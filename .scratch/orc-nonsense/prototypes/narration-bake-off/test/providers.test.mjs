@@ -50,6 +50,23 @@ test('Workers AI: JSON mode sends a json_schema response_format only when enable
   assert.equal(fetch.calls[1].body.response_format, undefined);
 });
 
+test('Workers AI: a reasoning model gets thinking off and 4x the token budget', async () => {
+  const fetch = fakeFetch(() => json({ result: { response: content } }));
+  await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch, reasoning: true }).call(msgs, 'clash');
+  await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch }).call(msgs, 'clash');
+  assert.deepEqual(fetch.calls[0].body.chat_template_kwargs, { enable_thinking: false });
+  assert.equal(fetch.calls[0].body.max_tokens, 512 * 4);
+  assert.equal(fetch.calls[1].body.chat_template_kwargs, undefined);
+  assert.equal(fetch.calls[1].body.max_tokens, 512);
+});
+
+test('Workers AI: thinking that eats the whole budget is a format failure, not transport', async () => {
+  const fetch = fakeFetch(() => json({ result: { choices: [{ message: { content: null, reasoning: 'Task: calibration…' } }] } }));
+  const r = await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch, reasoning: true }).call(msgs, 'clash');
+  assert.equal(r.ok, false);
+  assert.equal(r.error, 'reasoning_only');
+});
+
 test('an HTTP error is one failed call with no retry', async () => {
   const fetch = fakeFetch(() => json({ success: false, errors: [{ message: 'AiError: capacity temporarily exceeded' }] }, 400));
   const r = await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch }).call(msgs, 'clash');

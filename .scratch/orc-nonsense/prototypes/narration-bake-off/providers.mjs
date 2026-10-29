@@ -76,14 +76,18 @@ function failed(base, error, detail) {
   return { ...base, ok: false, error, detail: detail?.slice(0, 500) };
 }
 
-export function createWorkersAi({ accountId, apiToken, model, fetch = globalThis.fetch, timeoutMs = 30_000, jsonMode = false }) {
+// Gemma 4 is a reasoning model: on the first real run it spent the whole budget thinking and returned content: null.
+// chat_template_kwargs is listed on its model page with undocumented keys; enable_thinking is the usual one. The 4x
+// budget leaves room to answer if the switch is ignored (the extra thinking then shows up as output Neurons).
+export function createWorkersAi({ accountId, apiToken, model, fetch = globalThis.fetch, timeoutMs = 30_000, jsonMode = false, reasoning = false }) {
   return {
     provider: 'workers-ai',
     model,
     // 300 requests/minute and a daily Neuron allowance: no pacing needed for ~40 sequential calls.
     delayBeforeNext: () => 0,
     async call(messages, kind) {
-      const body = { messages, max_tokens: MAX_TOKENS[kind] };
+      const body = { messages, max_tokens: MAX_TOKENS[kind] * (reasoning ? 4 : 1) };
+      if (reasoning) body.chat_template_kwargs = { enable_thinking: false };
       if (jsonMode) body.response_format = { type: 'json_schema', json_schema: SCHEMAS[kind] };
       const res = await timedPost({
         fetch,
@@ -104,7 +108,10 @@ export function createWorkersAi({ accountId, apiToken, model, fetch = globalThis
       let content = result.response ?? result.choices?.[0]?.message?.content;
       if (content && typeof content === 'object') content = JSON.stringify(content);
       const out = { ...base, usage, neurons: estimateNeurons(model, usage) };
-      if (typeof content !== 'string') return failed(out, 'empty', res.text);
+      if (typeof content !== 'string' || !content.trim()) {
+        const thoughtOnly = result.choices?.[0]?.message?.reasoning;
+        return failed(out, thoughtOnly ? 'reasoning_only' : 'empty', res.text);
+      }
       return { ...out, ok: true, content };
     },
   };

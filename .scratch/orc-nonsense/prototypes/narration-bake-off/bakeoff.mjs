@@ -21,7 +21,7 @@ export function realProviders(env = process.env, { timeoutMs = 30_000 } = {}) {
   const out = [];
   if (env.CF_ACCOUNT_ID && env.CF_API_TOKEN) {
     const cf = { accountId: env.CF_ACCOUNT_ID, apiToken: env.CF_API_TOKEN, timeoutMs };
-    out.push(createWorkersAi({ ...cf, model: MODELS.gemma, jsonMode: env.CF_GEMMA_JSON_MODE === '1' }));
+    out.push(createWorkersAi({ ...cf, model: MODELS.gemma, jsonMode: env.CF_GEMMA_JSON_MODE === '1', reasoning: true }));
     out.push(createWorkersAi({ ...cf, model: MODELS.llama, jsonMode: env.CF_LLAMA_JSON_MODE !== '0' }));
   }
   if (env.GROQ_API_KEY) out.push(createGroq({ apiKey: env.GROQ_API_KEY, model: MODELS.groq, timeoutMs }));
