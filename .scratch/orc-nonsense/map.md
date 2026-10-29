@@ -19,15 +19,16 @@ A **locked MVP spec** for ORC NONSENSE: [gdd.md](./gdd.md) plus its decision log
 - [Destination and first principles](issues/01-destination-and-first-principles.md): locked MVP spec is the goal; async-first; Backing pays on wins and Infamy; Infamy decides the Warlord; Krúg (accent on the u) is the founding Captain; content "all out" (boundary still open); score still open.
 - [Free-tier platform limits](issues/02-free-tier-platform-limits.md): the free stack works if a Cloudflare cron Worker owns the tick (adaptive 1 to 5 min) with Supabase as canonical store, and sends one Realtime broadcast per tick; risks are Supabase's vague pause rule and the 10 ms Worker CPU budget.
 - [AI and voice costs](issues/03-ai-and-voice-costs.md): running costs are pennies to a few dollars a month (Haiku 5.5 with thinking off, caching, Batch for the Herald; one ElevenLabs Starter month to prerender all audio); policy allows profanity and crude fictional insults but not protected-group humour or explicit sex, so edgier lines must be hand-written.
+- [Score or no score](issues/04-score-or-no-score.md): no win state or ranking; instead loud, unranked Blame for every consequence of a Player's Meddles, a rap sheet per Player, gold as fuel only, open Stables, and rare, often-wrong Accusations where an orc names a Player.
 
 ## Not yet specified
 
 - **Event catalogue v1**: how many event templates, their preconditions and effects, and how comedy weight is scored. Needs the Captain card, Meddles and Failing Upward rules first.
-- **The Herald's structure**: how "Since You Left" is ranked, how long it is, what gets the announcer voice, and push-notification triggers.
-- **Hall of Shame**: what's archived and how it's browsed. Probably a view, depending on Score or no score.
+- **The Herald's structure**: how "Since You Left" is ranked, how long it is, what gets the announcer voice, and push-notification triggers. Also how Blame is traced back in headlines and where Accusations fit (at most about one per Herald). No recurring awards in the MVP.
+- **Hall of Shame**: what's archived and how it's browsed, and how it relates to each Player's rap sheet. A view, not a system.
 - **Portrait pipeline**: turning ~30 curated images into Captain cards, plus Humiliation overlays and disguise variants.
 - **Onboarding**: inviting friends, creating a world, the first session's experience (Krúg's Introduction?).
-- **The final data model and sim interface**: graduates once narration, tick budget and the mechanics rules are settled.
+- **The final data model and sim interface**: graduates once narration, tick budget and the mechanics rules are settled. Must record Meddle → consequence causal links so Blame can follow the whole chain.
 
 ## Out of scope
 

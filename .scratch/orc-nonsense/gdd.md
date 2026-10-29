@@ -37,7 +37,7 @@ Backing captains from a budget · two-portrait voiced clashes · a daily news re
 |---|---|
 | Live (an event every minute) vs away (the daily report) | **Async-first**. The world speeds up while someone is watching, and time away gets compressed into the Herald. *(Decided, Q2)* |
 | Money buys odds vs the stupidest orc rules | Backing gives a **small edge** and pays out on **Infamy as well as wins**. *(Decided, Q4)* |
-| Competing vs just stirring | **Open.** Explore both a light scoreboard and pure no-score chaos. → ticket *Score or no score* |
+| Competing vs just stirring | **No score.** No win state or ranking. Players get loud, unranked **Blame** for what their Meddles caused, plus a rap sheet. *(Decided, ticket Score or no score)* |
 | Topical humour vs a persistent world | Brexit-geezer register as a running theme ("exit means exit") rather than news commentary. → ticket *Tone bible* |
 | "All out, no censorship" vs "accents without ethnic caricature" (from the supplementary note) | **Open.** The two sources contradict each other, and what the narration model will actually produce also has a bearing. → ticket *Tone bible* |
 | Frequency vs cost | Rules decide every event, the LLM only voices featured ones, and audio is prerecorded. → tickets *Platform limits*, *AI and voice costs*, *Narration tiers* |
@@ -156,7 +156,7 @@ One original fortress, around 12 **active** Captains plus a **reserve** from ~30
 **Why it's funny:** you plant chaos, leave, and come back to the newspaper reporting what your chaos did. The punchline is always delayed, attributed to you, and grounded in history.
 
 ### 6.3 Reserved for later iterations
-Multiple fortresses or regions · seasons and resets · gear and loot systems · player-created Captains · generated portraits · runtime voice cloning · cross-group worlds · Gift and Dare Meddles (if *Meddle verbs* cuts them) · a full Hall of Shame with timelines · shareable video clips.
+Multiple fortresses or regions · seasons and resets · gear and loot systems · player-created Captains · generated portraits · runtime voice cloning · cross-group worlds · Gift and Dare Meddles (if *Meddle verbs* cuts them) · a full Hall of Shame with timelines · shareable video clips · Blame that starts anonymous and is revealed later · recurring Herald awards ("Meddler of the Week") · Accusations with mechanical effects.
 
 ---
 
@@ -223,5 +223,7 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 | D15 | Trophies are an effect + tag, not an inventory | Proposed | §4.1 |
 | D16 | Hall of Shame is a view over the event log, not a system | Proposed | §4.1 |
 | D17 | Captain Introduction is a required MVP set piece | Proposed | Supplementary note |
-| — | Score or no score | **Open** | Q3 → ticket |
+| D18 | No win state or ranking; Blame (announced, unranked, follows the whole causal chain, shared, Meddles only) plus a per-Player rap sheet | **Decided** | Ticket *Score or no score* |
+| D19 | Gold is fuel, never shown as wealth; Stables may overlap | **Decided** | Ticket *Score or no score* |
+| D20 | Accusations: rare, often wrong, mangled pre-rendered Player names, flavour only (no state change) | **Decided** | Ticket *Score or no score* |
 | — | Content boundaries (no censorship vs no ethnic caricature) | **Open** | Q6 → ticket |

@@ -34,8 +34,20 @@ Gold a Player puts behind a Captain. It nudges that Captain's odds and pays out 
 _Avoid_: Sponsorship, bet, funding
 
 **Stable**:
-The set of Captains a Player currently backs.
+The set of Captains a Player currently backs. Stables may overlap.
 _Avoid_: Team, roster
+
+**Blame**:
+The lasting record linking a Player to the consequences of their Meddles. It is announced, never ranked.
+_Avoid_: Score, points, credit
+
+**Accusation**:
+A Captain naming a Player as the cause of their misfortune. Often wrong, and separate from Blame.
+_Avoid_: Blame (when the orc is speaking), grudge (against a Player)
+
+**Rap sheet**:
+A Player's unranked list of their most infamous Blame.
+_Avoid_: Profile, stats, leaderboard
 
 ## Consequences
 
