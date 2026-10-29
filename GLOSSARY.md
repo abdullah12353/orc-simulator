@@ -58,8 +58,16 @@ A Meddle that pushes a Captain towards a stunt (a Stunt dare) or a prank on anot
 _Avoid_: Challenge, quest, order
 
 **Backing**:
-Gold a Player puts behind a Captain. It nudges that Captain's odds and pays out on both wins and Infamy.
+A Player putting gold behind a Captain and leaving it there. It slightly nudges that Captain's chances in a Clash and pays out on both wins and Infamy.
 _Avoid_: Sponsorship, bet, funding
+
+**Stake**:
+The gold a Player has put behind one Captain. It stays put, and survives the Captain's death, until the Player withdraws it.
+_Avoid_: Bet, wager, investment
+
+**Stipend**:
+The small, equal daily allowance of gold every Player receives.
+_Avoid_: Income, salary, daily reward
 
 **Stable**:
 The set of Captains a Player currently backs. Stables may overlap.
@@ -82,6 +90,10 @@ _Avoid_: Profile, stats, leaderboard
 **The Gutter Herald**:
 The world's deadpan tabloid. It reports what happened while you were away, treating orc idiocy with the gravity of history. Called "the Herald" for short.
 _Avoid_: Mordor Morning Herald, daily report, newsfeed
+
+**Clipping**:
+The shareable card cut from the Herald after a Clash: headline, portraits, the loser's last line as a pull quote, and the Blame line.
+_Avoid_: Share card, poster, screenshot
 
 **Swap test**:
 The content rule for accents. A Captain's accent is their voice, never their punchline: if swapping the accent kills the joke, the joke is cut.

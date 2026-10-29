@@ -95,7 +95,7 @@ Rule of thumb: **systems for the left column, seed content for the right.**
 | **The Incompetent Hierarchy** | **Core**, merged with Return | Rank comes from Infamy as much as Power. Accidents and luck promote. |
 | **The Return of the Idiot** | **Core**, merged with Hierarchy | One system: *Failing Upward*. |
 | **Trophies and Loot** | MVP, **as an effect, not a system** | A Clash effect: it adds a Trophy and a Grudge tag. No inventory. |
-| **Captain Sponsorship** (Backing) | MVP, **light** | Stakes for each friend. How much it matters depends on *Score or no score*. |
+| **Captain Sponsorship** (Backing) | MVP, **light** | A standing Stake on a Captain. Clash-only edge, pays best on Infamy. See [Backing economy](issues/08-backing-economy.md). |
 | **Cascading Disasters** | **Don't build it** | This is an *emergent property* of Grudges + Rumour misfires + Return vendettas. A dedicated cascade system would script what should emerge. |
 | **The Herald** (daily report) | MVP, **the stage** | How the mechanics reach you while you're away. Named *The Gutter Herald*. |
 | **The Hall of Shame** | MVP-lite, **as a view** | A ranked query over past high-Infamy events and Legendary Captains. No new rules. |
@@ -104,7 +104,7 @@ Rule of thumb: **systems for the left column, seed content for the right.**
 
 1. **Persistent Grudges**: memory tags between Captain pairs, plus affinity.
 2. **The Rumour Mill**: Rumours (and possibly Gifts and Dares) that can misfire.
-3. **Backing**: a small edge on odds, paid out on wins *and* Infamy.
+3. **Backing**: a standing Stake with a small Clash edge, paid out on wins *and* (mostly) Infamy.
 4. **The Clash and Captain Introduction**: the shareable set pieces.
 5. **Failing Upward**: death → Return with a Humiliation, Infamy, succession by Infamy, Legendary deeds.
 
@@ -147,7 +147,7 @@ A worked chain:
 One original fortress, around 12 **active** Captains plus a **reserve**, from a fixed, hand-written cast of ~30 (one portrait each), and **Krúg as the founding Captain**, always active but not the starting Warlord. Card, name and voice rules: [Captain card and name generator](issues/06-captain-card-and-name-generator.md). One private world per friend group.
 
 ### 6.2 Core loop (async-first, a 3–5 minute visit a few times a day)
-1. **Open → the Herald** ("Since You Left"): 5–8 headlines ranked by comedy weight, with the top one announced in a voice.
+1. **Open → the Herald** ("Since You Left"): 5–8 headlines ranked by comedy weight, with the top one introduced by prerecorded announcer stingers (no runtime TTS).
 2. **Check your Stable**: Grudges, new Humiliations, Trophies lost and gained.
 3. **Meddle**: a handful of Meddles (Rumours first and foremost) and some Backing.
 4. **Watch**: while anyone's on, ticks speed up and Clashes and Introductions play live.
@@ -182,7 +182,7 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 2. **`simulate(state, intents, seed) → { facts, stateDiff }`**: pure, deterministic TypeScript with a seeded RNG, shared by the Worker and the tests.
 3. **Events are data**: templates with preconditions, weights, outcome rules, effects and comedy weight.
 4. **Narration sees only Facts** (Fact + both voice cards + top Grudge tags), and falls back to templates on failure. A daily token cap is stored in the DB.
-5. **Audio is almost entirely prerecorded**: per-Captain bark banks keyed by emotion, Introductions, and an announcer stinger set, all generated offline. Runtime TTS is limited to at most the top Herald headline.
+5. **Audio is almost entirely prerecorded**: per-Captain bark banks keyed by emotion, Introductions, and an announcer stinger set, all generated offline. No runtime TTS in the MVP.
 6. **Adaptive tick**: slow when nobody's online, fast when someone is.
 
 ---
@@ -212,7 +212,7 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 | D3 | Death not permanent; humiliating Return | **Decided** | Brainstorm |
 | D4 | Minimal v1 | **Decided** | Brainstorm |
 | D5 | Original characters and mechanics; no Shadow of War / Tolkien / Brooks content | **Decided** | Brief |
-| D6 | Stack: React/TS PWA, Supabase free, Cloudflare, Haiku 5.5, ElevenLabs | **Decided** (feasibility open) | Brief |
+| D6 | Stack: React/TS PWA, Supabase free, Cloudflare, a free LLM (amended by D37), ElevenLabs | **Decided** | Brief, amended by ticket *Narration tiers* |
 | D7 | Rules-based sim owns canonical state; LLM only narrates Facts | **Decided** | Brief |
 | D8 | Destination: a locked MVP spec; building is a later effort | **Decided** | Grilling Q1 |
 | D9 | Async-first loop; live speed-up while someone's on | **Decided** | Grilling Q2 |
@@ -239,3 +239,10 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 | D30 | Six accent archetypes; muffled is a Humiliation overlay; the Brexit geezer is a Trait (Little Fortresser) | **Decided** | Ticket *Captain card* |
 | D31 | Names are guttural or compound English, with say-as respellings; Captains shout their own names badly; Epithets come from a prerecorded announcer bank | **Decided** | Ticket *Captain card* |
 | D32 | Krúg starts at Power 3, not Warlord, always in the active 12 | **Decided** | Ticket *Captain card* |
+| D33 | Gold comes only from a flat daily Stipend (≈10) and payouts; banked to a cap (≈30), overflow lost, no reset | **Decided** | Ticket *Backing economy* |
+| D34 | Backing is a standing Stake: withdraw for half back, held through death; who backs whom public, amounts private | **Decided** | Ticket *Backing economy* |
+| D35 | Backing edge is flat for each backer (≈+5%, max +10%) and applies to Clashes only; gold never buys odds | **Decided** | Ticket *Backing economy* |
+| D36 | Payouts: ≈10% of Stake per win, ≈1% per Infamy point, rounded up; shown only privately, never in the Herald | **Decided** | Ticket *Backing economy* |
+| D37 | Narration runs at $0: Cloudflare Workers AI as primary, Groq gpt-oss-120b as fallback, templates as the last resort; the free quota is the cap; model chosen by bake-off | **Decided** | Ticket *Narration tiers* |
+| D38 | Tiers: every Clash gets generated dialogue; the Herald is generated on open; notable events are templated; minor changes are silent; no runtime TTS | **Decided** | Ticket *Narration tiers* |
+| D39 | Tick every 1 min when watched (Player seen within 5 min), every 5 min otherwise; Worker as clock, Edge Function runs the tick; narration never blocks it | **Decided** | Ticket *Narration tiers* |

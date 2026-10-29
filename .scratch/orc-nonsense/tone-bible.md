@@ -37,7 +37,7 @@ Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). This file is also the seed for the
 
 ## 5. Who writes what
 
-| Hand-written | Generated (Haiku 5.5) | Templated fallback |
+| Hand-written | Generated (free LLM, see D37) | Templated fallback |
 |---|---|---|
 | Introductions, catchphrases, bark banks, announcer stingers, Accusation lines, the edgiest material | Clash dialogue, Herald headlines and bodies, all inside this tone bible as the system prompt with the samples below as examples | Every generated line has a rules-engine template behind it, in case of refusal or the spend cap |
 

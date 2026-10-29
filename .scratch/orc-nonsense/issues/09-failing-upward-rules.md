@@ -1,7 +1,8 @@
 # Failing Upward rules
 
 Type: grilling
-Status: open
+Status: claimed
+Assignee: Mohammed
 Blocked by: 06
 
 ## Question
@@ -14,3 +15,5 @@ What are the rules for death, Return, Humiliation, Infamy, rank and becoming Leg
 - The Legendary threshold and what a Legendary deed is. Does Legendary retire a Captain into the Hall of Shame?
 
 ## Comments
+
+- From [Backing economy](08-backing-economy.md): Infamy gains directly set Backing payouts (1% of the Stake per point). Aim for roughly 5–30 Infamy per notable disaster.
