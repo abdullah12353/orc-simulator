@@ -91,6 +91,10 @@ _Avoid_: Profile, stats, leaderboard
 The world's deadpan tabloid. It reports what happened while you were away, treating orc idiocy with the gravity of history. Called "the Herald" for short.
 _Avoid_: Mordor Morning Herald, daily report, newsfeed
 
+**Day zero**:
+The simulated day the sim pre-rolls when a world is created, so the first edition has stories in it.
+_Avoid_: Tutorial, warm-up
+
 **Edition**:
 One Player's "Since You Left" issue of the Herald, covering the time since their last visit.
 _Avoid_: Issue, report, digest

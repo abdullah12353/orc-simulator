@@ -262,3 +262,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D53 | One templated Blame line per Meddle-caused story; at most one Accusation per edition, as a pull quote over the true Blame; the model writes only headlines and bodies | **Decided** | Ticket *Herald* |
 | D54 | Private "Your Stable" section for gold and Stakes; pushes only for your Stable or Meddles, at most 3 a day, quiet hours 23:00–08:00, never gold; any story can be clipped | **Decided** | Ticket *Herald* |
 | D55 | Hall of Shame: Legends, moments with comedy weight 20+, and Clippings; browsed by Captain, by Player (the rap sheet: 10 heaviest Blame, in time order) or timeline; never ranked; replays without the model; kept forever | **Decided** | Ticket *Hall of Shame* |
+| D56 | One Player creates the world with no in-world powers; magic-link invites; at most 8 Players | **Decided** | Ticket *Onboarding* |
+| D57 | Casting: Krúg + 2 per accent, highest Power is the first Warlord, about 6 seeded Grudges; a day-zero pre-roll fills edition #1 | **Decided** | Ticket *Onboarding* |
+| D58 | First open: Krúg's Introduction, then the edition, then a guided first Rumour on a 2–5 min fuse; no tutorial, one-line hints only | **Decided** | Ticket *Onboarding* |
+| D59 | Accusations come only from 6 fixed accuser Captains; late joiners can be Accused once their name is rendered | **Decided** | Ticket *Onboarding* |
