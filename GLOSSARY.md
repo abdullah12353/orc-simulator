@@ -9,7 +9,7 @@ A friend who meddles in the world from outside. A Player never controls an orc d
 _Avoid_: User, gamer, commander
 
 **Captain**:
-A named, persistent orc with a portrait, voice, personality and history. The cast of the world.
+A named, persistent orc with a portrait, voice, personality and history. The cast of the world. All Captains are male.
 _Avoid_: Orc (when you mean a specific named one), NPC, unit, character
 
 **Krúg**:
@@ -48,6 +48,16 @@ _Avoid_: Blame (when the orc is speaking), grudge (against a Player)
 **Rap sheet**:
 A Player's unranked list of their most infamous Blame.
 _Avoid_: Profile, stats, leaderboard
+
+## Voice
+
+**The Gutter Herald**:
+The world's deadpan tabloid. It reports what happened while you were away, treating orc idiocy with the gravity of history. Called "the Herald" for short.
+_Avoid_: Mordor Morning Herald, daily report, newsfeed
+
+**Swap test**:
+The content rule for accents. A Captain's accent is their voice, never their punchline: if swapping the accent kills the joke, the joke is cut.
+_Avoid_: Accent humour
 
 ## Consequences
 

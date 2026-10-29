@@ -20,6 +20,7 @@ A **locked MVP spec** for ORC NONSENSE: [gdd.md](./gdd.md) plus its decision log
 - [Free-tier platform limits](issues/02-free-tier-platform-limits.md): the free stack works if a Cloudflare cron Worker owns the tick (adaptive 1 to 5 min) with Supabase as canonical store, and sends one Realtime broadcast per tick; risks are Supabase's vague pause rule and the 10 ms Worker CPU budget.
 - [AI and voice costs](issues/03-ai-and-voice-costs.md): running costs are pennies to a few dollars a month (Haiku 5.5 with thinking off, caching, Batch for the Herald; one ElevenLabs Starter month to prerender all audio); policy allows profanity and crude fictional insults but not protected-group humour or explicit sex, so edgier lines must be hand-written.
 - [Score or no score](issues/04-score-or-no-score.md): no win state or ranking; instead loud, unranked Blame for every consequence of a Player's Meddles, a rap sheet per Player, gold as fuel only, open Stables, and rare, often-wrong Accusations where an orc names a Player.
+- [Tone bible and content boundaries](issues/05-tone-bible-and-content-boundaries.md): everything goes except punching at identity (the swap test: accents are voices, never punchlines). Full profanity, innuendo but nothing explicit, Brexit as a register only, all-male cast with off-screen women as gags. Prerecorded lines are hand-written, Clash dialogue and the Herald are generated. The daily report is The Gutter Herald. Rules and samples in [tone-bible.md](./tone-bible.md).
 
 ## Not yet specified
 
@@ -27,6 +28,7 @@ A **locked MVP spec** for ORC NONSENSE: [gdd.md](./gdd.md) plus its decision log
 - **The Herald's structure**: how "Since You Left" is ranked, how long it is, what gets the announcer voice, and push-notification triggers. Also how Blame is traced back in headlines and where Accusations fit (at most about one per Herald). No recurring awards in the MVP.
 - **Hall of Shame**: what's archived and how it's browsed, and how it relates to each Player's rap sheet. A view, not a system.
 - **Portrait pipeline**: turning ~30 curated images into Captain cards, plus Humiliation overlays and disguise variants.
+- **Voice casting**: whether ElevenLabs Voice Design can produce each accent archetype convincingly (cockney, RP and Indian English were flagged by the research), plus the muffled bandage voice and the announcer, and whether to tune pronunciation by hand. Needs the final archetype list from the Captain card first.
 - **Onboarding**: inviting friends, creating a world, the first session's experience (Krúg's Introduction?).
 - **The final data model and sim interface**: graduates once narration, tick budget and the mechanics rules are settled. Must record Meddle → consequence causal links so Blame can follow the whole chain.
 

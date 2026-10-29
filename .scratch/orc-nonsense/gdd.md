@@ -38,10 +38,10 @@ Backing captains from a budget · two-portrait voiced clashes · a daily news re
 | Live (an event every minute) vs away (the daily report) | **Async-first**. The world speeds up while someone is watching, and time away gets compressed into the Herald. *(Decided, Q2)* |
 | Money buys odds vs the stupidest orc rules | Backing gives a **small edge** and pays out on **Infamy as well as wins**. *(Decided, Q4)* |
 | Competing vs just stirring | **No score.** No win state or ranking. Players get loud, unranked **Blame** for what their Meddles caused, plus a rap sheet. *(Decided, ticket Score or no score)* |
-| Topical humour vs a persistent world | Brexit-geezer register as a running theme ("exit means exit") rather than news commentary. → ticket *Tone bible* |
-| "All out, no censorship" vs "accents without ethnic caricature" (from the supplementary note) | **Open.** The two sources contradict each other, and what the narration model will actually produce also has a bearing. → ticket *Tone bible* |
+| Topical humour vs a persistent world | Brexit is a **register**, not a topic: no real people, parties or news. *(Decided, ticket Tone bible)* |
+| "All out, no censorship" vs "accents without ethnic caricature" (from the supplementary note) | **Everything goes except punching at identity.** Accents pass the swap test. See [tone-bible.md](./tone-bible.md). *(Decided, ticket Tone bible)* |
 | Frequency vs cost | Rules decide every event, the LLM only voices featured ones, and audio is prerecorded. → tickets *Platform limits*, *AI and voice costs*, *Narration tiers* |
-| Homage vs originality | Original cast. Krúg is your own invention. No Shadow of War, Tolkien or Mike Brooks names or lines. **"Mordor Morning Herald" needs renaming** (Mordor is Tolkien's). |
+| Homage vs originality | Original cast. Krúg is your own invention. No Shadow of War, Tolkien or Mike Brooks names or lines. The daily report is **The Gutter Herald**. *(Decided, ticket Tone bible)* |
 
 ### 1.5 Supplementary direction (Haris's references and the extended mechanics list)
 
@@ -97,7 +97,7 @@ Rule of thumb: **systems for the left column, seed content for the right.**
 | **Trophies and Loot** | MVP, **as an effect, not a system** | A Clash effect: it adds a Trophy and a Grudge tag. No inventory. |
 | **Captain Sponsorship** (Backing) | MVP, **light** | Stakes for each friend. How much it matters depends on *Score or no score*. |
 | **Cascading Disasters** | **Don't build it** | This is an *emergent property* of Grudges + Rumour misfires + Return vendettas. A dedicated cascade system would script what should emerge. |
-| **The Herald** (daily report) | MVP, **the stage** | How the mechanics reach you while you're away. Needs an original name. |
+| **The Herald** (daily report) | MVP, **the stage** | How the mechanics reach you while you're away. Named *The Gutter Herald*. |
 | **The Hall of Shame** | MVP-lite, **as a view** | A ranked query over past high-Infamy events and Legendary Captains. No new rules. |
 
 ### 4.2 The five strongest (unchanged from draft 0, now confirmed by the supplementary list)
@@ -130,11 +130,11 @@ Shown when a Captain first appears, Returns, or is promoted. Announcer stinger �
 A worked chain:
 
 1. Mohammed backs **Krúg** (Power 3, *Hydrophobic*, *Mummy's Boy*, Brexit-geezer register: "exit means exit").
-2. Mohammed plants a Rumour: *"Krúg says Grishnack's helmet is a bucket."* It **misfires** onto **Lady Snarlbottom**, a posh orc who really is wearing a bucket.
+2. Mohammed plants a Rumour: *"Krúg says Grishnack's helmet is a bucket."* It **misfires** onto **Lord Snarlbottom**, a posh orc who really is wearing a bucket.
 3. Snarlbottom → Krúg affinity −60, Grudge tag `"called my helmet a bucket"`.
 4. The Grudge raises the odds of a Clash. Mid-Clash, a glutton Captain **intervenes** (the wrong saviour) because Krúg was standing near the pies. It makes things worse.
 5. Krúg loses and drowns in 30cm of moat. Infamy +25. Mohammed's Backing pays out on Infamy.
-6. Snarlbottom takes Krúg's nose ring as a **Trophy**. It shows up in her description and her taunts.
+6. Snarlbottom takes Krúg's nose ring as a **Trophy**. It shows up in his description and his taunts.
 7. Krúg **Returns** as *"Krúg the Damp"*: bandaged, now also afraid of puddles, with a vendetta.
 8. The Warlord falls off the throne. Succession by Infamy: **Krúg the Damp is Warlord.** Introduction card: "KRÚÚÚG… THE DAMP."
 9. Herald headline: **"DAMP ORC SEIZES POWER — 'EXIT MEANS EXIT,' SAYS NEW WARLORD, REFUSING TO LEAVE THRONE."**
@@ -192,10 +192,11 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 - **Krúg**, the recurring nuisance and founding Captain.
 - **Krúg Bootleg**, a badly disguised Return form.
 - **Krúg's mum**, an off-screen presence referenced constantly and never seen.
+- **Susan**, the Brexit-geezer meme's long-suffering wife, another off-screen gag.
 - **Drank too much / fell in a pond**: the Herald's tone in two examples.
 - **The stupidest orc ruling the fortress.**
 - **Legendary for causing Brexit.**
-- **"A day in the life of a Brexit geezer"**: the register for a whole class of Captains. "Exit means exit." "Once you go black, you never go back."
+- **"A day in the life of a Brexit geezer"**: the register for a whole class of Captains. "Exit means exit." "Once you go black, you never go back" (re-grounded onto black pudding, tar or soot, never race).
 - **Bloody mummy bandages over eyes and mouth**: muffled barks.
 - **The glutton who saves you**: the wrong-saviour intervention.
 - **Skull bolted to the armour**: visible Trophies.
@@ -226,4 +227,10 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 | D18 | No win state or ranking; Blame (announced, unranked, follows the whole causal chain, shared, Meddles only) plus a per-Player rap sheet | **Decided** | Ticket *Score or no score* |
 | D19 | Gold is fuel, never shown as wealth; Stables may overlap | **Decided** | Ticket *Score or no score* |
 | D20 | Accusations: rare, often wrong, mangled pre-rendered Player names, flavour only (no state change) | **Decided** | Ticket *Score or no score* |
-| — | Content boundaries (no censorship vs no ethnic caricature) | **Open** | Q6 → ticket |
+| D21 | Everything goes except punching at identity; same rule for hand-written and generated lines | **Decided** | Ticket *Tone bible* |
+| D22 | Swap test: accents are voices, never punchlines; written down through word choice only | **Decided** | Ticket *Tone bible* |
+| D23 | Full profanity (c-word rare, never in the Herald), no slurs, innuendo but nothing explicit | **Decided** | Ticket *Tone bible* |
+| D24 | Brexit is a register, not a topic; no real people | **Decided** | Ticket *Tone bible* |
+| D25 | All Captains are male; women only as off-screen gags (Krúg's mum, Susan) | **Decided** | Ticket *Tone bible* |
+| D26 | Prerecorded lines hand-written; Clash dialogue and the Herald generated under the tone bible; templated fallbacks | **Decided** | Ticket *Tone bible* |
+| D27 | The daily report is The Gutter Herald: clean, deadpan; mocks Meddles, never Players | **Decided** | Ticket *Tone bible* |
