@@ -21,7 +21,7 @@ Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). This file is also the seed for the
 - **The swap test.** A Captain's accent is their voice, never their punchline. If swapping the accent kills the joke, the joke is cut. This applies to every accent, cockney and RP included.
 - Every Captain's joke comes from the **shared trait pool** (vain, hydrophobic, glutton, Mummy's Boy, compulsive liar…), never from a "type" tied to their accent (no call-centre, shopkeeper and so on).
 - **Written down through word choice and grammar only** ("yous", "ain't", "deid", "old boy"), with no phonetic respelling. The voice does the rest. Muffled is the only exception.
-- **Calibration roster**: cockney geezer, posh RP toff, West Country, Scouse, Glaswegian, Indian English, and muffled (mummy bandages, subtitled). The final archetype list and how Captains get assigned belong to [Captain card and name generator](issues/06-captain-card-and-name-generator.md).
+- **Accent archetypes** (final, from [Captain card and name generator](issues/06-captain-card-and-name-generator.md)): cockney, posh RP, West Country, Scouse, Glaswegian, Indian English. **Muffled** (mummy bandages, subtitled) is a Humiliation overlay that any Captain can get, not an archetype.
 
 ## 4. Boundaries
 

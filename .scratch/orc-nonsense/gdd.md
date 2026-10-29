@@ -118,7 +118,7 @@ Rule of thumb: **systems for the left column, seed content for the right.**
 
 ### 4.4 Captain Introduction (new set piece, required)
 
-Shown when a Captain first appears, Returns, or is promoted. Announcer stinger → portrait slam → **the name shouted, badly pronounced** → title / epithet → one signature line in the Captain's voice. Prerecorded per Captain, so the pronunciation can be tuned by hand. → ticket *The Clash and Introduction cards*.
+Shown when a Captain first appears, Returns, or is promoted. Announcer stinger → portrait slam → **the Captain shouts his own name, badly** ("KRRRÚÚÚG!") → the announcer adds the Epithet, deadpan, from a prerecorded bank → one signature line in the Captain's voice. Prerecorded per Captain, so the pronunciation can be tuned by hand. → ticket *The Clash and Introduction cards*.
 
 ---
 
@@ -129,7 +129,7 @@ Shown when a Captain first appears, Returns, or is promoted. Announcer stinger �
 
 A worked chain:
 
-1. Mohammed backs **Krúg** (Power 3, *Hydrophobic*, *Mummy's Boy*, Brexit-geezer register: "exit means exit").
+1. Mohammed backs **Krúg** (Power 3, Traits *Mummy's Boy* and *Little Fortresser*, Fear of *Water*, catchphrase "exit means exit").
 2. Mohammed plants a Rumour: *"Krúg says Grishnack's helmet is a bucket."* It **misfires** onto **Lord Snarlbottom**, a posh orc who really is wearing a bucket.
 3. Snarlbottom → Krúg affinity −60, Grudge tag `"called my helmet a bucket"`.
 4. The Grudge raises the odds of a Clash. Mid-Clash, a glutton Captain **intervenes** (the wrong saviour) because Krúg was standing near the pies. It makes things worse.
@@ -144,7 +144,7 @@ A worked chain:
 ## 6. Recommended MVP
 
 ### 6.1 The world
-One original fortress, around 12 **active** Captains plus a **reserve** from ~30 portraits, and **Krúg as the founding Captain**. One private world per friend group.
+One original fortress, around 12 **active** Captains plus a **reserve**, from a fixed, hand-written cast of ~30 (one portrait each), and **Krúg as the founding Captain**, always active but not the starting Warlord. Card, name and voice rules: [Captain card and name generator](issues/06-captain-card-and-name-generator.md). One private world per friend group.
 
 ### 6.2 Core loop (async-first, a 3–5 minute visit a few times a day)
 1. **Open → the Herald** ("Since You Left"): 5–8 headlines ranked by comedy weight, with the top one announced in a voice.
@@ -234,3 +234,8 @@ These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. T
 | D25 | All Captains are male; women only as off-screen gags (Krúg's mum, Susan) | **Decided** | Ticket *Tone bible* |
 | D26 | Prerecorded lines hand-written; Clash dialogue and the Herald generated under the tone bible; templated fallbacks | **Decided** | Ticket *Tone bible* |
 | D27 | The daily report is The Gutter Herald: clean, deadpan; mocks Meddles, never Players | **Decided** | Ticket *Tone bible* |
+| D28 | Fixed, hand-written cast of ~30; portraits one-to-one, with Humiliations and disguises as overlays | **Decided** | Ticket *Captain card* |
+| D29 | Card: 2 Traits + 1 Fear, Power 1–10, Infamy, one Epithet, two disguise aliases, unique voice; Grudges live on pairs | **Decided** | Ticket *Captain card* |
+| D30 | Six accent archetypes; muffled is a Humiliation overlay; the Brexit geezer is a Trait (Little Fortresser) | **Decided** | Ticket *Captain card* |
+| D31 | Names are guttural or compound English, with say-as respellings; Captains shout their own names badly; Epithets come from a prerecorded announcer bank | **Decided** | Ticket *Captain card* |
+| D32 | Krúg starts at Power 3, not Warlord, always in the active 12 | **Decided** | Ticket *Captain card* |

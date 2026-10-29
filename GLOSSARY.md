@@ -15,6 +15,22 @@ _Avoid_: Orc (when you mean a specific named one), NPC, unit, character
 **Krúg**:
 The founding Captain. Spelled with an accent on the u and pronounced "KROOG" (long u), never "Groog".
 
+**Trait**:
+A personality quirk from a pool shared by every Captain, such as Glutton or Mummy's Boy. Each Captain has exactly two. Captains get their jokes from Traits, never from their accent.
+_Avoid_: Perk, type, personality (as the term)
+
+**Fear**:
+Something a Captain panics at or can be made to give in to, such as water or his mum. Each Captain starts with one, and Humiliations can add more.
+_Avoid_: Weakness, phobia (as the term)
+
+**Epithet**:
+The title tacked onto a Captain's name, such as "the Damp". A Captain has at most one at a time, and it is usually earned through disaster.
+_Avoid_: Nickname, title (when you mean the epithet)
+
+**Accent archetype**:
+The regional or class voice a Captain speaks in, such as cockney or posh RP. It is his voice, never his joke.
+_Avoid_: Race, nationality, accent type
+
 **Warlord**:
 The Captain currently ruling the fortress.
 _Avoid_: Ruler, overlord, boss
@@ -26,8 +42,20 @@ A single outside intervention a Player makes in the world, such as planting a Ru
 _Avoid_: Action, move, command
 
 **Rumour**:
-A Meddle that plants an insult, claim or bit of misinformation between Captains. It may land on the wrong orc.
+A Meddle that plants a claim about one Captain, supposedly said by another. It may work, reach the wrong orc, or get Garbled.
 _Avoid_: Gossip, lie
+
+**Claim**:
+The kind of thing a Rumour asserts: an insult, a Fear exposed, a theft, a mum claim or a coup plot.
+_Avoid_: Topic, content
+
+**Garble**:
+A Rumour mutating on its way to the target, always escalating into something worse.
+_Avoid_: Misunderstanding, distortion
+
+**Dare**:
+A Meddle that pushes a Captain towards a stunt (a Stunt dare) or a prank on another Captain (a Prank dare). He botches it, pulls it off, or refuses.
+_Avoid_: Challenge, quest, order
 
 **Backing**:
 Gold a Player puts behind a Captain. It nudges that Captain's odds and pays out on both wins and Infamy.
