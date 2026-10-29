@@ -104,7 +104,7 @@ The strip of new template lines shown above the last edition when a new one isn'
 _Avoid_: Update, refresh
 
 **Clipping**:
-The shareable card cut from the Herald after a Clash: headline, portraits, the loser's last line as a pull quote, and the Blame line.
+The shareable card cut from any Herald story: headline, portraits, a pull quote (for a Clash, the loser's last line) and the Blame line.
 _Avoid_: Share card, poster, screenshot
 
 **Swap test**:
@@ -112,6 +112,23 @@ The content rule for accents. A Captain's accent is their voice, never their pun
 _Avoid_: Accent humour
 
 ## Consequences
+
+**Tick**:
+One step of the world clock: every 1 minute while watched and every 5 while not. Each tick consumes Intents and produces Facts.
+_Avoid_: Turn, round, frame
+
+**Intent**:
+A Player's submitted Meddle or Backing change, waiting for the next tick to consume it.
+_Avoid_: Command, action, request
+
+**Fact**:
+One thing that happened, written by the sim to the event log. Narration only ever puts Facts into words.
+_Avoid_: Event (when you mean the logged record), log entry
+
+**Fuse**:
+The delay before a Meddle or a chained reaction takes effect.
+_Avoid_: Timer, cooldown
+
 
 **Clash**:
 A short, theatrical two-portrait encounter between Captains. The rules decide who wins.
