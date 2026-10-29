@@ -117,6 +117,10 @@ _Avoid_: Loot, drop
 A dead Captain coming back, changed by a Humiliation.
 _Avoid_: Respawn, resurrection
 
+**Benched**:
+Moved from the active 12 to the reserve to make room for a Returning Captain. It happens to the active Captain with the least recent Infamy.
+_Avoid_: Retired, dropped, sacked (as the term)
+
 **Humiliation**:
 A lasting, visible mark of shame a Captain gains on Return or through disaster, such as bandages, a missing limb, a disguise or an epithet.
 _Avoid_: Debuff, injury (as the general term)
@@ -124,6 +128,18 @@ _Avoid_: Debuff, injury (as the general term)
 **Infamy**:
 How renowned a Captain is for stupidity. It is separate from Power and decides succession to Warlord.
 _Avoid_: Fame, reputation, notoriety
+
+**Unmasked**:
+A disguised Captain being exposed, which ends his disguise. It is its own notable event.
+_Avoid_: Revealed, caught
+
+**Legendary**:
+The permanent status of a Captain whose lifetime Infamy has passed the Legendary threshold. He keeps playing, with a stamp on his portrait and Introductions.
+_Avoid_: Hero, legend (lowercase, as the status), retired
+
+**Legendary deed**:
+The event that takes a Captain over the Legendary threshold. It makes the Herald's front page and the Hall of Shame.
+_Avoid_: Achievement, feat
 
 **Power**:
 How dangerous a Captain actually is in a Clash.

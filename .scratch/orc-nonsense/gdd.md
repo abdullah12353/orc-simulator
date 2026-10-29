@@ -246,3 +246,9 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D37 | Narration runs at $0: Cloudflare Workers AI as primary, Groq gpt-oss-120b as fallback, templates as the last resort; the free quota is the cap; model chosen by bake-off | **Decided** | Ticket *Narration tiers* |
 | D38 | Tiers: every Clash gets generated dialogue; the Herald is generated on open; notable events are templated; minor changes are silent; no runtime TTS | **Decided** | Ticket *Narration tiers* |
 | D39 | Tick every 1 min when watched (Player seen within 5 min), every 5 min otherwise; Worker as clock, Edge Function runs the tick; narration never blocks it | **Decided** | Ticket *Narration tiers* |
+| D40 | Any disaster can kill (Clash, botched Dare, accident), about 1–3 deaths a day; every Captain Returns after 2–12 h with an Introduction and an hour's grace from dying | **Decided** | Ticket *Failing Upward* |
+| D41 | Every Return brings exactly one Humiliation that fits the death; five categories (bandages, lost bits, disguise, Epithet, new Fear) with their own lifetimes; none touch Power or the odds | **Decided** | Ticket *Failing Upward* |
+| D42 | Infamy comes only from stupidity (tiers 1–4 / 5–15 / 15–30; wins 0; the throne +20) and is lifetime; Power only drifts ±1 | **Decided** | Ticket *Failing Upward* |
+| D43 | No ranks below Warlord; he falls on any death, Clash loss or botched Dare; the most Infamy in the last 7 days succeeds (amends D11's Infamy to recent Infamy) | **Decided** | Ticket *Failing Upward* |
+| D44 | The active 12 stays at 12: a reserve Captain steps in on a death, and a Returner benches the least recently infamous; Krúg is never benched | **Decided** | Ticket *Failing Upward* |
+| D45 | Legendary at 150 lifetime Infamy, marked by a Legendary deed; permanent, never retired | **Decided** | Ticket *Failing Upward* |
