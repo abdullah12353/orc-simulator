@@ -252,3 +252,8 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D43 | No ranks below Warlord; he falls on any death, Clash loss or botched Dare; the most Infamy in the last 7 days succeeds (amends D11's Infamy to recent Infamy) | **Decided** | Ticket *Failing Upward* |
 | D44 | The active 12 stays at 12: a reserve Captain steps in on a death, and a Returner benches the least recently infamous; Krúg is never benched | **Decided** | Ticket *Failing Upward* |
 | D45 | Legendary at 150 lifetime Infamy, marked by a Legendary deed; permanent, never retired | **Decided** | Ticket *Failing Upward* |
+| D46 | Every event (Clashes and Dares included) is one data template: trigger, cast preconditions, outcome table, effects, 3 line variants, base comedy weight; ~60 templates plus banks in v1, drafted by Claude and struck by Mohammed | **Decided** | Ticket *Event catalogue* |
+| D47 | Ambient events fire on ~1 in 3 watched and ~1 in 10 unwatched ticks; reactions chain 3 deep, then fuse 5–30 min; deaths capped at 3 a day; recent templates and pairs halved; Krúg counts double | **Decided** | Ticket *Event catalogue* |
+| D48 | Clashes only from Grudges (affinity < −50, ~5% a tick) or forcing Meddles; logistic Power odds plus Backing and Traits; won, defeated or fled; wrong saviour in ~1 in 5; Trophy in ~half of defeats | **Decided** | Ticket *Event catalogue* |
+| D49 | Pair affinity −100..+100 drifts to 0 by ~5 a day; Grudge tags are permanent | **Decided** | Ticket *Event catalogue* |
+| D50 | Comedy weight is deterministic: base + Infamy/3 + 3 per callback + 2 if Meddle-caused + 2 if Krúg or the Warlord; Legendary deeds rank first | **Decided** | Ticket *Event catalogue* |

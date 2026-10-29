@@ -105,6 +105,18 @@ _Avoid_: Accent humour
 A short, theatrical two-portrait encounter between Captains. The rules decide who wins.
 _Avoid_: Fight, battle, duel, Idiot Arena (as a term for one encounter)
 
+**Template**:
+One event as data: its trigger, cast, outcome odds, effects, line variants and base comedy weight. Clashes and Dares are templates too.
+_Avoid_: Script, scenario, event type
+
+**Comedy weight**:
+A deterministic score for how funny an event is, computed by the sim from its Facts. It ranks the Herald and feeds the Hall of Shame.
+_Avoid_: Score, rating, priority
+
+**Callback**:
+An event that reuses something the world already remembers: an existing Grudge tag, a Trophy changing hands again, a Fear already shown. Callbacks score extra comedy weight.
+_Avoid_: Reference, repeat
+
 **Grudge**:
 A Captain's lasting memory of something another Captain did to them. It shapes their future encounters.
 _Avoid_: Feud, beef (as terms)
