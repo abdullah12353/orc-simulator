@@ -257,3 +257,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D48 | Clashes only from Grudges (affinity < −50, ~5% a tick) or forcing Meddles; logistic Power odds plus Backing and Traits; won, defeated or fled; wrong saviour in ~1 in 5; Trophy in ~half of defeats | **Decided** | Ticket *Event catalogue* |
 | D49 | Pair affinity −100..+100 drifts to 0 by ~5 a day; Grudge tags are permanent | **Decided** | Ticket *Event catalogue* |
 | D50 | Comedy weight is deterministic: base + Infamy/3 + 3 per callback + 2 if Meddle-caused + 2 if Krúg or the Warlord; Legendary deeds rank first | **Decided** | Ticket *Event catalogue* |
+| D51 | The Herald is per Player ("Since You Left" since their last visit): lead story + 4–7 headlines + a collapsed list, at most 8 stories; "Stop press" when no new edition is due; last 7 editions browsable | **Decided** | Ticket *Herald* |
+| D52 | Only the lead story gets the announcer and auto-plays its set piece; Legendary deeds get a fanfare | **Decided** | Ticket *Herald* |
+| D53 | One templated Blame line per Meddle-caused story; at most one Accusation per edition, as a pull quote over the true Blame; the model writes only headlines and bodies | **Decided** | Ticket *Herald* |
+| D54 | Private "Your Stable" section for gold and Stakes; pushes only for your Stable or Meddles, at most 3 a day, quiet hours 23:00–08:00, never gold; any story can be clipped | **Decided** | Ticket *Herald* |

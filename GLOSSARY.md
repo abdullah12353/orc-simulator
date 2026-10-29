@@ -91,6 +91,14 @@ _Avoid_: Profile, stats, leaderboard
 The world's deadpan tabloid. It reports what happened while you were away, treating orc idiocy with the gravity of history. Called "the Herald" for short.
 _Avoid_: Mordor Morning Herald, daily report, newsfeed
 
+**Edition**:
+One Player's "Since You Left" issue of the Herald, covering the time since their last visit.
+_Avoid_: Issue, report, digest
+
+**Stop press**:
+The strip of new template lines shown above the last edition when a new one isn't due yet.
+_Avoid_: Update, refresh
+
 **Clipping**:
 The shareable card cut from the Herald after a Clash: headline, portraits, the loser's last line as a pull quote, and the Blame line.
 _Avoid_: Share card, poster, screenshot
