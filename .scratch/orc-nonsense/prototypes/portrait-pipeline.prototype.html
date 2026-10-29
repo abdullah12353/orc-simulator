@@ -1,0 +1,534 @@
+<!doctype html>
+<!--
+  PROTOTYPE — THROWAWAY. Ticket: "Portrait pipeline" (https://github.com/abdullah12353/orc-simulator/issues/18).
+  Question: how do Humiliation and disguise overlays line up and stack on ~30 different faces?
+  Plan: three placeholder busts (squat, long, wide) wear ONE shared overlay stack, rendered under two
+  alignment strategies side by side:
+    A = per-portrait anchor points (eyes, brow, crown, nose, mouth, jaw, tusks, shoulder); overlays move and scale to them.
+    B = one shared template face box; every portrait is drawn to fit it, and the overlays are fixed.
+  Rules from #9: at most 3 overlays are shown, newest first. Layer (z) order is by slot, not by time.
+  Use ?view=A|AB|B (bottom pill, or the ← → keys). Number keys 1–9 apply overlays, Z undoes.
+  Double-click to open; no build, no server. All art is crude inline SVG.
+-->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · Portrait pipeline</title>
+<style>
+  :root { --bg:#0d0b0a; --ink:#e9e2d4; --blood:#a3171b; --mud:#4b3a28; --bone:#d8cfb8; --dim:#9c9282; --line:#3a332c; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: Georgia, serif; }
+  h1 { font: 900 26px/1 Impact, 'Arial Black', sans-serif; letter-spacing:.03em; margin:0; color:var(--bone); text-transform:uppercase; }
+  h2 { font: 900 18px Impact, sans-serif; letter-spacing:.04em; margin:0 0 4px; color:var(--bone); text-transform:uppercase; }
+  h3 { font: 700 13px system-ui, sans-serif; letter-spacing:.12em; text-transform:uppercase; color:#c66; margin:18px 0 6px; }
+  .top { display:flex; align-items:baseline; gap:14px; padding:12px 16px; border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .top .sub { font: 13px system-ui, sans-serif; color:var(--dim); }
+  .app { display:grid; grid-template-columns: 310px 1fr; gap:0; }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
+  aside { border-right:1px solid var(--line); padding:12px 14px 120px; font: 13px system-ui, sans-serif; }
+  main { padding:12px 16px 40px; min-width:0; }
+
+  .bank { display:grid; grid-template-columns: 1fr 1fr; gap:6px; }
+  .bank button { text-align:left; background:#1c1815; color:#eee; border:1px solid #4a4038; border-radius:6px; padding:6px 8px; cursor:pointer; font: 600 13px system-ui; line-height:1.2; }
+  .bank button small { display:block; font-weight:400; font-size:11px; color:var(--dim); }
+  .bank button:hover { background:#2a231e; border-color:#8a7a5a; }
+  .bank button.on { border-color:#d4af37; box-shadow: inset 0 0 0 1px #d4af37; }
+  .bank button kbd { float:right; font: 10px ui-monospace,monospace; color:#888; }
+  .row { display:flex; flex-wrap:wrap; gap:6px; margin-top:6px; }
+  .row button { background:#222; color:#eee; border:1px solid #555; border-radius:6px; padding:5px 9px; cursor:pointer; font: 12px system-ui; }
+  .row button:hover { background:#333; }
+  label.opt { display:flex; gap:8px; align-items:flex-start; margin:6px 0; color:#ddd; line-height:1.3; cursor:pointer; }
+  label.opt input { margin-top:2px; }
+  label.opt small { display:block; color:var(--dim); }
+  select { background:#1c1815; color:#eee; border:1px solid #555; border-radius:6px; padding:3px 6px; }
+
+  .hist { list-style:none; padding:0; margin:0; font: 12px/1.4 ui-monospace, monospace; }
+  .hist li { display:flex; justify-content:space-between; gap:8px; padding:3px 6px; border-radius:4px; margin-bottom:2px; background:#15120f; }
+  .hist li.shown { background:#1f2a14; color:#cfe8a8; }
+  .hist li.hidden { color:#777; text-decoration: line-through; text-decoration-color:#555; }
+  .hist li .tag { font-size:10px; letter-spacing:.08em; }
+  .empty { color:#777; font-style:italic; }
+
+  .strategies { display:grid; grid-template-columns: 1fr 1fr; gap:16px; }
+  .strategies.only { grid-template-columns: 1fr; }
+  @media (max-width: 1300px) { .strategies { grid-template-columns: 1fr; } }
+  .strat { border:1px solid var(--line); border-radius:10px; padding:12px; background:#120f0d; }
+  .strat .desc { font: 13px/1.4 system-ui; color:var(--dim); margin-bottom:8px; }
+  .strat .bopts { display:flex; gap:14px; flex-wrap:wrap; font: 12px system-ui; color:#ddd; margin-bottom:8px; }
+  .strat .bopts label { display:flex; gap:5px; align-items:center; cursor:pointer; }
+  .faces { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; align-items:flex-start; }
+  figure { margin:0; text-align:center; }
+  figure svg { display:block; width:var(--pw, 200px); height:auto; border:3px solid #3b2f25; border-radius:6px; background:#1b1714; }
+  figcaption { font: 12px/1.35 system-ui; margin-top:4px; max-width:var(--pw, 200px); min-width:110px; }
+  figcaption .nm { font: 900 16px Impact, sans-serif; color:var(--bone); letter-spacing:.02em; }
+  figcaption .really { color:var(--dim); font-size:11px; }
+  .chip { display:inline-block; font: 700 10px system-ui; letter-spacing:.06em; text-transform:uppercase; padding:1px 6px; border-radius:999px; margin:2px 2px 0; }
+  .chip.muff { background:#5a1a1a; color:#f3c9c9; }
+  .chip.warn { background:#5a4a10; color:#ffe58a; }
+  .chip.shape { background:#222; color:#aaa; }
+
+  #switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:4px; background:#fff; color:#000; border-radius:999px; padding:5px 6px; font:600 13px system-ui,sans-serif; box-shadow:0 6px 24px #000a; }
+  #switcher button { border:0; background:#eee; color:#000; border-radius:999px; padding:6px 12px; cursor:pointer; font:600 13px system-ui; }
+  #switcher button.on { background:#000; color:#fff; }
+
+  details.notes { margin-top:18px; border:1px solid var(--line); border-radius:10px; background:#110e0c; padding:4px 16px 16px; font: 14px/1.5 system-ui, sans-serif; }
+  details.notes summary { cursor:pointer; font: 900 18px Impact, sans-serif; letter-spacing:.04em; color:var(--bone); text-transform:uppercase; padding:8px 0; }
+  .notes table { border-collapse:collapse; width:100%; font-size:13px; margin:6px 0; }
+  .notes th, .notes td { border:1px solid #2e2823; padding:4px 7px; text-align:left; vertical-align:top; }
+  .notes th { background:#1c1815; color:#e0d5bd; }
+  .notes code, .notes pre { font: 12px/1.4 ui-monospace, monospace; }
+  .notes pre { background:#0a0908; border:1px solid #2e2823; border-radius:6px; padding:8px; overflow:auto; margin:4px 0; }
+  .jsons { display:grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap:8px; }
+  .uv { color:#ffcf6a; font-weight:700; font-size:11px; letter-spacing:.06em; }
+  .ok { color:#9fd47a; font-weight:700; font-size:11px; letter-spacing:.06em; }
+  .notes a { color:#8fc4ff; }
+  .rec { border-left:4px solid #d4af37; padding:6px 12px; background:#1a160f; margin:8px 0; }
+</style>
+</head>
+<body>
+
+<!-- Shared SVG defs (url(#id) resolves document-wide) -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="gauze" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e6dcc2"/><stop offset="1" stop-color="#c2b28c"/></linearGradient>
+    <linearGradient id="tin" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6f7376"/><stop offset=".35" stop-color="#b9bdc0"/><stop offset=".6" stop-color="#8d9195"/><stop offset="1" stop-color="#55595c"/></linearGradient>
+    <radialGradient id="bgGlow" cx=".5" cy=".4" r=".7"><stop offset="0" stop-color="#3a1d12"/><stop offset="1" stop-color="#140f0c"/></radialGradient>
+    <filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="2.5"/></filter>
+  </defs>
+</svg>
+
+<div class="top">
+  <h1>Portrait pipeline</h1>
+  <span class="sub">Throwaway prototype for #18. One shared overlay stack on three faces, under two alignment strategies. All three Captains wear the same stack so you can compare the faces.</span>
+</div>
+
+<div class="app">
+<aside>
+  <h3 style="margin-top:4px">Overlay bank (apply in order)</h3>
+  <div class="bank" id="bank"></div>
+
+  <h3>Presets</h3>
+  <div class="row" id="presets"></div>
+
+  <h3>Time passes</h3>
+  <div class="row">
+    <button id="undo" title="Z">Undo last</button>
+    <button id="heal">Heal bandages (2 days)</button>
+    <button id="unmask">Unmask (drop disguises)</button>
+    <button id="clear">Clear all</button>
+  </div>
+
+  <h3>Rules to react to</h3>
+  <label class="opt"><input type="radio" name="z" value="slot" checked> <span>Layer by <b>slot</b> (recommended)<small>Newest-first picks <i>which</i> 3 show. The slot decides what sits on top.</small></span></label>
+  <label class="opt"><input type="radio" name="z" value="time"> <span>Layer by <b>apply order</b><small>Newest on top. Watch a moustache land on a mouth bandage.</small></span></label>
+  <label class="opt"><input type="checkbox" id="pin"> <span>Pin the muffle and the active disguise into the 3<small>Overlays that change his voice or name always stay visible.</small></span></label>
+  <label class="opt"><input type="checkbox" id="tuskBase"> <span>Lost tusk is a base-art flag, outside the cap<small>Otherwise a 4th overlay makes the tusk grow back.</small></span></label>
+  <label class="opt"><input type="checkbox" id="stampCounts"> <span>Legendary stamp counts toward the 3<small>Off: the stamp is a frame, not a Humiliation.</small></span></label>
+
+  <h3>View</h3>
+  <label class="opt"><input type="checkbox" id="guides" checked> <span>Show anchors (A) and the face box (B)</span></label>
+  <label class="opt"><span>Portrait size&nbsp;
+    <select id="size">
+      <option value="200">Card (200 px)</option>
+      <option value="120">Feed (120 px)</option>
+      <option value="64">Thumbnail (64 px)</option>
+      <option value="300">Big (300 px)</option>
+    </select></span></label>
+
+  <h3>Humiliation history (newest first)</h3>
+  <ul class="hist" id="hist"></ul>
+</aside>
+
+<main>
+  <div class="strategies" id="strategies">
+    <section class="strat" id="stratA">
+      <h2>A · Per-portrait anchors</h2>
+      <div class="desc">Each face keeps its own shape. Every portrait ships with an anchor JSON, and each overlay is moved and scaled to it (eye spacing, crown width, jaw width, mouth line).</div>
+      <div class="faces" id="facesA"></div>
+    </section>
+    <section class="strat" id="stratB">
+      <h2>B · One template face box</h2>
+      <div class="desc">Every portrait is drawn so its crown, eye line, eye spacing, cheek width and mouth line sit on one shared box. The overlays are drawn once at fixed spots. Identity has to live outside the box: the jaw, chin, ears, gear and colour.</div>
+      <div class="bopts">
+        <label><input type="checkbox" id="drift"> Art ignores the template (what an unbriefed artist or raw AI output gives you)</label>
+        <label><input type="checkbox" id="overrides"> Sparse per-portrait overrides (jaw width + shoulder only)</label>
+      </div>
+      <div class="faces" id="facesB"></div>
+    </section>
+  </div>
+
+  <details class="notes" open>
+    <summary>Notes</summary>
+
+    <h3>1 · Layer order (bottom → top)</h3>
+    <table>
+      <tr><th>z</th><th>Slot</th><th>Overlays</th><th>Why here</th></tr>
+      <tr><td>0</td><td>Base face</td><td>bust, head, eyes, snout, mouth</td><td>One image per Captain, with any baked-in gear (hood, monocle, skullcap).</td></tr>
+      <tr><td>0b</td><td>Base tusks</td><td>(tusks layer)</td><td>A separate layer of the base, so <i>missing tusk</i> can remove a tusk instead of painting over it.</td></tr>
+      <tr><td>1</td><td>Lost bits</td><td>missing-tusk stub, hook</td><td>Part of the body, so everything worn goes over them. A peg leg doesn't show on a bust; it would need a badge or a full-body card.</td></tr>
+      <tr><td>2</td><td>Face hair</td><td>bad moustache</td><td>Under every wrap, so a mouth bandage covers it and only the tips and price tag peek out.</td></tr>
+      <tr><td>3</td><td>Face wraps</td><td>eyepatch, mouth bandage (muffled)</td><td>On the skin. Each wraps one feature.</td></tr>
+      <tr><td>4</td><td>Head wraps</td><td>head bandage</td><td>Goes round the head over the eyepatch strap.</td></tr>
+      <tr><td>5</td><td>Hair disguise</td><td>wig</td><td>A disguise is worn over injuries; the bandage tails poke out from under it.</td></tr>
+      <tr><td>6</td><td>Headgear</td><td>bucket helmet</td><td>Always outermost on the head. The bandage's lower edge and tails show under the rim.</td></tr>
+      <tr><td>7</td><td>Frame</td><td>Legendary stamp</td><td>Not anchored to the face; the same position on every portrait and under both strategies.</td></tr>
+    </table>
+    <p><b>Rule:</b> recency picks <i>which</i> 3 overlays are shown (#9: at most 3, newest first). The slot decides the stacking. Within a slot, the newer one goes on top. Switch to "apply order" in the sidebar to see why time alone doesn't work.</p>
+
+    <h3>2 · Per-portrait data each strategy needs</h3>
+    <table>
+      <tr><th></th><th>A · anchors</th><th>B · template box</th></tr>
+      <tr><td>Per portrait</td><td>An anchor JSON (below, live): about 9 points, ~20 numbers. <span id="anchorBytes"></span></td><td>Nothing beyond the id. Optional sparse overrides, usually empty: <code>{"jaw":168,"shoulder":[176,186]}</code>.</td></tr>
+      <tr><td>Shared</td><td>8 overlays drawn once in a reference frame, then translated and scaled per anchor. Raster overlays tolerate roughly 0.7–1.3× scale (estimate).</td><td>One template JSON + an art brief (a PNG guide with the box and lines), plus 8 overlays drawn at fixed positions.</td></tr>
+      <tr><td>Authoring cost</td><td>Click ~9 points on each of 30 faces: a small anchor-picker page, maybe an hour in total (estimate).</td><td>Every portrait has to be drawn, or nudged in an editor, to hit the box. That costs nothing for a briefed artist and is a manual fix-up for AI output.</td></tr>
+      <tr><td>What breaks</td><td>Overlays drawn for an average face look stretched on extremes (see the eyepatch on the long face). The anchor data can be wrong.</td><td>Faces converge (the long face can only be long below the mouth). A jaw wider or narrower than the box sticks out of, or floats inside, the mouth bandage. Unbriefed art misaligns badly (tick "Art ignores the template").</td></tr>
+      <tr><td>Both</td><td colspan="2">Base split into <b>face + tusks</b> (2 files per Captain). Captain state stores <code>{ portraitId, overlays:[{id, appliedAt}], legendary }</code>; the 3 shown are derived at render time, never stored.</td></tr>
+    </table>
+    <div class="jsons" id="jsons"></div>
+
+    <h3>3 · File format and size (free-tier PWA)</h3>
+    <ul>
+      <li><b>Base portraits:</b> lossy WebP, 512×640 (2× a 256×320 card), est. 30–60 KB each → 30 × ~50 KB ≈ <b>1.5 MB</b>. A 128×160 thumbnail too, est. 5–8 KB each ≈ 0.2 MB. Tusk layers are small transparent WebPs, est. 2–4 KB each.</li>
+      <li><b>Overlays:</b> 8 transparent lossy WebPs at template size, est. 10–25 KB each ≈ 0.15 MB. Total art ≈ <b>2 MB</b>, all precached by the service worker. These sizes are my estimates; measure them on the first real portrait.</li>
+      <li><b>Compose at runtime</b> from stacked absolutely-positioned <code>&lt;img&gt;</code>s (or one SVG with <code>&lt;image&gt;</code>s), with CSS transforms for strategy A. The shareable card uses canvas <code>drawImage</code> in the same order. <b>Never pre-bake combinations:</b> 30 faces × every ≤3-subset of 8 overlays is thousands of files.</li>
+      <li>If the portraits end up as hand-drawn vector like this page, SVG is smaller still (est. 3–10 KB each), and the overlays can be inline SVG <code>&lt;g&gt;</code>s like the ones here.</li>
+      <li><span class="ok">CHECKED</span> Cloudflare Pages Free allows 20,000 files per site and 25 MiB per asset (<a href="https://developers.cloudflare.com/pages/platform/limits/">Pages limits</a>, read 2026-10-29). Static asset requests are free and unlimited (repo research for #2, citing Cloudflare's docs). ~100 small files is nowhere near any limit.</li>
+      <li><span class="ok">CHECKED</span> WebP works in all current Chrome, Edge, Firefox, Opera and Safari, but needs Safari 14+ on macOS 11+ (<a href="https://developer.mozilla.org/en-US/docs/Web/Media/Guides/Formats/Image_types">MDN image types</a>). Lossy WebP supports transparency and is typically ~3× smaller than PNG (<a href="https://developers.google.com/speed/webp">Google WebP</a>). AVIF is listed from Safari 16.1 and is ~50% smaller than JPEG (MDN). That could suit us, since iOS push already needs 16.4+, but WebP is the safer default.</li>
+      <li><span class="uv">UNVERIFIED</span> How much an iOS home-screen PWA may cache before eviction. 2 MB is probably fine, but it isn't checked.</li>
+    </ul>
+
+    <h3>4 · Where the 30 real portraits could come from</h3>
+    <table>
+      <tr><th>Option</th><th>Good</th><th>Bad</th><th>Fits</th></tr>
+      <tr><td><b>Hand-drawn</b> by Mohammed or Haris</td><td>Free. Crude is on-tone (GDD §1.5: faces mostly hidden anyway). Easy to draw to the template, and the overlays come out in the same hand. Clean rights.</td><td>Slow (30 faces + 8 overlays + tusk layers, est. days of evenings). Quality depends on skill, and the style may drift over 30 faces.</td><td>B, or SVG vector</td></tr>
+      <tr><td><b>Commissioned</b> artist</td><td>Consistent and good. Can deliver layered files (face / tusks / overlays) to the template brief. Rights settled by contract.</td><td>Costs money, against the near-zero-cost goal. <span class="uv">UNVERIFIED</span> rates and turnaround; they vary widely and none were checked. Weeks of back-and-forth.</td><td>B</td></tr>
+      <tr><td><b>AI-generated, then curated</b></td><td>Fast. Lots of candidates to pick from, with near-zero marginal cost on some tools.</td><td>Face position and style drift across 30 images, so you get A-style anchors or a manual alignment pass. Overlays still need drawing to match. <span class="uv">UNVERIFIED</span> each tool's licence and commercial-use terms, free-tier limits, and the copyright status of the output (it depends on the jurisdiction). Prompts must not name Shadow of War, Warhammer or Tolkien (tone bible: original cast).</td><td>A, or B after a fix-up pass</td></tr>
+    </table>
+    <p>A hybrid also works: AI or rough sketches as reference, then hand-traced to the template. That gives you the speed of AI drafts and the consistency of one hand.</p>
+
+    <h3>5 · Recommendation</h3>
+    <div class="rec">
+      <b>B + sparse overrides.</b> The template face box is the art brief and the default. A portrait carries an override only where its silhouette leaves the box (in practice the jaw width and the hook's shoulder). Faces are mostly hidden (§1.5), so the identity should live in the jaw, ears, chin and baked gear, which B leaves free. One overlay set fits all 30 with no tuning.
+      <br>Plus: <b>layer by slot</b>; <b>pin the muffle and the active disguise</b> so the voice and name always match the face; make <b>removals (lost tusk) base-art flags outside the cap</b>; and keep the <b>Legendary stamp as a frame, outside the cap</b>.
+      <br>Fall back to <b>A</b> if the portraits come from raw AI output that nobody will align by hand.
+    </div>
+
+    <h3>Open questions for Mohammed</h3>
+    <ul>
+      <li>Is the cap "3 Humiliations" or "3 things on the face"? Pinning the muffle and disguise can push out a fresh bandage.</li>
+      <li>Should the hook (and a peg leg) appear on the bust at all, or as a small badge beside the name?</li>
+      <li>How much of a bare face is OK? At thumbnail size, 3 overlays on top of baked gear can leave nothing recognisable (try 64 px with the Overflow preset).</li>
+    </ul>
+  </details>
+</main>
+</div>
+
+<div id="switcher">
+  <button data-v="A">A only</button><button data-v="AB">A + B</button><button data-v="B">B only</button>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const CX = 100;
+
+// ---------------- Cast (placeholder geometry; one shared stack across all three) ----------------
+// g = face geometry in a 200×240 frame. eyeDX = half the eye spacing, mouthW = half mouth width,
+// hw = half head width at the cheeks, jw = half jaw width at the mouth line.
+const CAST = {
+  krug:   { name:'Krúg', aliases:['Krúg Bootleg','Kevin'], shape:'squat', skin:'#6f8a3c', dark:'#465a24', eyeRy:6.5, gear:'krug',
+            g:{ crownY:52, eyeY:100, eyeDX:26, mouthY:140, mouthW:34, chinY:168, hw:70, jw:66, tuskH:16, earLen:22 } },
+  snarl:  { name:'Lord Snarlbottom', aliases:['Not-Snarlbottom','Nigel'], shape:'long', skin:'#7d8f6a', dark:'#56654a', eyeRy:4.5, gear:'hood',
+            g:{ crownY:22, eyeY:92, eyeDX:18, mouthY:152, mouthW:22, chinY:192, hw:44, jw:34, tuskH:12, earLen:30 } },
+  mudgut: { name:'Old Mudgut', aliases:['Gutmud','Dave'], shape:'wide', skin:'#5d7a46', dark:'#3f5530', eyeRy:4, gear:'skullcap',
+            g:{ crownY:50, eyeY:96, eyeDX:34, mouthY:136, mouthW:44, chinY:172, hw:86, jw:84, tuskH:20, earLen:16 } },
+};
+// Strategy B: the face box every portrait must hit, and the full template the overlays are drawn for.
+const BOX = { crownY:40, eyeY:96, eyeDX:26, mouthY:142, mouthW:32, hw:64 };
+const TEMPLATE = { ...BOX, jw:62, chinY:170, tuskH:16 };
+
+const round = n => Math.round(n);
+function shoulderOf(g) { return [Math.min(176, round(CX + g.jw*0.9 + 14)), round(g.chinY + 14)]; }
+function anchorsOf(g) {
+  return {
+    eyes:  { l:[CX-g.eyeDX, g.eyeY], r:[CX+g.eyeDX, g.eyeY] },
+    brow:  g.eyeY - 12,
+    crown: [CX, g.crownY, round(2*g.hw*0.94)],
+    nose:  [CX, round((g.eyeY+g.mouthY)/2)],
+    mouth: [CX, g.mouthY, 2*g.mouthW],
+    jaw:   2*g.jw,
+    tusks: { l:[round(CX-g.mouthW*0.7), g.mouthY+3, g.tuskH], r:[round(CX+g.mouthW*0.7), g.mouthY+3, g.tuskH] },
+    shoulder: shoulderOf(g),
+  };
+}
+
+// ---------------- Base portrait ----------------
+function headPath(g) {
+  const { crownY:c, eyeY:e, mouthY:m, chinY:ch, hw, jw } = g, up = c + (e-c)*0.45, low = e + (m-e)*0.6;
+  return `M${CX},${c} C${CX+hw*0.7},${c} ${CX+hw},${up} ${CX+hw},${e} C${CX+hw},${low} ${CX+jw},${m-8} ${CX+jw},${m}
+    C${CX+jw},${ch-6} ${CX+jw*0.5},${ch} ${CX},${ch} C${CX-jw*0.5},${ch} ${CX-jw},${ch-6} ${CX-jw},${m}
+    C${CX-jw},${m-8} ${CX-hw},${low} ${CX-hw},${e} C${CX-hw},${up} ${CX-hw*0.7},${c} ${CX},${c} Z`;
+}
+function tusk([x,y,h]) { return `<path d="M${x-5},${y+2} Q${x-4},${y-h*0.5} ${x},${y-h} Q${x+3},${y-h*0.4} ${x+5},${y+2} Z" fill="#efe6c8" stroke="#000" stroke-width="2"/>`; }
+function base(c, g, hideTuskL) {
+  const { crownY:cy, eyeY:e, mouthY:m, chinY:ch, hw, jw, eyeDX:dx, mouthW:mw, earLen:el } = g;
+  const a = anchorsOf(g), nose = a.nose[1];
+  let s = `<rect width="200" height="240" fill="url(#bgGlow)"/>`;
+  s += `<path d="M0,240 L0,${ch+40} Q10,${ch+14} 100,${ch+6} Q190,${ch+14} 200,${ch+40} L200,240 Z" fill="#2b2420" stroke="#000" stroke-width="3"/>`;
+  s += `<path d="M40,240 L66,${ch+12} M160,240 L134,${ch+12}" stroke="#6d5b45" stroke-width="9"/>`;
+  if (c.gear === 'hood') s += `<path d="M${CX-hw-20},${ch+26} Q${CX-hw-28},${cy-18} ${CX},${cy-22} Q${CX+hw+28},${cy-18} ${CX+hw+20},${ch+26} Z" fill="#3b2f4a" stroke="#000" stroke-width="3"/>`;
+  s += `<rect x="${CX-jw*0.55}" y="${m}" width="${jw*1.1}" height="${ch-m+14}" fill="${c.dark}"/>`;
+  s += `<path d="M${CX+hw-4},${e-14} L${CX+hw+el},${e-26} L${CX+hw-2},${e+6} Z M${CX-hw+4},${e-14} L${CX-hw-el},${e-26} L${CX-hw+2},${e+6} Z" fill="${c.skin}" stroke="#000" stroke-width="2.5"/>`;
+  s += `<path d="${headPath(g)}" fill="${c.skin}" stroke="#000" stroke-width="3"/>`;
+  s += `<circle cx="${CX+hw*0.55}" cy="${e+22}" r="3" fill="${c.dark}"/><circle cx="${CX-hw*0.3}" cy="${(cy+e)/2}" r="2.5" fill="${c.dark}"/>`;
+  // brow ridge + sunken eyes with slit pupils (the "unsettling glimpse")
+  s += `<path d="M${CX-dx-14},${e-9} Q${CX-dx},${e-19} ${CX-4},${e-8} M${CX+dx+14},${e-9} Q${CX+dx},${e-19} ${CX+4},${e-8}" stroke="${c.dark}" stroke-width="6" fill="none" stroke-linecap="round"/>`;
+  for (const [x,y] of [a.eyes.l, a.eyes.r]) s += `<ellipse cx="${x}" cy="${y}" rx="10" ry="${c.eyeRy}" fill="#140d06"/><ellipse cx="${x}" cy="${y}" rx="4.2" ry="${Math.min(3.4,c.eyeRy-0.6)}" fill="#e9c23a"/><rect x="${x-0.7}" y="${y-2.6}" width="1.4" height="5.2" fill="#000"/>`;
+  s += `<ellipse cx="${CX}" cy="${nose}" rx="12" ry="8" fill="${c.dark}" stroke="#000" stroke-width="1.5"/><ellipse cx="${CX-5}" cy="${nose+2}" rx="2.6" ry="2" fill="#140d06"/><ellipse cx="${CX+5}" cy="${nose+2}" rx="2.6" ry="2" fill="#140d06"/>`;
+  s += `<path d="M${CX-mw},${m-2} Q${CX},${m+10} ${CX+mw},${m-2}" stroke="#140d06" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+  s += `<path d="M${CX-8},${m+3} l3,-6 l3,6 M${CX+2},${m+3} l3,-6 l3,6" fill="#efe6c8" stroke="#000" stroke-width="1"/>`;
+  if (!hideTuskL) s += tusk(a.tusks.l);
+  s += tusk(a.tusks.r);
+  if (c.gear === 'krug') {
+    s += `<circle cx="${CX}" cy="${nose+9}" r="6" fill="none" stroke="#d4af37" stroke-width="3"/>`;
+    s += `<path d="M${CX-hw*0.75},${e+10} L${CX-hw*0.4},${e+30}" stroke="#2a1a0e" stroke-width="2"/>` + [0,1,2,3].map(i=>{ const x=CX-hw*0.75+i*hw*0.09, y=e+10+i*5.3; return `<path d="M${x-4},${y+2} l8,-4" stroke="#2a1a0e" stroke-width="1.5"/>`; }).join('');
+  }
+  if (c.gear === 'hood') {
+    const [lx,ly] = a.eyes.l;
+    s += `<circle cx="${lx}" cy="${ly}" r="11" fill="#ffffff22" stroke="#d4af37" stroke-width="2"/><path d="M${lx-9},${ly+7} Q${lx-20},${ly+50} ${lx-14},${ch+20}" stroke="#d4af37" stroke-width="1" fill="none"/>`;
+  }
+  if (c.gear === 'skullcap') {
+    const capY = cy + (e-cy)*0.5;
+    s += `<path d="M${CX-hw*0.93},${capY} C${CX-hw*0.85},${cy-6} ${CX+hw*0.85},${cy-6} ${CX+hw*0.93},${capY} Z" fill="#5b5e61" stroke="#000" stroke-width="3"/>`;
+    s += [-0.6,-0.2,0.2,0.6].map(f=>`<circle cx="${CX+hw*f}" cy="${capY-4}" r="2.5" fill="#a6a9ac" stroke="#000"/>`).join('');
+    s += `<ellipse cx="${CX+12}" cy="${ch-8}" rx="9" ry="4" fill="#5a3a12" opacity=".8"/>`;
+  }
+  return s;
+}
+
+// ---------------- Overlays (each a function of an anchor set) ----------------
+const OV = {
+  headBandage: { label:'Head bandage', cat:'Bandage', life:'heals ~2 days', slot:4, draw(a) {
+    const [cx,cy,w] = a.crown, b = a.brow, L = cx-w/2-3, R = cx+w/2+3;
+    return `<g>
+      <path d="M${cx-w*0.34},${b-12} L${cx-w*0.14},${b-20} L${cx+w*0.2},${cy+5} L${cx+w*0.02},${cy+1} Z" fill="url(#gauze)" stroke="#7d6c4c" stroke-width="2"/>
+      <path d="M${L},${b-12} Q${cx},${b-26} ${R},${b-14} L${R},${b+3} Q${cx},${b-9} ${L},${b+5} Z" fill="url(#gauze)" stroke="#7d6c4c" stroke-width="2"/>
+      <path d="M${L+6},${b-5} Q${cx},${b-17} ${R-6},${b-7}" stroke="#a8977a" stroke-width="1.5" fill="none"/>
+      <ellipse cx="${cx+w*0.18}" cy="${b-9}" rx="7" ry="4.5" fill="#8b1a1a" opacity=".85"/>
+      <path d="M${R-3},${b-6} l13,15 l-6,4 Z M${R-3},${b-1} l5,21 l-6,1 Z" fill="url(#gauze)" stroke="#7d6c4c" stroke-width="1.5"/>
+    </g>`; } },
+  eyepatch: { label:'Eyepatch', cat:'Bandage', life:'heals ~2 days', slot:3, draw(a) {
+    const [ex,ey] = a.eyes.r, s = (a.eyes.r[0]-a.eyes.l[0])/52, [cx,,w] = a.crown;
+    return `<g>
+      <path d="M${cx-w/2},${a.brow-12} L${ex},${ey} L${cx+w/2},${ey-3}" stroke="#111" stroke-width="3" fill="none"/>
+      <ellipse cx="${ex}" cy="${ey}" rx="${13*s}" ry="${10*s}" fill="#161412" stroke="#000" stroke-width="2"/>
+      <path d="M${ex-7*s},${ey-4*s} q${6*s},${-3*s} ${11*s},${1*s}" stroke="#4a4540" stroke-width="1.5" fill="none"/>
+    </g>`; } },
+  mouthBandage: { label:'Mouth bandage', cat:'Bandage', life:'heals ~2 days · muffled', slot:3, draw(a) {
+    const [mx,my] = a.mouth, j = a.jaw/2 + 3;
+    return `<g>
+      <path d="M${mx-j},${my-7} Q${mx},${my-12} ${mx+j},${my-7} L${mx+j},${my+15} Q${mx},${my+22} ${mx-j},${my+15} Z" fill="url(#gauze)" stroke="#7d6c4c" stroke-width="2"/>
+      <path d="M${mx-j+4},${my-1} Q${mx},${my-6} ${mx+j-4},${my-1} M${mx-j+4},${my+8} Q${mx},${my+13} ${mx+j-4},${my+8}" stroke="#a8977a" stroke-width="1.5" fill="none"/>
+      <ellipse cx="${mx+4}" cy="${my+3}" rx="10" ry="4" fill="#7b1515" opacity=".8"/>
+    </g>`; } },
+  hook: { label:'Hook', cat:'Lost bit', life:'permanent', slot:1, draw(a) {
+    const [sx,sy] = a.shoulder, hx = sx-8, hy = sy+2;
+    return `<g>
+      <path d="M${sx+34},240 L${sx+6},${sy+14} L${sx-16},${sy+8} L${sx-8},240 Z" fill="#3a2d22" stroke="#000" stroke-width="2.5"/>
+      <ellipse cx="${hx}" cy="${hy+6}" rx="12" ry="5" fill="#6d5b45" stroke="#000" stroke-width="2"/>
+      <path d="M${hx},${hy+4} L${hx},${hy-16} C${hx},${hy-40} ${hx-24},${hy-40} ${hx-22},${hy-22}" stroke="#222" stroke-width="7" fill="none" stroke-linecap="round"/>
+      <path d="M${hx},${hy+4} L${hx},${hy-16} C${hx},${hy-40} ${hx-24},${hy-40} ${hx-22},${hy-22}" stroke="#c3c7ca" stroke-width="4" fill="none" stroke-linecap="round"/>
+    </g>`; } },
+  missingTusk: { label:'Missing tusk', cat:'Lost bit', life:'permanent', slot:1, removes:'tuskL', draw(a) {
+    const [tx,ty,h] = a.tusks.l;
+    return `<g>
+      <path d="M${tx-5},${ty+2} L${tx-3},${ty-h*0.35} L${tx},${ty-h*0.22} L${tx+2},${ty-h*0.42} L${tx+5},${ty+2} Z" fill="#d9cfae" stroke="#000" stroke-width="1.5"/>
+      <path d="M${tx-1},${ty-2} l2,-3" stroke="#7b1515" stroke-width="1.2"/>
+    </g>`; } },
+  moustache: { label:'Bad moustache', cat:'Disguise', life:'until unmasked', slot:2, draw(a) {
+    const [nx,ny] = a.nose, [,my,mw] = a.mouth, x = nx+3, y = ny + 10, h = Math.max(mw*0.7, 24);
+    const half = d => `M${x},${y-2} C${x+d*h*0.4},${y-12} ${x+d*h*0.85},${y-6} ${x+d*h},${y-15} C${x+d*h*1.02},${y+3} ${x+d*h*0.5},${y+9} ${x},${y+4} Z`;
+    return `<g transform="rotate(5 ${x} ${y})">
+      <path d="${half(-1)} ${half(1)}" fill="#2a1a0e" stroke="#000" stroke-width="1.5"/>
+      <rect x="${x-6}" y="${y-7}" width="12" height="12" fill="#e8f0ff" opacity=".45"/>
+      <path d="M${x+h-2},${y-8} l9,13" stroke="#ddd" stroke-width="1"/>
+      <rect x="${x+h+3}" y="${y+4}" width="13" height="9" rx="1.5" fill="#f2e6c4" stroke="#6b5a3a"/>
+      <text x="${x+h+9.5}" y="${y+11}" font-size="7" font-family="system-ui" font-weight="700" text-anchor="middle" fill="#5a1a1a">2p</text>
+    </g>`; } },
+  wig: { label:'Wig', cat:'Disguise', life:'until unmasked', slot:5, draw(a) {
+    const [cx,cy,w] = a.crown, b = a.brow, [,my] = a.mouth, r = Math.max(8, 11*w/124);
+    let s = `<g transform="rotate(6 ${cx} ${b})">`, curls = [];
+    for (let i=0;i<=12;i++){ const t = Math.PI*i/12; curls.push([cx + (w/2+2)*Math.cos(t), b - (b-cy+8)*Math.sin(t)]); }
+    for (let i=0;i<5;i++) curls.push([cx - w*0.36 + i*w*0.18, b-6]);
+    for (let y=b+6; y<my+6; y+=r*1.3) { curls.push([cx-w/2-5, y]); curls.push([cx+w/2+5, y]); }
+    s += curls.map(([x,y])=>`<circle cx="${x}" cy="${y}" r="${r}" fill="#e9c55a" stroke="#a07a20" stroke-width="1.5"/>`).join('');
+    s += curls.filter((_,i)=>i%2===0).map(([x,y])=>`<path d="M${x-r*0.4},${y} q${r*0.4},${-r*0.5} ${r*0.8},0" stroke="#a07a20" stroke-width="1" fill="none"/>`).join('');
+    return s + `</g>`; } },
+  bucket: { label:'Bucket helmet', cat:'Disguise', life:'until unmasked', slot:6, draw(a) {
+    const [cx,cy,w] = a.crown, rim = a.brow - 1, top = Math.max(4, cy-24), th = w*0.36, rh = w*0.58;
+    const at = f => [top + (rim-top)*f, th + (rh-th)*f];
+    const [y1,w1] = at(0.33), [y2,w2] = at(0.66);
+    return `<g transform="rotate(-7 ${cx} ${rim})">
+      <path d="M${cx+rh*0.78},${top+(rim-top)*0.4} C${cx+rh*1.4},${top+(rim-top)*0.3} ${cx+rh*1.45},${rim+8} ${cx+rh*1.02},${rim-2}" stroke="#444" stroke-width="2.5" fill="none"/>
+      <path d="M${cx-th},${top} L${cx+th},${top} L${cx+rh},${rim} L${cx-rh},${rim} Z" fill="url(#tin)" stroke="#333" stroke-width="3"/>
+      <path d="M${cx-w1},${y1} L${cx+w1},${y1} M${cx-w2},${y2} L${cx+w2},${y2}" stroke="#555" stroke-width="2"/>
+      <rect x="${cx-rh-3}" y="${rim-4}" width="${2*rh+6}" height="7" rx="3" fill="#7a7d80" stroke="#333" stroke-width="2"/>
+      <path d="M${cx-th*0.5},${top+8} q6,6 2,14" stroke="#444" stroke-width="1.5" fill="none"/>
+      <circle cx="${cx+th*0.6}" cy="${y2+4}" r="3.5" fill="#8a4a1a" opacity=".8"/><circle cx="${cx-w2*0.7}" cy="${y1+5}" r="2.5" fill="#8a4a1a" opacity=".7"/>
+    </g>`; } },
+  stamp: { label:'Legendary stamp', cat:'Legendary', life:'permanent', slot:7, draw() {
+    return `<g transform="rotate(-12 100 214)" opacity=".85" filter="url(#rough)">
+      <rect x="38" y="200" width="124" height="28" rx="4" fill="#c0161b22" stroke="#c0161b" stroke-width="4"/>
+      <text x="100" y="222" text-anchor="middle" font-family="Impact, 'Arial Black', sans-serif" font-size="21" letter-spacing="2" fill="#c0161b">LEGENDARY</text>
+    </g>`; } },
+};
+const ORDER = ['headBandage','eyepatch','mouthBandage','hook','missingTusk','bucket','moustache','wig','stamp'];
+
+// ---------------- State ----------------
+let seq = 0, applied = [];   // [{id, n}] — every active Humiliation, ever; the cap is only for display
+const opt = () => ({
+  z: document.querySelector('input[name=z]:checked').value,
+  pin: $('#pin').checked, tuskBase: $('#tuskBase').checked, stampCounts: $('#stampCounts').checked,
+  guides: $('#guides').checked, drift: $('#drift').checked, overrides: $('#overrides').checked,
+});
+function apply(id) { applied = applied.filter(x => x.id !== id); applied.push({ id, n: ++seq }); render(); }
+
+function visible(o) {
+  const newest = [...applied].sort((a,b) => b.n - a.n);
+  const outside = x => (x.id === 'stamp' && !o.stampCounts) || (x.id === 'missingTusk' && o.tuskBase);
+  const cand = newest.filter(x => !outside(x));
+  let shown = [];
+  if (o.pin) {
+    const m = cand.find(x => x.id === 'mouthBandage'), d = cand.find(x => OV[x.id].cat === 'Disguise');
+    shown = [m, d].filter(Boolean);
+  }
+  for (const x of cand) { if (shown.length >= 3) break; if (!shown.includes(x)) shown.push(x); }
+  shown.push(...newest.filter(outside));
+  return shown;
+}
+function zSort(list, o) {
+  return [...list].sort((a,b) => o.z === 'slot' ? (OV[a.id].slot - OV[b.id].slot) || (a.n - b.n) : a.n - b.n);
+}
+
+// ---------------- Render ----------------
+function guidesA(a) {
+  const pts = [['eyeL',...a.eyes.l],['eyeR',...a.eyes.r],['crown',a.crown[0],a.crown[1]],['nose',...a.nose],['mouth',a.mouth[0],a.mouth[1]],['tuskL',a.tusks.l[0],a.tusks.l[1]],['tuskR',a.tusks.r[0],a.tusks.r[1]],['shoulder',...a.shoulder]];
+  let s = `<g pointer-events="none"><path d="M${a.crown[0]-a.crown[2]/2},${a.brow} h${a.crown[2]}" stroke="#ff4fd8" stroke-width="1" stroke-dasharray="3 2"/>`;
+  s += `<path d="M${a.mouth[0]-a.jaw/2},${a.mouth[1]+20} h${a.jaw}" stroke="#ff4fd8" stroke-width="1" stroke-dasharray="3 2"/>`;
+  s += pts.map(([k,x,y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#ff4fd8" stroke="#000" stroke-width=".8"/><text x="${x+4}" y="${y-3}" font-size="7" font-family="system-ui" fill="#ff9cec" stroke="#000" stroke-width="2" paint-order="stroke">${k}</text>`).join('');
+  return s + `</g>`;
+}
+function guidesB(a) {
+  const T = TEMPLATE;
+  return `<g pointer-events="none" stroke="#3fe0ff" stroke-width="1" fill="none" stroke-dasharray="4 2">
+    <rect x="${CX-T.hw}" y="${T.crownY}" width="${2*T.hw}" height="${T.mouthY-T.crownY}"/>
+    <path d="M${CX-T.hw},${T.eyeY} h${2*T.hw} M${CX-T.hw},${T.mouthY} h${2*T.hw}"/>
+    <path d="M${a.mouth[0]-a.jaw/2},${a.mouth[1]+20} h${a.jaw}" stroke="#ffd23f"/>
+    <text x="${CX-T.hw+2}" y="${T.crownY+8}" font-size="7" font-family="system-ui" fill="#3fe0ff" stroke="none">face box</text>
+  </g>`;
+}
+function portrait(id, strat, o, shown) {
+  const c = CAST[id];
+  let g, a;
+  if (strat === 'A') { g = c.g; a = anchorsOf(g); }
+  else {
+    g = o.drift ? c.g : { ...c.g, ...BOX };
+    a = anchorsOf(TEMPLATE);
+    if (o.overrides) { a.jaw = 2*g.jw; a.shoulder = shoulderOf(g); }
+  }
+  const ids = new Set(applied.map(x => x.id));
+  const hideTusk = shown.some(x => x.id === 'missingTusk') || (o.tuskBase && ids.has('missingTusk'));
+  let s = base(c, g, hideTusk);
+  for (const x of zSort(shown, o)) s += OV[x.id].draw(a);
+  if (o.guides) s += strat === 'A' ? guidesA(a) : guidesB(a);
+  const svg = `<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg">${s}</svg>`;
+
+  // caption: name/alias and state warnings (state comes from ALL active Humiliations, not just the shown 3)
+  const disguised = applied.some(x => OV[x.id].cat === 'Disguise');
+  const muffled = ids.has('mouthBandage');
+  const shownIds = new Set(shown.map(x => x.id));
+  let chips = `<span class="chip shape">${c.shape}</span>`;
+  if (muffled) chips += `<span class="chip muff">voice: muffled</span>`;
+  if (muffled && !shownIds.has('mouthBandage')) chips += `<span class="chip warn">muffled, but bandage hidden</span>`;
+  if (disguised && !shown.some(x => OV[x.id].cat === 'Disguise')) chips += `<span class="chip warn">alias, but no disguise visible</span>`;
+  if (ids.has('missingTusk') && !hideTusk) chips += `<span class="chip warn">tusk grew back</span>`;
+  const nm = disguised ? `“${c.aliases[0]}”` : c.name;
+  const really = disguised ? `<div class="really">(really ${c.name})</div>` : '';
+  return `<figure>${svg}<figcaption><div class="nm">${nm}</div>${really}${chips}</figcaption></figure>`;
+}
+
+function render() {
+  const o = opt(), shown = visible(o);
+  document.documentElement.style.setProperty('--pw', $('#size').value + 'px');
+  for (const strat of ['A','B']) $('#faces'+strat).innerHTML = Object.keys(CAST).map(id => portrait(id, strat, o, shown)).join('');
+
+  // history
+  const newest = [...applied].sort((a,b) => b.n - a.n);
+  $('#hist').innerHTML = newest.length ? newest.map(x => {
+    const on = shown.includes(x), v = OV[x.id];
+    return `<li class="${on?'shown':'hidden'}"><span>#${x.n} ${v.label}</span><span class="tag">${on?'SHOWN':'HIDDEN'} · ${v.life}</span></li>`;
+  }).join('') : `<li class="empty">No Humiliations yet. Click the bank.</li>`;
+  document.querySelectorAll('.bank button').forEach(b => b.classList.toggle('on', applied.some(x => x.id === b.dataset.id)));
+
+  // notes: live anchor JSON for A, template for B
+  const fmt = obj => '{\n' + Object.entries(obj).map(([k,v]) => `  "${k}": ${JSON.stringify(v)}`).join(',\n') + '\n}';
+  const blocks = Object.entries(CAST).map(([id,c]) => `<div><b>A · ${id}.anchors.json</b> <small>(${c.shape})</small><pre>${fmt(anchorsOf(c.g))}</pre></div>`);
+  blocks.push(`<div><b>B · template.json</b> <small>(shared, once)</small><pre>${fmt(anchorsOf(TEMPLATE))}</pre></div>`);
+  $('#jsons').innerHTML = blocks.join('');
+  const bytes = JSON.stringify(anchorsOf(CAST.krug.g)).length;
+  $('#anchorBytes').textContent = `~${bytes} bytes each, ~${Math.round(bytes*30/100)/10} KB for 30.`;
+
+  // view
+  const v = new URLSearchParams(location.search).get('view') || 'AB';
+  $('#stratA').style.display = v === 'B' ? 'none' : '';
+  $('#stratB').style.display = v === 'A' ? 'none' : '';
+  $('#strategies').classList.toggle('only', v !== 'AB');
+  document.querySelectorAll('#switcher button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+
+// ---------------- Controls ----------------
+$('#bank').innerHTML = ORDER.map((id,i) => `<button data-id="${id}"><kbd>${i+1}</kbd>${OV[id].label}<small>${OV[id].cat} · z${OV[id].slot}</small></button>`).join('');
+$('#bank').addEventListener('click', e => { const b = e.target.closest('button'); if (b) apply(b.dataset.id); });
+
+const PRESETS = {
+  'Bucket over head bandage': ['headBandage','bucket'],
+  'Moustache under muffle': ['moustache','mouthBandage'],
+  'Full disguise': ['wig','moustache','bucket'],
+  'Overflow (5 in a row)': ['eyepatch','missingTusk','headBandage','mouthBandage','bucket'],
+  'Legendary veteran': ['hook','eyepatch','moustache','bucket','stamp'],
+};
+$('#presets').innerHTML = Object.keys(PRESETS).map(k => `<button data-p="${k}">${k}</button>`).join('');
+$('#presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  applied = []; PRESETS[b.dataset.p].forEach(id => applied.push({ id, n: ++seq })); render();
+});
+$('#undo').onclick = () => { if (applied.length) { const max = Math.max(...applied.map(x => x.n)); applied = applied.filter(x => x.n !== max); render(); } };
+$('#heal').onclick = () => { applied = applied.filter(x => OV[x.id].cat !== 'Bandage'); render(); };
+$('#unmask').onclick = () => { applied = applied.filter(x => OV[x.id].cat !== 'Disguise'); render(); };
+$('#clear').onclick = () => { applied = []; render(); };
+document.querySelectorAll('aside input, aside select, .bopts input').forEach(el => el.addEventListener('change', render));
+
+function setView(v) { const u = new URL(location); u.searchParams.set('view', v); history.replaceState(null, '', u); render(); }
+$('#switcher').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setView(b.dataset.v); });
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) return;
+  const views = ['A','AB','B'], cur = new URLSearchParams(location.search).get('view') || 'AB', i = views.indexOf(cur);
+  if (e.key === 'ArrowRight') setView(views[(i+1)%3]);
+  else if (e.key === 'ArrowLeft') setView(views[(i+2)%3]);
+  else if (/^[1-9]$/.test(e.key)) apply(ORDER[+e.key-1]);
+  else if (e.key === 'z' || e.key === 'Z') $('#undo').click();
+});
+
+// Start with a moustache under a mouth bandage, plus a head bandage (press "Bucket over head bandage" for the other case).
+// Optional URL state: ?stack=hook,eyepatch&size=300&guides=0&z=time&pin=1&tuskBase=1&stampCounts=1&drift=1&overrides=1
+const q = new URLSearchParams(location.search);
+const stack = q.get('stack') ? q.get('stack').split(',').filter(id => OV[id]) : ['moustache','mouthBandage','headBandage'];
+stack.forEach(id => applied.push({ id, n: ++seq }));
+if (q.get('size')) $('#size').value = q.get('size');
+if (q.get('guides') === '0') $('#guides').checked = false;
+if (q.get('z') === 'time') document.querySelector('input[name=z][value=time]').checked = true;
+for (const k of ['pin','tuskBase','stampCounts','drift','overrides']) if (q.get(k) === '1') $('#'+k).checked = true;
+render();
+</script>
+</body>
+</html>
