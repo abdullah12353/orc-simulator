@@ -17,6 +17,8 @@ A **locked MVP spec** for ORC NONSENSE: [gdd.md](./gdd.md) plus its decision log
 ## Decisions so far
 
 - [Destination and first principles](issues/01-destination-and-first-principles.md): locked MVP spec is the goal; async-first; Backing pays on wins and Infamy; Infamy decides the Warlord; Krúg (accent on the u) is the founding Captain; content "all out" (boundary still open); score still open.
+- [Free-tier platform limits](issues/02-free-tier-platform-limits.md): the free stack works if a Cloudflare cron Worker owns the tick (adaptive 1 to 5 min) with Supabase as canonical store, and sends one Realtime broadcast per tick; risks are Supabase's vague pause rule and the 10 ms Worker CPU budget.
+- [AI and voice costs](issues/03-ai-and-voice-costs.md): running costs are pennies to a few dollars a month (Haiku 5.5 with thinking off, caching, Batch for the Herald; one ElevenLabs Starter month to prerender all audio); policy allows profanity and crude fictional insults but not protected-group humour or explicit sex, so edgier lines must be hand-written.
 
 ## Not yet specified
 
