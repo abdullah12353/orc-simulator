@@ -1,6 +1,6 @@
 # ORC NONSENSE: Exploratory Game Design Document (draft 1)
 
-Status: **exploratory**. Nothing is built. This document is the destination the wayfinder map ([map.md](./map.md)) is working towards: once every map ticket is resolved, this becomes the locked MVP spec.
+Status: **exploratory**. Nothing is built. This document is the destination the wayfinder map ([issue #14](https://github.com/abdullah12353/orc-simulator/issues/14)) is working towards: once every map ticket is resolved, this becomes the locked MVP spec.
 Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). Decision log: §10 here, plus the map's *Decisions so far*.
 
 Sources: the Mohammed/Haris brainstorm summary (§1), the supplementary creative direction note (§1.5), and first-round grilling answers.
@@ -95,7 +95,7 @@ Rule of thumb: **systems for the left column, seed content for the right.**
 | **The Incompetent Hierarchy** | **Core**, merged with Return | Rank comes from Infamy as much as Power. Accidents and luck promote. |
 | **The Return of the Idiot** | **Core**, merged with Hierarchy | One system: *Failing Upward*. |
 | **Trophies and Loot** | MVP, **as an effect, not a system** | A Clash effect: it adds a Trophy and a Grudge tag. No inventory. |
-| **Captain Sponsorship** (Backing) | MVP, **light** | A standing Stake on a Captain. Clash-only edge, pays best on Infamy. See [Backing economy](issues/08-backing-economy.md). |
+| **Captain Sponsorship** (Backing) | MVP, **light** | A standing Stake on a Captain. Clash-only edge, pays best on Infamy. See [Backing economy](https://github.com/abdullah12353/orc-simulator/issues/8). |
 | **Cascading Disasters** | **Don't build it** | This is an *emergent property* of Grudges + Rumour misfires + Return vendettas. A dedicated cascade system would script what should emerge. |
 | **The Herald** (daily report) | MVP, **the stage** | How the mechanics reach you while you're away. Named *The Gutter Herald*. |
 | **The Hall of Shame** | MVP-lite, **as a view** | A ranked query over past high-Infamy events and Legendary Captains. No new rules. |
@@ -144,7 +144,7 @@ A worked chain:
 ## 6. Recommended MVP
 
 ### 6.1 The world
-One original fortress, around 12 **active** Captains plus a **reserve**, from a fixed, hand-written cast of ~30 (one portrait each), and **Krúg as the founding Captain**, always active but not the starting Warlord. Card, name and voice rules: [Captain card and name generator](issues/06-captain-card-and-name-generator.md). One private world per friend group.
+One original fortress, around 12 **active** Captains plus a **reserve**, from a fixed, hand-written cast of ~30 (one portrait each), and **Krúg as the founding Captain**, always active but not the starting Warlord. Card, name and voice rules: [Captain card and name generator](https://github.com/abdullah12353/orc-simulator/issues/6). One private world per friend group.
 
 ### 6.2 Core loop (async-first, a 3–5 minute visit a few times a day)
 1. **Open → the Herald** ("Since You Left"): 5–8 headlines ranked by comedy weight, with the top one introduced by prerecorded announcer stingers (no runtime TTS).
@@ -162,7 +162,7 @@ Multiple fortresses or regions · seasons and resets · gear and loot systems ·
 
 ## 7. Open design questions
 
-These live as tickets on [map.md](./map.md) or in its *Not yet specified* fog. They are not restated here.
+These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simulator/issues/14) or in its *Not yet specified* fog. They are not restated here.
 
 ---
 

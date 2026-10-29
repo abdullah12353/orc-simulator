@@ -1,6 +1,6 @@
 # ORC NONSENSE: Tone bible
 
-Status: **decided** (ticket [Tone bible and content boundaries](issues/05-tone-bible-and-content-boundaries.md), 2026-10-29).
+Status: **decided** (ticket [Tone bible and content boundaries](https://github.com/abdullah12353/orc-simulator/issues/5), 2026-10-29).
 Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). This file is also the seed for the narration system prompt: its rules and samples are the cached few-shot prefix.
 
 ## 1. The house voice
@@ -21,7 +21,7 @@ Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). This file is also the seed for the
 - **The swap test.** A Captain's accent is their voice, never their punchline. If swapping the accent kills the joke, the joke is cut. This applies to every accent, cockney and RP included.
 - Every Captain's joke comes from the **shared trait pool** (vain, hydrophobic, glutton, Mummy's Boy, compulsive liar…), never from a "type" tied to their accent (no call-centre, shopkeeper and so on).
 - **Written down through word choice and grammar only** ("yous", "ain't", "deid", "old boy"), with no phonetic respelling. The voice does the rest. Muffled is the only exception.
-- **Accent archetypes** (final, from [Captain card and name generator](issues/06-captain-card-and-name-generator.md)): cockney, posh RP, West Country, Scouse, Glaswegian, Indian English. **Muffled** (mummy bandages, subtitled) is a Humiliation overlay that any Captain can get, not an archetype.
+- **Accent archetypes** (final, from [Captain card and name generator](https://github.com/abdullah12353/orc-simulator/issues/6)): cockney, posh RP, West Country, Scouse, Glaswegian, Indian English. **Muffled** (mummy bandages, subtitled) is a Humiliation overlay that any Captain can get, not an archetype.
 
 ## 4. Boundaries
 
@@ -41,7 +41,7 @@ Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). This file is also the seed for the
 |---|---|---|
 | Introductions, catchphrases, bark banks, announcer stingers, Accusation lines, the edgiest material | Clash dialogue, Herald headlines and bodies, all inside this tone bible as the system prompt with the samples below as examples | Every generated line has a rules-engine template behind it, in case of refusal or the spend cap |
 
-Rule of thumb: **anything prerecorded is hand-written**, so its pronunciation and timing can be tuned by hand. Which *events* get which tier belongs to [Narration tiers and tick budget](issues/11-narration-tiers-and-tick-budget.md).
+Rule of thumb: **anything prerecorded is hand-written**, so its pronunciation and timing can be tuned by hand. Which *events* get which tier belongs to [Narration tiers and tick budget](https://github.com/abdullah12353/orc-simulator/issues/11).
 
 ## 6. Calibration samples (approved heat)
 
