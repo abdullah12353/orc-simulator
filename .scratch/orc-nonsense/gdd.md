@@ -222,7 +222,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D13 | Mohammed plans alone; no Haris sign-off needed | **Decided** | Grilling Q8 |
 | D14 | Cascading Disasters is emergent, not a system | Proposed | §4.1 |
 | D15 | Trophies are an effect + tag, not an inventory | Proposed | §4.1 |
-| D16 | Hall of Shame is a view over the event log, not a system | Proposed | §4.1 |
+| D16 | Hall of Shame is a view over the event log, not a system | **Decided** | §4.1, ticket *Hall of Shame* |
 | D17 | Captain Introduction is a required MVP set piece | Proposed | Supplementary note |
 | D18 | No win state or ranking; Blame (announced, unranked, follows the whole causal chain, shared, Meddles only) plus a per-Player rap sheet | **Decided** | Ticket *Score or no score* |
 | D19 | Gold is fuel, never shown as wealth; Stables may overlap | **Decided** | Ticket *Score or no score* |
@@ -261,3 +261,4 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D52 | Only the lead story gets the announcer and auto-plays its set piece; Legendary deeds get a fanfare | **Decided** | Ticket *Herald* |
 | D53 | One templated Blame line per Meddle-caused story; at most one Accusation per edition, as a pull quote over the true Blame; the model writes only headlines and bodies | **Decided** | Ticket *Herald* |
 | D54 | Private "Your Stable" section for gold and Stakes; pushes only for your Stable or Meddles, at most 3 a day, quiet hours 23:00–08:00, never gold; any story can be clipped | **Decided** | Ticket *Herald* |
+| D55 | Hall of Shame: Legends, moments with comedy weight 20+, and Clippings; browsed by Captain, by Player (the rap sheet: 10 heaviest Blame, in time order) or timeline; never ranked; replays without the model; kept forever | **Decided** | Ticket *Hall of Shame* |
