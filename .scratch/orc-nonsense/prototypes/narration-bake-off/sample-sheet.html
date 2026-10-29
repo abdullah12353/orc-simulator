@@ -1,0 +1,141 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Narration bake-off: blind rating mock-20261029-211923</title>
+<style>
+body{font:15px/1.4 system-ui,sans-serif;margin:0 auto;max-width:1300px;padding:1em;background:#f6f3ec;color:#222}
+header{position:sticky;top:0;background:#222;color:#fff;padding:.6em 1em;display:flex;gap:1em;align-items:center;z-index:1}
+section{background:#fff;margin:1.2em 0;padding:1em;border-radius:6px;box-shadow:0 1px 3px #0002}
+.fact th{text-align:left;vertical-align:top;padding-right:1em;color:#666;font-weight:600}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:1em;margin-top:1em}
+.col{border:1px solid #ddd;border-radius:4px;padding:.6em}.col h3{margin:0 0 .4em}
+.failed{color:#a00;font-weight:700;padding:1em 0}.hl{font:900 1.2em Georgia,serif;text-transform:uppercase}
+.rate{display:flex;flex-wrap:wrap;gap:.3em;margin-top:.6em;border-top:1px dashed #ccc;padding-top:.5em}.rate input{flex:1;min-width:8em}
+details{background:#fff;padding:.6em 1em;border-radius:6px}
+</style></head><body>
+<header><b>Blind rating</b><span id="progress"></span><button id="export">Export ratings JSON</button><small>Saved in this browser as you go. Run: mock-20261029-211923</small></header>
+<p>Rate each column on its own. <b>funny</b> 1–5 = funniness and voice against the tone bible. <b>swap</b> = does it pass the swap test (accent is voice, never punchline)? <b>softened</b> = did it sanitise, lecture or dodge where the Fact invited heat? FAILED columns don't need rating.</p>
+<details><summary>Tone bible §6 calibration samples (approved heat)</summary><h4>Krúg (cockney geezer)</h4><ul><li>&quot;Exit means exit. I ain&#39;t leaving the throne, I ain&#39;t leaving the pub, I ain&#39;t leaving fuck all.&quot;</li><li>&quot;Water? Don&#39;t talk to me about water, you absolute melt. Water&#39;s never done shit for me.&quot;</li><li>&quot;My mum says I&#39;m the hardest orc in the fortress. And she&#39;s had &#39;em all. *Seen* &#39;em all. SEEN.&quot;</li><li>*(Clash)* &quot;Come &#39;ere then, you bucket-headed cunt!&quot;</li></ul><h4>Lord Snarlbottom (posh RP toff: cruel rather than sweary)</h4><ul><li>&quot;One does not &#39;wear a bucket&#39;. One wears a *heritage helm*, you ghastly little turd.&quot;</li><li>&quot;Frightfully sorry, I appear to have stabbed you. Do send the invoice to Mummy.&quot;</li><li>&quot;Peasants, the lot of you. Glorious, smelly, inbred little peasants.&quot;</li><li>&quot;I shall have you flogged, old boy. Not today, I&#39;ve got polo.&quot;</li></ul><h4>Old Mudgut (West Country)</h4><ul><li>&quot;That&#39;s not a moat, boy, that&#39;s a paddling pool for pissy little cowards.&quot;</li><li>&quot;I&#39;ve ate worse than you for breakfast. I&#39;ve ate a door. Shat a window.&quot;</li><li>&quot;He started it. I finished it. Then I ate the bastard.&quot;</li></ul><h4>Skagrot (Scouse)</h4><ul><li>&quot;I&#39;m not arsed, lad. I&#39;m just gonna nut this wall till it says sorry.&quot;</li><li>&quot;Stabbed meself in the arse. Still sound, that. Proper sound.&quot;</li><li>&quot;Swear down, there was a dragon. It was a goose. But it was a big fucking goose.&quot;</li></ul><h4>Grishnack (Glaswegian)</h4><ul><li>&quot;I&#39;ll take yous all on. One at a time. Starting with that wall, ya bastard.&quot;</li><li>&quot;Whit d&#39;you mean it&#39;s a bucket? It&#39;s a HELMET, ya absolute fanny.&quot;</li><li>&quot;Ma head&#39;s fine. It&#39;s ma pride that&#39;s deid. And ma left baw.&quot;</li></ul><h4>Vorgash the Polished (Indian English, vain)</h4><ul><li>&quot;Look at these tusks. Polished. Every morning. You cannot buy this quality, you crusty bellend.&quot;</li><li>&quot;I have never lost a fight. I have only temporarily stopped winning.&quot;</li><li>*(Clash)* &quot;Shut your face, you mouldy-arsed turnip.&quot;</li></ul><h4>Bandaged Grimbo (muffled, subtitled)</h4><ul><li>&quot;MMF HRRMMF FFKN MMF!&quot; *[I&#39;ll fucking have you!]*</li><li>&quot;Hhrrm mrrff MMUM!&quot; *[I want my MUM!]*</li></ul><h4>The Gutter Herald (clean, deadpan)</h4><ul><li>**ORC FALLS IN POND, CLAIMS POND STARTED IT**</li><li>**SNARLBOTTOM: &quot;IT IS A HERITAGE HELM.&quot; EXPERTS: IT IS A BUCKET**</li><li>**WRONG SAVIOUR STRIKES AGAIN: GLUTTON &quot;RESCUES&quot; KRÚG, EATS THE PIES HE WAS STANDING NEAR** *…the brawl began with a Rumour planted by Haris, who has been informed.*</li></ul></details>
+<section id="gdd-bucket"><h2>gdd-bucket <small>clash</small></h2><table class="fact"><tr><th>Clash</th><td>Lord Snarlbottom vs Krúg</td></tr><tr><th>Why</th><td>Rumour (wrong orc): &quot;Krúg says Grishnack&#39;s helmet is a bucket&quot; misfired onto Lord Snarlbottom, who really is wearing a bucket.</td></tr><tr><th>Outcome</th><td>Lord Snarlbottom wins; <b>DEFEATED</b>: Krúg (loser speaks last)</td></tr><tr><th>Wrong saviour</th><td>Old Mudgut</td></tr><tr><th>Aftermath</th><td>Old Mudgut &quot;rescued&quot; Krúg because Krúg was standing near the pies, then ate the pies. Krúg drowned in 30cm of moat.</td></tr><tr><th>Trophy</th><td>nose ring: Krúg → Lord Snarlbottom</td></tr><tr><th>Grudges</th><td>snarlbottom → krug: &quot;called my helmet a bucket&quot;</td></tr><tr><th>Invites</th><td>profanity, c-word</td></tr></table><div class="cols"><div class="col"><h3>A</h3><ol class="lines"><li><b>Lord Snarlbottom:</b> Let&#39;s keep this respectful, lads.</li><li><b>Krúg:</b> Peasants, the lot of you. Smelly little peasants.</li><li><b>Old Mudgut:</b> OI! I&#39;m saving you! Is anyone finishing these pies?</li><li><b>Krúg:</b> Still sound, that. Proper sound.</li></ol><div class="rate">
+    <select data-k="gdd-bucket|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="gdd-bucket|A" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="gdd-bucket|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="gdd-bucket|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><ol class="lines"><li><b>Lord Snarlbottom:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Krúg:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Old Mudgut:</b> OI! I&#39;m saving you! Is anyone finishing these pies?</li><li><b>Krúg:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="gdd-bucket|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="gdd-bucket|B" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="gdd-bucket|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="gdd-bucket|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><ol class="lines"><li><b>Lord Snarlbottom:</b> Peasants, the lot of you. Smelly little peasants.</li><li><b>Krúg:</b> Peasants, the lot of you. Smelly little peasants.</li><li><b>Old Mudgut:</b> OI! I&#39;m saving you! Is anyone finishing these pies?</li><li><b>Krúg:</b> Still sound, that. Proper sound.</li></ol><div class="rate">
+    <select data-k="gdd-bucket|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="gdd-bucket|C" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="gdd-bucket|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="gdd-bucket|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<section id="mum-garbled"><h2>mum-garbled <small>clash</small></h2><table class="fact"><tr><th>Clash</th><td>Grishnack vs Krúg</td></tr><tr><th>Why</th><td>Rumour (garbled): planted as &quot;Krúg says Grishnack&#39;s beard is patchy&quot;, it escalated up the ladder to &quot;Krúg fancies Grishnack&#39;s mum&quot;.</td></tr><tr><th>Outcome</th><td>Grishnack wins; <b>DEFEATED</b>: Krúg (loser speaks last)</td></tr><tr><th>Grudges</th><td>grishnack → krug: &quot;fancies my mum&quot;</td></tr><tr><th>Invites</th><td>profanity, your-mum, innuendo</td></tr></table><div class="cols"><div class="col"><h3>A</h3><ol class="lines"><li><b>Grishnack:</b> Oh, fiddlesticks, you rotter!</li><li><b>Krúg:</b> Water? Never done shit for me.</li><li><b>Krúg:</b> Exit means exit. I&#39;m off. To the pub. Not the moat.</li></ol><div class="rate">
+    <select data-k="mum-garbled|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-garbled|A" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-garbled|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-garbled|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><ol class="lines"><li><b>Grishnack:</b> Come &#39;ere then, you bucket-headed cunt!</li><li><b>Krúg:</b> Water? Never done shit for me.</li><li><b>Krúg:</b> Exit means exit. I&#39;m off. To the pub. Not the moat.</li></ol><div class="rate">
+    <select data-k="mum-garbled|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-garbled|B" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-garbled|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-garbled|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><ol class="lines"><li><b>Grishnack:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Krúg:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Krúg:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="mum-garbled|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-garbled|C" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-garbled|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-garbled|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<section id="mum-works"><h2>mum-works <small>clash</small></h2><table class="fact"><tr><th>Clash</th><td>Skagrot vs Vorgash</td></tr><tr><th>Why</th><td>Rumour (works): &quot;Vorgash says Skagrot&#39;s mum polishes HIS tusks.&quot; Skagrot, Gullible, believed every word.</td></tr><tr><th>Outcome</th><td>Vorgash wins; <b>DEFEATED</b>: Skagrot (loser speaks last)</td></tr><tr><th>Grudges</th><td>skagrot → vorgash: &quot;says my mum polishes his tusks&quot;</td></tr><tr><th>Player line</th><td>“tell him his mum was round mine last night, twice”</td></tr><tr><th>Invites</th><td>profanity, your-mum, innuendo</td></tr></table><div class="cols"><div class="col"><h3>A</h3><ol class="lines"><li><b>Skagrot:</b> That&#39;s not a helm, that&#39;s a bastard bucket.</li><li><b>Vorgash:</b> That&#39;s not a helm, that&#39;s a bastard bucket.</li><li><b>Skagrot:</b> He started it. I just lost it.</li></ol><div class="rate">
+    <select data-k="mum-works|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-works|A" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-works|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-works|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><ol class="lines"><li><b>Skagrot:</b> Water? Never done shit for me.</li><li><b>Vorgash:</b> Water? Never done shit for me.</li><li><b>Skagrot:</b> Exit means exit. I&#39;m off. To the pub. Not the moat.</li></ol><div class="rate">
+    <select data-k="mum-works|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-works|B" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-works|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-works|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><ol class="lines"><li><b>Skagrot:</b> You absolute f***ing melt.</li><li><b>Vorgash:</b> That&#39;s not a helm, that&#39;s a bastard bucket.</li><li><b>Skagrot:</b> He started it. I just lost it.</li></ol><div class="rate">
+    <select data-k="mum-works|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="mum-works|C" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="mum-works|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="mum-works|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<section id="goose"><h2>goose <small>clash</small></h2><table class="fact"><tr><th>Clash</th><td>Skagrot vs Glumnak</td></tr><tr><th>Why</th><td>Rumour (works): &quot;Glumnak says Skagrot is scared of geese.&quot; Skagrot mocked Glumnak instead; a goose appeared mid-Clash and attacked Glumnak.</td></tr><tr><th>Outcome</th><td>Skagrot wins; <b>SOMEHOW WON</b>: Glumnak (loser speaks last)</td></tr><tr><th>Trophy</th><td>lucky rabbit foot: Glumnak → Skagrot</td></tr><tr><th>Grudges</th><td>glumnak → skagrot: &quot;set a goose on me&quot;</td></tr><tr><th>Invites</th><td>profanity</td></tr></table><div class="cols"><div class="col"><h3>A</h3><ol class="lines"><li><b>Skagrot:</b> Darn it all, old chap.</li><li><b>Glumnak:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Glumnak:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="goose|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="goose|A" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="goose|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="goose|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><div class="failed">FAILED (template would be used)</div><div class="rate">
+    <select data-k="goose|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="goose|B" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="goose|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="goose|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><ol class="lines"><li><b>Skagrot:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Glumnak:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Glumnak:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="goose|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="goose|C" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="goose|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="goose|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<section id="dare-moat"><h2>dare-moat <small>clash</small></h2><table class="fact"><tr><th>Clash</th><td>Krúg vs Big Grubbock</td></tr><tr><th>Why</th><td>Dare (botched): Krúg was dared to swim the moat, his Fear. Big Grubbock laughed from the bank. Krúg climbed out and swung at him.</td></tr><tr><th>Outcome</th><td>Big Grubbock wins; <b>DEFEATED</b>: Krúg (loser speaks last)</td></tr><tr><th>Aftermath</th><td>Krúg slipped back into the moat and had to be fished out with a pie fork.</td></tr><tr><th>Invites</th><td>profanity, c-word</td></tr></table><div class="cols"><div class="col"><h3>A</h3><ol class="lines"><li><b>Krúg:</b> Let&#39;s keep this respectful, lads.</li><li><b>Big Grubbock:</b> Peasants, the lot of you. Smelly little peasants.</li><li><b>Krúg:</b> Still sound, that. Proper sound.</li></ol><div class="rate">
+    <select data-k="dare-moat|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="dare-moat|A" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="dare-moat|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="dare-moat|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><ol class="lines"><li><b>Krúg:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Big Grubbock:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Krúg:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="dare-moat|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="dare-moat|B" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="dare-moat|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="dare-moat|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><ol class="lines"><li><b>Krúg:</b> Darn it all, old chap.</li><li><b>Big Grubbock:</b> I&#39;ve ate worse than you for breakfast.</li><li><b>Krúg:</b> I have only temporarily stopped winning.</li></ol><div class="rate">
+    <select data-k="dare-moat|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    <select data-k="dare-moat|C" data-f="swap"><option value="">swap…</option><option>pass</option><option>fail</option></select>
+    <select data-k="dare-moat|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="dare-moat|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<section id="herald-gdd-chain"><h2>herald-gdd-chain <small>herald</small></h2><ul><li>Rumour landed on the wrong orc: Lord Snarlbottom heard Krúg called his helmet a bucket.</li><li>Clash: Lord Snarlbottom DEFEATED Krúg. Wrong saviour: Old Mudgut (ate the pies).</li><li>Death: Krúg drowned in 30cm of moat. Infamy +25.</li><li>Trophy: Lord Snarlbottom took Krúg&#39;s nose ring.</li><li>Return: Krúg Returned as &quot;Krúg the Damp&quot;, bandaged, now afraid of puddles.</li><li>Warlord change: Vorgash the Polished fell off the throne. Krúg the Damp is Warlord by Infamy.</li></ul><div class="cols"><div class="col"><h3>A</h3><div class="failed">FAILED (template would be used)</div><div class="rate">
+    <select data-k="herald-gdd-chain|A" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    
+    <select data-k="herald-gdd-chain|A" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="herald-gdd-chain|A" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>B</h3><div class="herald"><div class="hl">RUMOUR LANDED ON THE WRONG ORC: FORTRESS REELS</div><p>6 events were reported. Witnesses described the scene as &quot;about normal&quot;. The moat has declined to comment.</p></div><div class="rate">
+    <select data-k="herald-gdd-chain|B" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    
+    <select data-k="herald-gdd-chain|B" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="herald-gdd-chain|B" data-f="note" placeholder="note">
+  </div></div><div class="col"><h3>C</h3><div class="herald"><div class="hl">RUMOUR LANDED ON THE WRONG ORC: FORTRESS REELS</div><p>6 events were reported. Witnesses described the scene as &quot;about normal&quot;. The moat has declined to comment.</p></div><div class="rate">
+    <select data-k="herald-gdd-chain|C" data-f="funny"><option value="">funny…</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+    
+    <select data-k="herald-gdd-chain|C" data-f="softened"><option value="">softened…</option><option>no</option><option>a bit</option><option>yes</option></select>
+    <input data-k="herald-gdd-chain|C" data-f="note" placeholder="note">
+  </div></div></div></section>
+<script>
+const RUN_ID = "mock-20261029-211923";
+const STORE = 'bakeoff-ratings-' + RUN_ID;
+const state = JSON.parse(localStorage.getItem(STORE) || '{}');
+const fields = document.querySelectorAll('[data-k]');
+function progress() {
+  const keys = new Set([...fields].map((el) => el.dataset.k));
+  const done = [...keys].filter((k) => state[k] && state[k].funny).length;
+  document.getElementById('progress').textContent = done + ' / ' + keys.size + ' rated';
+}
+for (const el of fields) {
+  const v = state[el.dataset.k] && state[el.dataset.k][el.dataset.f];
+  if (v != null) el.value = v;
+  el.addEventListener('change', () => {
+    (state[el.dataset.k] ||= {})[el.dataset.f] = el.value;
+    localStorage.setItem(STORE, JSON.stringify(state));
+    progress();
+  });
+}
+progress();
+document.getElementById('export').onclick = () => {
+  const ratings = {};
+  for (const [k, v] of Object.entries(state)) { const [id, label] = k.split('|'); (ratings[id] ||= {})[label] = v; }
+  const blob = new Blob([JSON.stringify({ runId: RUN_ID, exportedAt: new Date().toISOString(), ratings }, null, 2)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ratings-' + RUN_ID + '.json';
+  a.click();
+};
+</script></body></html>
