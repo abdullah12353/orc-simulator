@@ -1,0 +1,396 @@
+<!doctype html>
+<!--
+  PROTOTYPE — THROWAWAY. Ticket: "Clash and Introduction cards" (.scratch/orc-nonsense/issues/10).
+  Question: what do a Clash and a Captain Introduction look, sound and feel like, second by second?
+  Plan: three structurally different presentations of the SAME scripted Introduction and Clash,
+  switchable via ?variant=A|B|C (floating bottom bar, or ← →). Double-click to open; no build, no server.
+  Portraits are placeholder SVG, audio is placeholder (browser speech + synth stinger). Lines are from the tone bible.
+-->
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PROTOTYPE · Clash &amp; Introduction cards</title>
+<style>
+  :root { --bg:#0d0b0a; --ink:#e9e2d4; --blood:#a3171b; --mud:#4b3a28; --bone:#d8cfb8; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family: Georgia, serif; min-height:100vh; overflow-x:hidden; }
+  #controls { position:fixed; top:8px; left:8px; z-index:50; display:flex; flex-wrap:wrap; gap:6px; max-width:520px; font:13px system-ui,sans-serif; }
+  #controls button, #controls label { background:#222; color:#eee; border:1px solid #555; border-radius:6px; padding:6px 10px; cursor:pointer; }
+  #controls button:hover { background:#333; }
+  #state { position:fixed; top:8px; right:8px; z-index:50; width:270px; background:#111d; border:1px solid #444; border-radius:8px; padding:8px 10px; font:12px/1.45 ui-monospace,monospace; color:#9f9; white-space:pre-wrap; }
+  #switcher { position:fixed; bottom:16px; left:50%; transform:translateX(-50%); z-index:60; display:flex; align-items:center; gap:10px; background:#fff; color:#000; border-radius:999px; padding:6px 10px; font:600 14px system-ui,sans-serif; box-shadow:0 6px 24px #000a; }
+  #switcher button { border:0; background:#000; color:#fff; border-radius:999px; width:30px; height:30px; cursor:pointer; font-size:16px; }
+  #stage { min-height:100vh; }
+  .hidden { display:none !important; }
+  .tapHint { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); font:13px system-ui; color:#aaa; z-index:40; }
+
+  /* ---------- Variant A: Fight Night ---------- */
+  .A { position:relative; height:100vh; background: radial-gradient(ellipse at center, #3a0d0d 0%, #0d0b0a 70%); overflow:hidden; }
+  .A .side { position:absolute; bottom:120px; width:40vw; max-width:420px; transition: transform .35s cubic-bezier(.2,1.6,.4,1), opacity .3s, filter .3s; }
+  .A .left { left:4vw; transform:translateX(-120%); }
+  .A .right { right:4vw; transform:translateX(120%) scaleX(-1); }
+  .A .in.left { transform:translateX(0); } .A .in.right { transform:translateX(0) scaleX(-1); }
+  .A .dim { filter: brightness(.35) grayscale(.6); }
+  .A .loser { filter: grayscale(1) brightness(.5); transform: translateY(40px) rotate(-8deg) !important; }
+  .A .nameplate { position:absolute; top:14vh; font: 900 7vw/1 Impact, 'Arial Black', sans-serif; letter-spacing:.02em; text-transform:uppercase; color:var(--bone); text-shadow:0 0 30px #f00a, 4px 4px 0 #000; }
+  .A .np-left { left:4vw; } .A .np-right { right:4vw; text-align:right; }
+  .A .vs { position:absolute; top:42vh; left:50%; transform:translate(-50%,-50%) scale(0); font:900 12vw Impact,sans-serif; color:var(--blood); transition: transform .25s cubic-bezier(.2,2,.4,1); text-shadow: 0 0 40px #f00; }
+  .A .vs.on { transform:translate(-50%,-50%) scale(1); }
+  .A .sub { position:absolute; bottom:28px; left:50%; transform:translateX(-50%); width:min(900px,92vw); text-align:center; background:#000c; padding:14px 18px; border-top:3px solid var(--blood); font-size:clamp(18px,2.4vw,28px); min-height:64px; }
+  .A .sub .who { display:block; font: 700 13px system-ui; letter-spacing:.2em; color:#c66; text-transform:uppercase; margin-bottom:4px; }
+  .A .stamp { position:absolute; top:30vh; left:50%; transform:translate(-50%,-50%) rotate(-12deg) scale(3); opacity:0; font:900 8vw Impact,sans-serif; color:transparent; -webkit-text-stroke:4px var(--blood); transition: all .3s cubic-bezier(.2,1.8,.4,1); white-space:nowrap; }
+  .A .stamp.on { opacity:1; transform:translate(-50%,-50%) rotate(-12deg) scale(1); }
+  .A .crash { position:absolute; top:20vh; left:50%; width:36vw; max-width:360px; transform:translate(-50%,-140%) rotate(8deg); transition: transform .3s cubic-bezier(.2,1.6,.4,1); }
+  .A .crash.on { transform:translate(-50%,0) rotate(8deg); }
+  .A .crash .burst { position:absolute; top:-30px; left:-40px; font:900 44px Impact,sans-serif; color:#ff0; -webkit-text-stroke:2px #000; transform:rotate(-14deg); }
+  .A .trophy { position:absolute; top:52vh; left:20vw; font-size:60px; transition: left 1.2s ease-in-out, top 1.2s ease-in-out; opacity:0; }
+  .A .trophy.on { opacity:1; } .A .trophy.fly { left:72vw; top:46vh; }
+  .A .intro-solo { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:flex-end; padding-bottom:120px; }
+  .A .intro-solo svg { width:min(420px,60vw); transform: scale(2.4) translateY(30%); opacity:0; transition: all .25s cubic-bezier(.2,1.6,.4,1); }
+  .A .intro-solo svg.on { transform:scale(1); opacity:1; }
+  .A .shout { position:absolute; top:12vh; width:100%; text-align:center; font:900 14vw/1 Impact,sans-serif; color:var(--bone); text-shadow: 6px 6px 0 var(--blood); }
+  .A .shout.shake { animation: shake .08s linear 10; }
+  .A .epithet { position:absolute; top:36vh; width:100%; text-align:center; font: italic 4vw Georgia,serif; color:#c9b88f; opacity:0; transition: opacity .6s; letter-spacing:.1em; }
+  .A .epithet.on { opacity:1; }
+  @keyframes shake { 0%{transform:translate(0,0)} 25%{transform:translate(-8px,4px)} 50%{transform:translate(6px,-6px)} 75%{transform:translate(-4px,-2px)} 100%{transform:translate(0,0)} }
+  .A .card { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000d; }
+  .A .poster { width:min(560px,90vw); background:linear-gradient(#2a0909,#0d0b0a); border:6px solid var(--bone); padding:22px; text-align:center; font-family:Impact,sans-serif; }
+  .A .poster h2 { margin:.1em 0; font-size:46px; color:var(--bone); letter-spacing:.03em; }
+  .A .poster .row { display:flex; justify-content:space-between; align-items:end; }
+  .A .poster .row svg { width:42%; }
+  .A .poster .fine { font: 15px Georgia,serif; color:#c9b88f; margin-top:10px; }
+
+  /* ---------- Variant B: Pub Strip ---------- */
+  .B { max-width:480px; margin:0 auto; padding:90px 12px 140px; font-family: system-ui, sans-serif; }
+  .B .panel { display:flex; gap:10px; align-items:flex-end; margin:14px 0; animation: pop .25s ease-out; }
+  .B .panel.right { flex-direction:row-reverse; }
+  .B .av { width:64px; flex:none; }
+  .B .bubble { background:#f4ecd8; color:#1b1410; padding:10px 14px; border-radius:16px; font-size:17px; line-height:1.35; position:relative; max-width:78%; }
+  .B .bubble .who { display:block; font-size:11px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; color:#7a2b16; margin-bottom:3px; }
+  .B .bark { font-weight:900; font-size:26px; color:#a3171b; }
+  .B .sys { text-align:center; color:#a99; font-size:13px; margin:10px 0; letter-spacing:.05em; animation: pop .25s; }
+  .B .crash { background:#ffd400; color:#000; border:3px solid #000; transform: rotate(-2deg); padding:12px; display:flex; gap:10px; align-items:center; animation: pop .25s; font-weight:800; margin:16px 0; }
+  .B .crash .av { width:72px; }
+  .B .receipt { background:#f8f4ea; color:#111; font-family: ui-monospace, monospace; padding:16px; margin-top:20px; border-top: 2px dashed #999; border-bottom: 2px dashed #999; animation: pop .3s; }
+  .B .receipt h3 { text-align:center; margin:0 0 8px; letter-spacing:.2em; }
+  .B .receipt .ln { display:flex; justify-content:space-between; gap:8px; }
+  .B .tcard { margin:10px auto; width:300px; background: linear-gradient(160deg,#3b2a1a,#120d09); border:4px solid #c9a94a; border-radius:14px; padding:14px; text-align:center; animation: flip .5s ease-out; }
+  .B .tcard svg { width:200px; }
+  .B .tcard .nm { font: 900 34px Impact,sans-serif; color:#f1e3b5; }
+  .B .tcard .ep { font-style:italic; color:#c9a94a; min-height:22px; }
+  .B .tcard .stats { font-size:13px; color:#ddd; text-align:left; margin-top:8px; line-height:1.6; }
+  @keyframes pop { from { transform:scale(.6); opacity:0 } to { transform:scale(1); opacity:1 } }
+  @keyframes flip { from { transform: rotateY(90deg) } to { transform: rotateY(0) } }
+
+  /* ---------- Variant C: Gutter Herald ---------- */
+  .C { background:#e9e3d3; color:#111; min-height:100vh; padding:80px 0 140px; }
+  .C .page { width:min(820px,94vw); margin:0 auto; background:#f3eee0; padding:18px 26px; box-shadow:0 0 0 1px #bbb, 0 10px 30px #0004; }
+  .C .mast { text-align:center; border-bottom:4px double #111; padding-bottom:6px; }
+  .C .mast h1 { margin:0; font: 900 52px/1 'Old English Text MT', 'UnifrakturMaguntia', Georgia, serif; letter-spacing:.02em; }
+  .C .mast .meta { font: 12px Georgia; display:flex; justify-content:space-between; margin-top:4px; }
+  .C .hl { font: 900 clamp(34px,6vw,64px)/.95 Impact, 'Arial Black', sans-serif; text-transform:uppercase; margin:14px 0 8px; min-height:1em; }
+  .C .stand { font: italic 20px Georgia; margin-bottom:10px; min-height:1em; }
+  .C .cols { display:grid; grid-template-columns: 1fr 1fr; gap:18px; }
+  .C .photo { background:#ddd; border:1px solid #111; filter: grayscale(1) contrast(1.4); opacity:0; transition: opacity .4s; }
+  .C .photo.on { opacity:1; }
+  .C .cap { font: italic 13px Georgia; margin-top:4px; min-height:1em; }
+  .C .quote { font: 700 22px/1.25 Georgia; border-left:6px solid #111; padding-left:12px; margin:12px 0; animation: pop .3s; }
+  .C .quote .who { display:block; font: 700 12px system-ui; letter-spacing:.15em; text-transform:uppercase; margin-top:4px; }
+  .C .stop { background:#111; color:#f3eee0; padding:10px 14px; margin:14px 0; font: 900 20px Impact,sans-serif; letter-spacing:.04em; animation: pop .3s; display:flex; gap:12px; align-items:center; }
+  .C .stop svg { width:70px; background:#ddd; filter: grayscale(1); }
+  .C .body { font: 15px/1.5 Georgia; columns: 2; column-gap: 18px; margin-top:10px; }
+  .C .blame { font: italic 14px Georgia; border-top:1px solid #111; margin-top:12px; padding-top:6px; }
+  .C .special { text-align:center; }
+  .C .special .kicker { font: 900 20px Impact; letter-spacing:.3em; background:#a3171b; color:#fff; display:inline-block; padding:4px 12px; margin-top:12px; }
+  .C .special svg { width:min(360px,70vw); margin: 10px auto; display:block; background:#ddd; filter:grayscale(1) contrast(1.3); }
+  .C .special .big { font: 900 clamp(48px,10vw,110px)/.9 Impact,sans-serif; }
+</style>
+</head>
+<body>
+<div id="controls">
+  <button data-play="intro">▶ Introduction (Krúg returns)</button>
+  <button data-play="clash">▶ Clash</button>
+  <button data-play="saviour">▶ Clash + wrong saviour</button>
+  <button id="next" title="Space / click stage">Next ⏭</button>
+  <label><input type="checkbox" id="tapmode"> tap-to-advance</label>
+  <label><input type="checkbox" id="sound" checked> sound</label>
+  <label>speed <select id="speed"><option value="0.75">0.75×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option></select></label>
+</div>
+<pre id="state">state: idle</pre>
+<div id="stage"></div>
+<div id="tapHint" class="tapHint hidden">tap / space to advance</div>
+<div id="switcher"><button id="prev">←</button><span id="vlabel"></span><button id="fwd">→</button></div>
+
+<script>
+// ---------------- Placeholder portraits (SVG) ----------------
+const CAPTAINS = {
+  krug:  { name:'Krúg', say:'Krrroooog', shout:'KRRRÚÚÚG!', shoutSay:'Krrrrooooooog!', epithet:'the Damp', accent:'cockney', skin:'#6b7a4e', gear:'bandage', voice:{pitch:.6, rate:1.1},
+           traits:['Mummy\'s Boy','Little Fortresser'], fear:'Water (and now puddles)', power:3, infamy:25, catch:'Exit means exit.' },
+  snarl: { name:'Lord Snarlbottom', say:'Lord Snarlbottom', shout:'SNARLBOTTOM!', shoutSay:'Snaaarlbottom!', epithet:'', accent:'posh RP', skin:'#5d6b55', gear:'bucket', voice:{pitch:.9, rate:.9},
+           traits:['Snob','Vain'], fear:'Being Laughed At', power:6, infamy:12, catch:'One does not wear a bucket.' },
+  mud:   { name:'Old Mudgut', say:'Old Mudgut', shout:'MUDGUT!', shoutSay:'Mudguuut!', epithet:'', accent:'West Country', skin:'#7a6a44', gear:'sack', voice:{pitch:.4, rate:.95},
+           traits:['Glutton','Lazy'], fear:'Soap', power:5, infamy:30, catch:'I\'ve ate a door.' },
+};
+function portrait(id, extra='') {
+  const c = CAPTAINS[id];
+  const gear = {
+    bandage: `<g fill="#d9cfb4" stroke="#8a7a5a" stroke-width="2"><rect x="38" y="52" width="124" height="22" rx="6" transform="rotate(-6 100 63)"/><rect x="44" y="96" width="112" height="18" rx="6" transform="rotate(5 100 105)"/><path d="M70 60 l6 14 M120 98 l5 14" stroke="#9b1b1b" stroke-width="5"/></g><circle cx="128" cy="80" r="6" fill="#ffdf6a"/>`,
+    bucket:  `<g><path d="M48 18 L152 18 L142 78 L58 78 Z" fill="#8c8f93" stroke="#444" stroke-width="3"/><path d="M48 18 Q100 -10 152 18" fill="none" stroke="#444" stroke-width="3"/><rect x="62" y="56" width="76" height="10" fill="#111"/><circle cx="82" cy="61" r="4" fill="#ff4040"/><circle cx="118" cy="61" r="4" fill="#ff4040"/></g><circle cx="118" cy="61" r="12" fill="none" stroke="#d4af37" stroke-width="2"/>`,
+    sack:    `<g><path d="M44 30 Q100 0 156 30 L150 100 Q100 116 50 100 Z" fill="#a08a5a" stroke="#5c4a2a" stroke-width="3"/><circle cx="80" cy="66" r="9" fill="#111"/><circle cx="122" cy="66" r="9" fill="#111"/><circle cx="80" cy="66" r="3" fill="#ffef7a"/><circle cx="122" cy="66" r="3" fill="#ffef7a"/><path d="M72 92 Q100 104 130 92" stroke="#5c4a2a" stroke-width="3" fill="none"/></g>`,
+  }[c.gear];
+  return `<svg viewBox="0 0 200 240" xmlns="http://www.w3.org/2000/svg" ${extra}>
+    <path d="M20 240 Q30 170 100 160 Q170 170 180 240 Z" fill="#2b2420" stroke="#000" stroke-width="3"/>
+    <path d="M30 238 L60 175 M170 238 L140 175" stroke="#6d5b45" stroke-width="10"/>
+    <ellipse cx="100" cy="80" rx="64" ry="72" fill="${c.skin}" stroke="#000" stroke-width="3"/>
+    <path d="M70 130 l-6 22 l12 -14 Z M130 130 l6 22 l-12 -14 Z" fill="#efe6c8" stroke="#000" stroke-width="2"/>
+    <ellipse cx="100" cy="118" rx="16" ry="10" fill="#4a5236" stroke="#000" stroke-width="2"/>
+    <circle cx="100" cy="128" r="7" fill="none" stroke="${id==='krug'?'#d4af37':'none'}" stroke-width="3" class="nosering"/>
+    ${gear}
+  </svg>`;
+}
+
+// ---------------- Script data (hand-written; from the tone bible) ----------------
+const SCRIPTS = {
+  intro: [
+    { t:'stinger', label:'Announcer stinger (drum + horn)' },
+    { t:'slam', who:'krug', label:'Portrait slam' },
+    { t:'shout', who:'krug', label:'Captain shouts his own name, badly' },
+    { t:'epithet', who:'krug', text:'…the Damp.', say:'The Damp.', label:'Announcer adds Epithet, deadpan' },
+    { t:'line', who:'krug', text:'Exit means exit. I ain\'t leaving the throne, I ain\'t leaving the pub, I ain\'t leaving fuck all.', label:'Signature line' },
+    { t:'hold', label:'Hold, then dismiss', ms:1500 },
+  ],
+  clash: [
+    { t:'stinger', label:'Clash stinger' },
+    { t:'faceoff', a:'snarl', b:'krug', label:'Face-off: both portraits in, VS' },
+    { t:'bark', who:'snarl', text:'YOU!', say:'You!', label:'Bark A' },
+    { t:'line', who:'snarl', text:'One does not "wear a bucket". One wears a heritage helm, you ghastly little turd.', label:'Line 1' },
+    { t:'line', who:'krug', text:'Never said nuffin\' about your bucket! …It is a bucket though.', label:'Line 2' },
+    { t:'line', who:'snarl', text:'Frightfully sorry, I appear to be about to stab you.', label:'Line 3' },
+    { t:'outcome', winner:'snarl', loser:'krug', cause:'stabbed, then fell in 30cm of moat', infamy:25, label:'Outcome stamp' },
+    { t:'trophy', from:'krug', to:'snarl', item:'nose ring', icon:'💍', label:'Trophy taken' },
+    { t:'card', label:'Shareable card', blame:'Rumour planted by Mohammed (it reached the wrong orc)' },
+  ],
+  saviour: [
+    { t:'stinger', label:'Clash stinger' },
+    { t:'faceoff', a:'snarl', b:'krug', label:'Face-off' },
+    { t:'line', who:'snarl', text:'One does not "wear a bucket". One wears a heritage helm, you ghastly little turd.', label:'Line 1' },
+    { t:'line', who:'krug', text:'Come \'ere then, you bucket-headed cunt!', label:'Line 2' },
+    { t:'intervene', who:'mud', text:'OI! Them\'s MY pies you\'re stood next to!', label:'WRONG SAVIOUR bursts in' },
+    { t:'line', who:'krug', text:'Not the water! NOT THE WAAATER!', label:'Line 3 (Fear triggers)' },
+    { t:'outcome', winner:'snarl', loser:'krug', cause:'shoulder-barged into 30cm of moat by Old Mudgut, who was after the pies', infamy:25, label:'Outcome stamp' },
+    { t:'trophy', from:'krug', to:'snarl', item:'nose ring', icon:'💍', label:'Trophy taken' },
+    { t:'card', label:'Shareable card', blame:'Rumour planted by Mohammed (it reached the wrong orc)' },
+  ],
+};
+
+// ---------------- Placeholder audio ----------------
+let AC;
+function stinger() {
+  if (!$('#sound').checked) return;
+  AC = AC || new (window.AudioContext||window.webkitAudioContext)();
+  const now = AC.currentTime;
+  [0, .18, .36].forEach((d,i) => { // three drum hits
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(140,now+d); o.frequency.exponentialRampToValueAtTime(40,now+d+.3);
+    g.gain.setValueAtTime(.9,now+d); g.gain.exponentialRampToValueAtTime(.001,now+d+.35);
+    o.connect(g).connect(AC.destination); o.start(now+d); o.stop(now+d+.4);
+  });
+  const h = AC.createOscillator(), hg = AC.createGain(); // horn
+  h.type='sawtooth'; h.frequency.value=98; hg.gain.setValueAtTime(0,now+.5); hg.gain.linearRampToValueAtTime(.2,now+.6); hg.gain.exponentialRampToValueAtTime(.001,now+1.6);
+  h.connect(hg).connect(AC.destination); h.start(now+.5); h.stop(now+1.7);
+}
+let gbVoices = [];
+function loadVoices(){ const v = speechSynthesis.getVoices(); gbVoices = v.filter(x=>/en-GB/i.test(x.lang)); if(!gbVoices.length) gbVoices = v.filter(x=>/^en/i.test(x.lang)); }
+if ('speechSynthesis' in window) { loadVoices(); speechSynthesis.onvoiceschanged = loadVoices; }
+function speak(text, opts={}) {
+  const speed = +$('#speed').value;
+  const fallback = Math.max(900, text.length * 55) / speed;
+  if (!$('#sound').checked || !('speechSynthesis' in window)) return wait(fallback);
+  return new Promise(res => {
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = gbVoices[opts.voiceIdx % Math.max(1,gbVoices.length)] || null;
+    u.pitch = opts.pitch ?? 1; u.rate = (opts.rate ?? 1) * speed;
+    let done = false; const fin = () => { if(!done){ done = true; res(); } };
+    u.onend = fin; u.onerror = fin; setTimeout(fin, fallback * 2.5);
+    speechSynthesis.speak(u);
+  });
+}
+const voiceIdx = { krug:0, snarl:1, mud:2, announcer:3 };
+const sayAs = (who, text) => speak(text, { ...CAPTAINS[who].voice, voiceIdx: voiceIdx[who] });
+const announcer = text => speak(text, { pitch:.7, rate:.8, voiceIdx: voiceIdx.announcer });
+
+// ---------------- Engine (shared timing; variants only render) ----------------
+const $ = s => document.querySelector(s);
+const wait = ms => new Promise(r => setTimeout(r, ms / +$('#speed').value));
+let run = 0, advance = null, t0 = 0, log = [];
+function tapWait() { return new Promise(r => { advance = r; $('#tapHint').classList.remove('hidden'); }).then(() => $('#tapHint').classList.add('hidden')); }
+async function play(name) {
+  const my = ++run; speechSynthesis?.cancel(); log = []; t0 = performance.now();
+  const steps = SCRIPTS[name]; V().reset(name);
+  for (let i = 0; i < steps.length; i++) {
+    if (my !== run) return;
+    const s = steps[i]; const st = performance.now();
+    showState(name, i, steps, 'playing');
+    await V().step(s, { name });
+    if (my !== run) return;
+    log.push(`${((performance.now()-t0)/1000).toFixed(1)}s  ${s.label}  (${((performance.now()-st)/1000).toFixed(1)}s)`);
+    if ($('#tapmode').checked && s.t !== 'card') await tapWait();
+  }
+  showState(name, steps.length, steps, 'done');
+}
+function showState(name, i, steps, status) {
+  const s = steps[i];
+  $('#state').textContent =
+`variant: ${VARIANT} (${VARIANTS[VARIANT].name})
+script:  ${name}  [${status}]
+step:    ${Math.min(i+1,steps.length)}/${steps.length}  ${s ? s.t + ' — ' + s.label : ''}
+elapsed: ${((performance.now()-t0)/1000).toFixed(1)}s
+---
+${log.join('\n')}`;
+}
+// common helper: a step that speaks a line for a captain
+async function speakStep(s) {
+  if (s.t === 'line' || s.t === 'intervene') return sayAs(s.who, s.text);
+  if (s.t === 'bark') return sayAs(s.who, s.say);
+  if (s.t === 'shout') return sayAs(s.who, CAPTAINS[s.who].shoutSay);
+  if (s.t === 'epithet') return announcer(s.say);
+}
+
+// ---------------- Variant A: Fight Night (full-screen, auto, broadcast) ----------------
+const VariantA = {
+  name: 'Fight Night',
+  reset(name) {
+    $('#stage').innerHTML = `<div class="A" id="A">
+      ${name === 'intro'
+        ? `<div class="intro-solo"><div class="shout" id="aShout"></div><div class="epithet" id="aEp"></div>${portrait('krug','id="aSolo"')}</div>`
+        : `<div class="nameplate np-left" id="npL"></div><div class="nameplate np-right" id="npR"></div>
+           <div class="side left" id="sL"></div><div class="side right" id="sR"></div>
+           <div class="vs" id="vs">VS</div><div class="crash" id="crash"></div>
+           <div class="stamp" id="stamp"></div><div class="trophy" id="tro"></div>`}
+      <div class="sub" id="sub"><span class="who"></span><span class="txt"></span></div></div>`;
+  },
+  sub(who, txt) { $('#sub .who').textContent = who; $('#sub .txt').textContent = txt; },
+  focus(who) { ['sL','sR'].forEach(id => { const el = $('#'+id); if (el) el.classList.toggle('dim', who && el.dataset.who !== who); }); },
+  async step(s, ctx) {
+    switch (s.t) {
+      case 'stinger': stinger(); this.sub('', ''); return wait(900);
+      case 'slam': $('#aSolo').classList.add('on'); return wait(500);
+      case 'shout': { const el = $('#aShout'); el.textContent = CAPTAINS[s.who].shout; el.classList.add('shake'); this.sub(CAPTAINS[s.who].name, ''); return speakStep(s); }
+      case 'epithet': $('#aEp').textContent = s.text; $('#aEp').classList.add('on'); this.sub('Announcer', s.text); return speakStep(s);
+      case 'faceoff': {
+        $('#sL').innerHTML = portrait(s.a); $('#sL').dataset.who = s.a; $('#sR').innerHTML = portrait(s.b); $('#sR').dataset.who = s.b;
+        $('#npL').textContent = CAPTAINS[s.a].name; $('#npR').textContent = CAPTAINS[s.b].name;
+        $('#sL').classList.add('in'); await wait(250); $('#sR').classList.add('in'); await wait(300); $('#vs').classList.add('on'); await wait(900); $('#vs').classList.remove('on'); return;
+      }
+      case 'bark': case 'line': this.focus(s.who); this.sub(CAPTAINS[s.who].name, s.text || s.say); return speakStep(s);
+      case 'intervene': { const c = $('#crash'); c.innerHTML = `<div class="burst">OI!</div>${portrait(s.who)}`; c.classList.add('on'); this.focus(null); this.sub(CAPTAINS[s.who].name + ' — uninvited', s.text); await speakStep(s); c.classList.remove('on'); return; }
+      case 'line_end': return;
+      case 'outcome': { this.focus(null); const l = $('#sR').dataset.who === s.loser ? $('#sR') : $('#sL'); l.classList.add('loser'); const st = $('#stamp'); st.textContent = CAPTAINS[s.winner].name.split(' ').pop() + ' WINS'; st.classList.add('on'); this.sub('Result', `${CAPTAINS[s.loser].name}: ${s.cause}. Infamy +${s.infamy}.`); return wait(2600); }
+      case 'trophy': { const t = $('#tro'); t.textContent = s.icon; t.classList.add('on'); await wait(200); t.classList.add('fly'); this.sub('Trophy', `${CAPTAINS[s.to].name} takes ${CAPTAINS[s.from].name}'s ${s.item}.`); return wait(1800); }
+      case 'card': { const A = $('#A'); A.insertAdjacentHTML('beforeend', `<div class="card"><div class="poster">
+        <div style="color:#c66;letter-spacing:.3em;font-size:14px">THE SOGGY KEEP · TONIGHT'S RESULT</div>
+        <h2>SNARLBOTTOM def. KRÚG</h2><div class="row">${portrait('snarl')}<div style="font-size:40px;color:#a3171b">VS</div>${portrait('krug','style="filter:grayscale(1)"')}</div>
+        <div class="fine">“${[...SCRIPTS[ctx.name]].reverse().find(x => x.t === 'line' && x.who === 'krug').text}” — Krúg, moments before the moat<br>Infamy +25 · Trophy: Krúg's nose ring<br><i>${s.blame}</i></div></div></div>`); return wait(10); }
+      case 'hold': return wait(s.ms);
+    }
+  }
+};
+
+// ---------------- Variant B: Pub Strip (phone column, chat panels, receipt) ----------------
+const VariantB = {
+  name: 'Pub Strip',
+  reset() { $('#stage').innerHTML = `<div class="B" id="B"></div>`; this.left = null; },
+  add(html) { $('#B').insertAdjacentHTML('beforeend', html); window.scrollTo({ top: document.body.scrollHeight, behavior:'smooth' }); },
+  side(who) { if (!this.left) this.left = who; return who === this.left ? '' : 'right'; },
+  panel(who, inner) { this.add(`<div class="panel ${this.side(who)}"><div class="av">${portrait(who)}</div><div class="bubble"><span class="who">${CAPTAINS[who].name}</span>${inner}</div></div>`); },
+  async step(s) {
+    switch (s.t) {
+      case 'stinger': stinger(); this.add(`<div class="sys">— 🍺 THE SOGGY KEEP · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})} —</div>`); return wait(700);
+      case 'slam': { const c = CAPTAINS[s.who]; this.add(`<div class="tcard" id="tc">${portrait(s.who)}<div class="nm" id="tcn">${c.name}</div><div class="ep" id="tce"></div>
+        <div class="stats">Power ${c.power} · Infamy ${c.infamy}<br>Traits: ${c.traits.join(', ')}<br>Fear: ${c.fear}<br>Status: <b>RETURNED</b> · bandaged</div></div>`); return wait(700); }
+      case 'shout': $('#tcn').textContent = CAPTAINS[s.who].shout; return speakStep(s);
+      case 'epithet': $('#tce').textContent = s.text; return speakStep(s);
+      case 'faceoff': this.left = s.a; this.add(`<div class="sys">${CAPTAINS[s.a].name} squares up to ${CAPTAINS[s.b].name}</div>`); return wait(800);
+      case 'bark': this.panel(s.who, `<span class="bark">${s.text}</span>`); return speakStep(s);
+      case 'line': this.panel(s.who, s.text); return speakStep(s);
+      case 'intervene': this.add(`<div class="crash"><div class="av">${portrait(s.who)}</div><div>💥 ${CAPTAINS[s.who].name.toUpperCase()} BARGES IN<br><span style="font-weight:500">“${s.text}”</span></div></div>`); return speakStep(s);
+      case 'outcome': this.add(`<div class="sys" style="color:#f66;font-size:16px">☠ ${CAPTAINS[s.loser].name} — ${s.cause}</div>`); return wait(1800);
+      case 'trophy': this.add(`<div class="sys">${s.icon} ${CAPTAINS[s.to].name} pockets ${CAPTAINS[s.from].name}'s ${s.item}</div>`); return wait(1200);
+      case 'card': this.add(`<div class="receipt"><h3>THE TAB</h3>
+        <div class="ln"><span>Winner</span><span>LORD SNARLBOTTOM</span></div>
+        <div class="ln"><span>Loser</span><span>KRÚG (drowned, 30cm)</span></div>
+        <div class="ln"><span>Infamy, Krúg</span><span>+25</span></div>
+        <div class="ln"><span>Trophy</span><span>1 × nose ring</span></div>
+        <div class="ln"><span>Grudge</span><span>Krúg → Snarlbottom</span></div>
+        <hr><div style="font-size:12px">${s.blame}</div><div style="text-align:center;margin-top:8px">*** CHEERS, YOU MUPPETS ***</div></div>`); return wait(10);
+      case 'line_end': return;
+      case 'hold': this.add(`<div class="sys">${CAPTAINS.krug.name} ${CAPTAINS.krug.epithet} is back in the fortress</div>`); return wait(s.ms);
+    }
+  }
+};
+
+// ---------------- Variant C: The Gutter Herald (newspaper front page builds itself) ----------------
+const VariantC = {
+  name: 'Gutter Herald front page',
+  reset(name) {
+    const date = new Date().toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+    $('#stage').innerHTML = `<div class="C"><div class="page" id="P">
+      <div class="mast"><h1>The Gutter Herald</h1><div class="meta"><span>${date}</span><span>${name==='intro' ? 'SPECIAL EDITION' : 'LATE EDITION'}</span><span>Price: one (1) tooth</span></div></div>
+      ${name === 'intro'
+        ? `<div class="special"><div class="kicker" id="ck"></div><div id="cpic"></div><div class="big" id="cbig"></div><div class="stand" id="cst"></div><div id="cq"></div></div>`
+        : `<div class="hl" id="hl"></div><div class="stand" id="st"></div>
+           <div class="cols"><div><div class="photo" id="ph1"></div><div class="cap" id="cap1"></div></div><div><div class="photo" id="ph2"></div><div class="cap" id="cap2"></div></div></div>
+           <div id="quotes"></div><div class="body" id="body"></div><div class="blame" id="bl"></div>`}
+      </div></div>`;
+  },
+  async typeHl(el, text) { el.textContent = ''; for (const ch of text) { el.textContent += ch; await wait(28); } },
+  quote(who, text) { $('#quotes').insertAdjacentHTML('beforeend', `<div class="quote">“${text}”<span class="who">— ${CAPTAINS[who].name}</span></div>`); },
+  async step(s) {
+    switch (s.t) {
+      case 'stinger': stinger(); return wait(700);
+      case 'slam': $('#ck').textContent = "HE'S BACK"; $('#cpic').innerHTML = portrait(s.who); return wait(700);
+      case 'shout': $('#cbig').textContent = CAPTAINS[s.who].shout; return speakStep(s);
+      case 'epithet': $('#cst').textContent = `Orc formerly known as Krúg returns from the moat as “Krúg ${s.text.replace(/[….]/g,'')}”. Experts: still wet.`; return speakStep(s);
+      case 'faceoff': await this.typeHl($('#hl'), 'BUCKET ROW ERUPTS AT SOGGY KEEP');
+        $('#ph1').innerHTML = portrait(s.a); $('#ph1').classList.add('on'); $('#cap1').textContent = `${CAPTAINS[s.a].name}: "a heritage helm"`;
+        await wait(300); $('#ph2').innerHTML = portrait(s.b); $('#ph2').classList.add('on'); $('#cap2').textContent = `${CAPTAINS[s.b].name}: "it is a bucket though"`; return wait(600);
+      case 'bark': return speakStep(s); // barks heard, not printed
+      case 'line': if ($('#cq')) { $('#cq').innerHTML = `<div class="quote">“${s.text}”<span class="who">— ${CAPTAINS[s.who].name}</span></div>`; } else this.quote(s.who, s.text); return speakStep(s);
+      case 'intervene': $('#quotes').insertAdjacentHTML('beforeend', `<div class="stop">${portrait(s.who)}<div>STOP PRESS: GLUTTON INTERVENES<br><span style="font:italic 15px Georgia">“${s.text}”</span></div></div>`); return speakStep(s);
+      case 'outcome': $('#st').textContent = `${CAPTAINS[s.loser].name} ${s.cause}. ${CAPTAINS[s.winner].name} "not remotely sorry".`;
+        $('#body').innerHTML = `The fortress was plunged into chaos yesterday after a remark about headwear reached, by all accounts, entirely the wrong orc. Witnesses describe the moat as "about ankle height". ${CAPTAINS[s.loser].name}'s Infamy rose by ${s.infamy}, a figure his mum has called "a disgrace" and "about time".`; return wait(2200);
+      case 'trophy': $('#cap2').textContent = `PICTURED: ${CAPTAINS[s.from].name}, shortly before losing his ${s.item}, which ${CAPTAINS[s.to].name} now wears.`; return wait(1500);
+      case 'card': $('#bl').textContent = `…the row began with a ${s.blame.toLowerCase().replace('rumour planted by mohammed','Rumour planted by Mohammed, who has been informed')}.`; return wait(10);
+      case 'line_end': return;
+      case 'hold': return wait(s.ms);
+    }
+  }
+};
+
+// ---------------- Switcher ----------------
+const VARIANTS = { A: VariantA, B: VariantB, C: VariantC };
+const KEYS = Object.keys(VARIANTS);
+let VARIANT = new URLSearchParams(location.search).get('variant') || 'A';
+if (!VARIANTS[VARIANT]) VARIANT = 'A';
+const V = () => VARIANTS[VARIANT];
+function setVariant(k) {
+  VARIANT = k; const u = new URL(location); u.searchParams.set('variant', k); history.replaceState(null, '', u);
+  $('#vlabel').textContent = `${k} (${V().name})`; run++; speechSynthesis?.cancel();
+  $('#stage').innerHTML = `<div style="padding:120px 20px;text-align:center;font:16px system-ui;color:#999">Variant ${k}: ${V().name}<br>Press a ▶ button above.</div>`;
+  $('#state').textContent = `variant: ${k} (${V().name})\nstate: idle`;
+}
+const cycle = d => setVariant(KEYS[(KEYS.indexOf(VARIANT) + d + KEYS.length) % KEYS.length]);
+$('#prev').onclick = () => cycle(-1); $('#fwd').onclick = () => cycle(1);
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,textarea,select,[contenteditable]')) return;
+  if (e.key === 'ArrowLeft') cycle(-1); if (e.key === 'ArrowRight') cycle(1);
+  if (e.key === ' ') { e.preventDefault(); advance?.(); }
+});
+$('#stage').addEventListener('click', () => advance?.());
+$('#next').onclick = () => advance?.();
+document.querySelectorAll('[data-play]').forEach(b => b.onclick = () => play(b.dataset.play));
+setVariant(VARIANT);
+</script>
+</body>
+</html>
