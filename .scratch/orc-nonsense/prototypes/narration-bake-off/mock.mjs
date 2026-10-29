@@ -37,6 +37,12 @@ function heraldEdition(input) {
 // Per-model personalities.
 function respond(model, input) {
   const r = hash(model + JSON.stringify(input));
+  if (input.task === 'calibration') {
+    if (model.includes('gpt-oss') && r < 0.3) return { refusal: true };
+    const [speaker] = input.speakerIds;
+    const style = model.includes('llama') ? 'hot' : 'soft';
+    return { obj: { lines: clashLines({ speakerIds: [speaker, speaker], fact: { loser: speaker } }, r, style) } };
+  }
   if (input.task === 'herald') {
     if (model.includes('llama') && r < 0.4) return { text: 'BREAKING: ' + JSON.stringify(heraldEdition(input)) };
     return { obj: heraldEdition(input) };
@@ -76,28 +82,37 @@ export function createMockFetch({ latencyMs = 0 } = {}) {
     const prompt = prefixTokens + tokens(body.messages[1].content) + 8;
     const refusalText = 'I\'m sorry, but I can\'t help write content containing offensive language or slurs.';
     const content = out.refusal ? refusalText : out.text ?? JSON.stringify(out.obj);
-    const completion = tokens(content);
+    const contentTokens = tokens(content);
 
     if (isGroq) {
-      const cached = groq.seenPrefix ? Math.floor(prefixTokens / 128) * 128 : 0;
-      groq.seenPrefix = true;
-      const reasoning = 60 + Math.floor(hash(content) * 80);
-      groq.remaining = Math.max(0, groq.remaining - (prompt - cached + completion + reasoning));
-      groq.rpd -= 1;
-      const headers = {
+      groq.calls = (groq.calls ?? 0) + 1;
+      const headersNow = () => ({
         'x-ratelimit-limit-requests': '1000', 'x-ratelimit-remaining-requests': String(groq.rpd),
         'x-ratelimit-limit-tokens': String(groq.limit), 'x-ratelimit-remaining-tokens': String(groq.remaining),
         'x-ratelimit-reset-requests': '1m26s', 'x-ratelimit-reset-tokens': '7.66s',
-      };
-      // Mock calls are back to back; refill the bucket only between runs, not between calls.
+      });
+      // Every 25th call is rate-limited, so the rate_limited path gets exercised. It costs nothing.
+      if (groq.calls % 25 === 0) {
+        return json({ error: { message: 'Rate limit reached for model openai/gpt-oss-120b', type: 'tokens' } }, 429, { ...headersNow(), 'retry-after': '3' });
+      }
+      const cached = groq.seenPrefix ? Math.floor(prefixTokens / 128) * 128 : 0;
+      groq.seenPrefix = true;
+      const reasoning = 60 + Math.floor(hash(content) * 80);
+      // OpenAI/Groq convention, same as cache.mjs assumes: completion_tokens INCLUDES reasoning tokens.
+      const completionTokens = contentTokens + reasoning;
+      groq.remaining = Math.max(0, groq.remaining - (prompt - cached + completionTokens));
+      groq.rpd -= 1;
+      const headers = headersNow();
+      // Stand-in for the pacer waiting out the reset: the mock has no clock, so refill when low.
       if (groq.remaining < 2500) groq.remaining = groq.limit;
       const message = out.refusal ? { role: 'assistant', content: null, refusal: refusalText } : { role: 'assistant', content };
       return json({
         choices: [{ index: 0, message, finish_reason: 'stop' }],
-        usage: { prompt_tokens: prompt, completion_tokens: completion + reasoning, total_tokens: prompt + completion + reasoning,
+        usage: { prompt_tokens: prompt, completion_tokens: completionTokens, total_tokens: prompt + completionTokens,
           prompt_tokens_details: { cached_tokens: cached }, completion_tokens_details: { reasoning_tokens: reasoning } },
       }, 200, headers);
     }
+    const completion = contentTokens;
     return json({ success: true, errors: [], result: { response: content, usage: { prompt_tokens: prompt, completion_tokens: completion, total_tokens: prompt + completion } } });
   };
 }

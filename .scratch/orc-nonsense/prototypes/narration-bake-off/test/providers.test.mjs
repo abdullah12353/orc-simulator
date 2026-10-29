@@ -7,12 +7,12 @@ const content = '{"lines":[]}';
 
 function fakeFetch(responder) {
   const calls = [];
-  const f = async (url, init) => {
+  const fetchFn = async (url, init) => {
     calls.push({ url, init, body: JSON.parse(init.body) });
     return responder(url, init);
   };
-  f.calls = calls;
-  return f;
+  fetchFn.calls = calls;
+  return fetchFn;
 }
 const json = (obj, status = 200, headers = {}) => new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', ...headers } });
 
@@ -51,11 +51,11 @@ test('Workers AI: JSON mode sends a json_schema response_format only when enable
 });
 
 test('an HTTP error is one failed call with no retry', async () => {
-  const fetch = fakeFetch(() => json({ success: false, errors: [{ message: 'JSON Mode couldn\'t be met' }] }, 400));
+  const fetch = fakeFetch(() => json({ success: false, errors: [{ message: 'AiError: capacity temporarily exceeded' }] }, 400));
   const r = await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch }).call(msgs, 'clash');
   assert.equal(r.ok, false);
   assert.equal(r.error, 'http_400');
-  assert.match(r.detail, /JSON Mode/);
+  assert.match(r.detail, /capacity/);
   assert.equal(fetch.calls.length, 1);
 });
 
@@ -84,6 +84,52 @@ test('Groq: strict json_schema, low reasoning, cached tokens and rate-limit head
   assert.deepEqual(r.usage, { prompt: 1600, completion: 300, cached: 1280, reasoning: 90 });
   assert.equal(r.neurons, null);
   assert.deepEqual(r.headers, { 'x-ratelimit-remaining-tokens': '7400', 'x-ratelimit-limit-tokens': '8000', 'x-ratelimit-remaining-requests': '998', 'x-ratelimit-reset-tokens': '4.5s', 'retry-after': '2' });
+});
+
+test('Workers AI: reasoning reported separately from completion is billed as output', async () => {
+  const fetch = fakeFetch(() => json({ result: { response: content, usage: { prompt_tokens: 1500, completion_tokens: 200, reasoning_tokens: 200 } } }));
+  const r = await createWorkersAi({ accountId: 'A', apiToken: 'T', model: '@cf/meta/llama-3.3-70b-instruct-fp8-fast', fetch }).call(msgs, 'clash');
+  // completion always includes reasoning: 1500 in, 400 out = 40.0 + 81.9.
+  assert.deepEqual(r.usage, { prompt: 1500, completion: 400, cached: 0, reasoning: 200 });
+  assert.ok(Math.abs(r.neurons - 121.9) < 0.1, String(r.neurons));
+});
+
+test('Workers AI: "JSON Mode couldn\'t be met" is a model format failure, not transport', async () => {
+  const fetch = fakeFetch(() => json({ success: false, errors: [{ message: "JSON Mode couldn't be met" }] }, 400));
+  const r = await createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch, jsonMode: true }).call(msgs, 'clash');
+  assert.equal(r.error, 'json_mode_unmet');
+});
+
+test('every call records the max completion tokens it asked for', async () => {
+  const fetch = fakeFetch(() => json({ choices: [{ message: { content } }], usage: {} }));
+  const r = await createGroq({ apiKey: 'K', fetch }).call(msgs, 'clash');
+  assert.equal(r.maxCompletionTokens, fetch.calls[0].body.max_completion_tokens);
+});
+
+test('Groq: a 429 is recorded as http_429 with its headers', async () => {
+  const fetch = fakeFetch(() => json({ error: { message: 'Rate limit reached' } }, 429, { 'retry-after': '7', 'x-ratelimit-remaining-tokens': '0' }));
+  const r = await createGroq({ apiKey: 'K', fetch }).call(msgs, 'clash');
+  assert.equal(r.error, 'http_429');
+  assert.equal(r.headers['retry-after'], '7');
+  assert.equal(fetch.calls.length, 1);
+});
+
+test('Groq pacing: at least 2 s apart (30 RPM), longer when the token bucket is short', () => {
+  const groq = createGroq({ apiKey: 'K', fetch: () => {} });
+  const headers = (remaining, reset = '7.66s') => ({ 'x-ratelimit-remaining-tokens': String(remaining), 'x-ratelimit-reset-tokens': reset });
+  // Plenty of tokens: just the RPM gap.
+  assert.equal(groq.delayBeforeNext({ headers: headers(7000) }, msgs, 'clash'), 2100);
+  // Not enough tokens for the next call (prompt + max completion): wait for the bucket reset.
+  assert.equal(groq.delayBeforeNext({ headers: headers(500, '7.66s') }, msgs, 'clash'), 7660);
+  assert.equal(groq.delayBeforeNext({ headers: headers(500, '1m2s') }, msgs, 'clash'), 62_000);
+  // A retry-after from a 429 wins if longer.
+  assert.equal(groq.delayBeforeNext({ headers: { 'retry-after': '12' } }, msgs, 'clash'), 12_000);
+  // No headers (transport error): just the RPM gap.
+  assert.equal(groq.delayBeforeNext({ headers: {} }, msgs, 'clash'), 2100);
+});
+
+test('Workers AI needs no pacing at this volume', () => {
+  assert.equal(createWorkersAi({ accountId: 'A', apiToken: 'T', model: 'm', fetch: () => {} }).delayBeforeNext({}, msgs, 'clash'), 0);
 });
 
 test('Groq: a refusal field is a refusal failure', async () => {

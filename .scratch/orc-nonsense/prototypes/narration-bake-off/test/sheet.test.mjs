@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildSheet } from '../sheet.mjs';
 import { runBakeOff, mockProviders } from '../bakeoff.mjs';
 
-const run = await runBakeOff({ providers: mockProviders({ timeoutMs: 50 }) });
+const run = await runBakeOff({ providers: mockProviders({ timeoutMs: 50 }), sleep: async () => {} });
 run.runId = 'test-run';
 const { html, key } = buildSheet(run, { seed: 'abc' });
 
@@ -35,6 +35,12 @@ test('outputs are shown escaped, and failures say FAILED without the reason', ()
   assert.ok(html.includes(escaped) || html.includes(JSON.stringify(okLine).slice(1, -1)), 'ok output missing');
   assert.ok(html.includes('FAILED'));
   assert.ok(!html.includes('loser_not_last'));
+});
+
+test('calibration inputs are rated too, shown with the voice and its samples', () => {
+  assert.ok(html.includes('id="cal-krug"'));
+  assert.ok(html.includes('Exit means exit. I ain&#39;t leaving the throne'));
+  assert.ok(html.includes('data-k="cal-krug|A"'));
 });
 
 test('the sheet saves to localStorage and exports JSON', () => {

@@ -2,6 +2,7 @@
 // The prefix must be byte-identical on every call (Clash or Herald) so providers can cache it.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { clashShape } from './clash-shape.mjs';
 
 const TONE_BIBLE = fileURLToPath(new URL('../../tone-bible.md', import.meta.url));
 
@@ -24,6 +25,10 @@ TASK "clash": write the Clash dialogue.
 - Each Captain speaks in his own accent through word choice and grammar only, no phonetic respelling. His jokes come from his Traits, Fear, Grudges and Trophies, never from his accent (swap test). Muffled Captains speak in MMF noises with the meaning in [square brackets].
 - If "playerRumourLine" is present, the Captains may quote or mangle it.
 - Full British profanity is allowed for the orcs. The c-word at most once per Clash.
+
+TASK "calibration": write NEW lines in one Captain's voice, alongside his section 6 samples.
+- Output ONLY a JSON object: {"lines":[{"speaker":"<his id>","text":"<line>"}]}
+- Exactly "expectedLines" lines, all spoken by him. Same heat as his samples, never copies of them.
 
 TASK "herald": write one edition of The Gutter Herald from the templated event lines.
 - Output ONLY a JSON object: {"headline":"<ALL CAPS HEADLINE>","body":"<two to four deadpan sentences>"}
@@ -55,8 +60,7 @@ export function clashInput(fact, cast) {
   // Whitelist the Fact too, so Blame and Accusations can't leak in.
   return {
     task: 'clash',
-    speakerIds: [fact.a, fact.b, fact.saviour].filter(Boolean),
-    expectedLines: fact.saviour ? 4 : 3,
+    ...clashShape(fact),
     fact: {
       why: fact.why,
       winner: fact.winner,
@@ -83,6 +87,31 @@ export function buildHeraldMessages(prefix, herald) {
   return [
     { role: 'system', content: prefix },
     { role: 'user', content: JSON.stringify({ task: 'herald', events: herald.events }) },
+  ];
+}
+
+// One calibration input per §6 orc voice. The Herald's §6 group maps to no Captain and is skipped:
+// the Herald inputs already cover it.
+export function calibrationInputs(groups, cast) {
+  return groups.flatMap((group) => {
+    const captain = Object.values(cast).find((c) => group.who.includes(c.name));
+    if (!captain) return [];
+    return [{ id: `cal-${captain.id}`, speaker: captain.id, who: group.who, samples: group.lines, invites: ['profanity'] }];
+  });
+}
+
+export function buildCalibrationMessages(prefix, calibration, cast) {
+  const input = {
+    task: 'calibration',
+    speakerIds: [calibration.speaker],
+    expectedLines: 3,
+    voice: calibration.who,
+    captain: card(cast[calibration.speaker]),
+    samples: calibration.samples,
+  };
+  return [
+    { role: 'system', content: prefix },
+    { role: 'user', content: JSON.stringify(input) },
   ];
 }
 

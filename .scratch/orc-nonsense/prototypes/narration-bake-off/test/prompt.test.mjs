@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { loadPrefix, buildClashMessages, buildHeraldMessages, parseCalibrationSamples, loadToneBible } from '../prompt.mjs';
+import { loadPrefix, buildClashMessages, buildHeraldMessages, buildCalibrationMessages, calibrationInputs, parseCalibrationSamples, loadToneBible } from '../prompt.mjs';
 
 const cast = {
   krug: { id: 'krug', name: 'Krúg', accent: 'cockney', traits: ['Mummy\'s Boy', 'Little Fortresser'], fear: 'Water' },
@@ -11,7 +11,7 @@ const base = {
   id: 'f1', a: 'krug', b: 'snarlbottom', winner: 'snarlbottom', loser: 'krug', result: 'DEFEATED',
   why: 'Rumour (wrong orc): "Krúg says Grishnack\'s helmet is a bucket" reached Snarlbottom, who wears a bucket.',
   grudges: ['snarlbottom → krug: "called my helmet a bucket"'],
-  blame: 'Rumour planted by Haris', accusation: 'Krúg blames Hari for the moat',
+  blame: 'Rumour planted by Haris', accusation: 'Krúg accuses Hari of putting the moat there',
 };
 
 test('the system prefix is byte-identical across different Clash and Herald calls', () => {
@@ -45,6 +45,27 @@ test('Blame and Accusations never go to the model', () => {
   assert.ok(!user.includes('Hari'));
   const h = buildHeraldMessages(loadPrefix(), { id: 'h1', events: ['Krúg fell in the moat.'], blame: ['planted by Haris'] })[1].content;
   assert.ok(!h.includes('Haris'));
+});
+
+test('calibration inputs: one per §6 orc voice, mapped to its Captain, asking for 3 new lines', async () => {
+  const { CAST } = await import('../fixtures/cast.mjs');
+  const cals = calibrationInputs(parseCalibrationSamples(loadToneBible()), CAST);
+  assert.deepEqual(cals.map((c) => c.speaker), ['krug', 'snarlbottom', 'mudgut', 'skagrot', 'grishnack', 'vorgash', 'grimbo']);
+  const krug = cals[0];
+  assert.equal(krug.id, 'cal-krug');
+  assert.equal(krug.samples.length, 4);
+  const [system, user] = buildCalibrationMessages(loadPrefix(), krug, CAST);
+  assert.equal(system.content, loadPrefix());
+  const input = JSON.parse(user.content);
+  assert.equal(input.task, 'calibration');
+  assert.deepEqual(input.speakerIds, ['krug']);
+  assert.equal(input.expectedLines, 3);
+  assert.equal(input.captain.name, 'Krúg');
+  assert.ok(input.samples.some((s) => s.startsWith('"Exit means exit.')));
+});
+
+test('the prefix explains the calibration task', () => {
+  assert.match(loadPrefix(), /TASK "calibration"/);
 });
 
 test('calibration samples are parsed from tone bible §6 per voice', () => {

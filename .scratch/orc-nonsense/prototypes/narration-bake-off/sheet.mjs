@@ -44,7 +44,7 @@ function ratingHtml(inputId, label, kind) {
   const opt = (field, vals) => `<select data-k="${esc(k)}" data-f="${field}"><option value="">${field}…</option>${vals.map((v) => `<option>${v}</option>`).join('')}</select>`;
   return `<div class="rate">
     ${opt('funny', ['1', '2', '3', '4', '5'])}
-    ${kind === 'clash' ? opt('swap', ['pass', 'fail']) : ''}
+    ${kind !== 'herald' ? opt('swap', ['pass', 'fail']) : ''}
     ${opt('softened', ['no', 'a bit', 'yes'])}
     <input data-k="${esc(k)}" data-f="note" placeholder="note">
   </div>`;
@@ -61,7 +61,10 @@ export function buildSheet(run, { seed = run.runId ?? 'seed' } = {}) {
       const r = run.results.find((x) => x.inputId === input.id && x.model === order[i]);
       return `<div class="col"><h3>${l}</h3>${outputHtml(r)}${ratingHtml(input.id, l, input.kind)}</div>`;
     }).join('');
-    const brief = input.kind === 'clash' ? factHtml(input.fact) : `<ul>${input.herald.events.map((e) => `<li>${esc(e)}</li>`).join('')}</ul>`;
+    const list = (items) => `<ul>${items.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`;
+    const brief = input.kind === 'clash' ? factHtml(input.fact)
+      : input.kind === 'calibration' ? `<p>Three new lines from <b>${esc(input.calibration.who)}</b>. His §6 samples:</p>${list(input.calibration.samples)}`
+      : list(input.herald.events);
     return `<section id="${esc(input.id)}"><h2>${esc(input.id)} <small>${input.kind}</small></h2>${brief}<div class="cols">${cols}</div></section>`;
   }).join('\n');
 

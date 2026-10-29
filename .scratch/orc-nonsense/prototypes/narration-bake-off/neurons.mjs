@@ -1,7 +1,9 @@
 // Neurons per 1M tokens. The research doc (free-llm-api-options §1.4) gives only per-Clash and
 // per-Herald totals; these rates are solved back from its two columns (1.5k/200 and 3k/600).
 // Llama's match Cloudflare's published 26,668 / 204,805. Gemma's are derived, so treat them as an estimate.
-// Reasoning tokens are assumed to bill as output (the doc marks this UNCERTAIN).
+// Reasoning tokens are assumed to bill as output (the doc marks this UNCERTAIN). providers.mjs folds
+// separately-reported reasoning into usage.completion, so `completion` here always includes it.
+// These are estimates; the real figure is the Cloudflare dashboard's Neuron usage after a run.
 export const NEURON_RATES = {
   '@cf/google/gemma-4-26b-a4b-it': { in: 8_667, out: 30_000 },
   '@cf/meta/llama-3.3-70b-instruct-fp8-fast': { in: 26_668, out: 204_805 },

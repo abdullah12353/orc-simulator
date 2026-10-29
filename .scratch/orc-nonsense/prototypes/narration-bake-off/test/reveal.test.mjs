@@ -46,11 +46,21 @@ test('unblinding combines human ratings with the automatic metrics per model', (
   assert.equal(Y.rated, 2);
 });
 
-test('calls that never returned usage (timeouts) do not drag the token means down', () => {
-  const withTimeout = { ...run, results: [...run.results, rec('c2', 'clash', 'X', { status: 'failed', failure: 'timeout', latencyMs: 30000 })] };
-  const X = summarize({ run: withTimeout, key, ratings }).models.find((m) => m.model === 'X');
+test('rate-limited and transport failures are counted apart and kept out of the quality rates', () => {
+  const extra = [
+    rec('c2', 'clash', 'X', { status: 'failed', failure: 'timeout', latencyMs: 30000 }),
+    rec('c3', 'clash', 'X', { status: 'failed', failure: 'http_429', latencyMs: 50 }),
+  ];
+  const X = summarize({ run: { ...run, results: [...run.results, ...extra] }, key, ratings }).models.find((m) => m.model === 'X');
+  assert.equal(X.calls, 4);
+  assert.equal(X.scored, 2);
+  assert.equal(X.rateLimited, 1);
+  assert.equal(X.transport, 1);
+  assert.equal(X.failureRate, 0.5);
+  assert.equal(X.refusalRate, 0.5);
+  assert.equal(X.formatPassRate, 0.5);
+  // Calls that never returned usage don't drag the token means down.
   assert.equal(X.meanPrompt, 1500);
-  assert.equal(X.failureRate, 2 / 3);
 });
 
 test('ratings from a different run are rejected', () => {

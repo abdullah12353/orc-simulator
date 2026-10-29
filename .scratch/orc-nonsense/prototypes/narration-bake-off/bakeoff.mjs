@@ -1,8 +1,8 @@
 // Runs every input through every provider once, sequentially (so Groq's rate-limit headers
 // come from consecutive calls), and validates each output. No retries.
 import { createHash } from 'node:crypto';
-import { loadPrefix, buildClashMessages, buildHeraldMessages } from './prompt.mjs';
-import { validateClash, validateHerald } from './validate.mjs';
+import { loadPrefix, loadToneBible, buildClashMessages, buildHeraldMessages, buildCalibrationMessages, calibrationInputs, parseCalibrationSamples } from './prompt.mjs';
+import { validateClash, validateHerald, validateCalibration } from './validate.mjs';
 import { createWorkersAi, createGroq } from './providers.mjs';
 import { createMockFetch } from './mock.mjs';
 import { groqCacheFinding } from './cache.mjs';
@@ -41,26 +41,43 @@ export function mockProviders({ onFetch, timeoutMs = 2_000 } = {}) {
 
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 16);
 
-export async function runBakeOff({ providers, facts = FACTS, heralds = HERALDS, cast = CAST, onProgress } = {}) {
+const realSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function validate(input, content) {
+  if (input.kind === 'clash') return validateClash(content, input.fact);
+  if (input.kind === 'calibration') return validateCalibration(content, input.calibration);
+  return validateHerald(content);
+}
+
+export async function runBakeOff({ providers, facts = FACTS, heralds = HERALDS, calibrations, cast = CAST, onProgress, sleep = realSleep } = {}) {
   const prefix = loadPrefix();
+  calibrations ??= calibrationInputs(parseCalibrationSamples(loadToneBible()), cast);
   const inputs = [
-    ...facts.map((f) => ({ id: f.id, kind: 'clash', fact: f, messages: buildClashMessages(prefix, f, cast) })),
-    ...heralds.map((h) => ({ id: h.id, kind: 'herald', herald: h, messages: buildHeraldMessages(prefix, h) })),
+    ...calibrations.map((cal) => ({ id: cal.id, kind: 'calibration', calibration: cal, messages: buildCalibrationMessages(prefix, cal, cast) })),
+    ...facts.map((fact) => ({ id: fact.id, kind: 'clash', fact, messages: buildClashMessages(prefix, fact, cast) })),
+    ...heralds.map((herald) => ({ id: herald.id, kind: 'herald', herald, messages: buildHeraldMessages(prefix, herald) })),
   ];
   const results = [];
-  for (const p of providers) {
+  for (const provider of providers) {
+    let last = null;
     for (const input of inputs) {
+      if (last) {
+        const wait = provider.delayBeforeNext(last, input.messages, input.kind);
+        if (wait > 0) await sleep(wait);
+      }
       const startedAt = Date.now();
-      const call = await p.call(input.messages, input.kind);
-      const v = call.ok ? (input.kind === 'clash' ? validateClash(call.content, input.fact) : validateHerald(call.content)) : null;
-      const failure = call.ok ? (v.ok ? null : v.failure) : call.error;
+      const call = await provider.call(input.messages, input.kind);
+      last = call;
+      const verdict = call.ok ? validate(input, call.content) : null;
+      const failure = call.ok ? (verdict.ok ? null : verdict.failure) : call.error;
       results.push({
-        inputId: input.id, kind: input.kind, provider: p.provider, model: p.model, startedAt,
+        inputId: input.id, kind: input.kind, provider: provider.provider, model: provider.model, startedAt,
         prefixSha: sha(input.messages[0].content),
-        ok: call.ok, status: failure ? 'failed' : 'ok', failure, detail: call.detail,
-        content: call.content ?? null, lines: v?.lines, headline: v?.headline, body: v?.body,
-        flags: v?.flags ?? [], softening: v?.softening ?? [],
+        transportOk: call.ok, status: failure ? 'failed' : 'ok', failure, detail: call.detail,
+        content: call.content ?? null, lines: verdict?.lines, headline: verdict?.headline, body: verdict?.body,
+        flags: verdict?.flags ?? [], softening: verdict?.softening ?? [],
         latencyMs: call.latencyMs, usage: call.usage, neurons: call.neurons, headers: call.headers,
+        maxCompletionTokens: call.maxCompletionTokens,
       });
       onProgress?.(results.at(-1));
     }
@@ -70,7 +87,7 @@ export async function runBakeOff({ providers, facts = FACTS, heralds = HERALDS, 
     startedAt: new Date().toISOString(),
     prefixSha: sha(prefix),
     prefixChars: prefix.length,
-    inputs: inputs.map(({ id, kind, fact, herald }) => ({ id, kind, fact, herald })),
+    inputs: inputs.map(({ id, kind, fact, herald, calibration }) => ({ id, kind, fact, herald, calibration })),
     results,
     groqCache: groqCacheFinding(groqCalls),
   };
