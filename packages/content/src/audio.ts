@@ -8,9 +8,10 @@ export type BarkEmotion = (typeof BARK_EMOTIONS)[number];
 
 /**
  * The announcer's stingers: the Clash opener, a wrong saviour's crash, the verdict stamp, a Trophy taken,
- * the Introduction's opener (#33), and the fanfare for a Legendary deed leading the Herald (#34, D52).
+ * the Introduction's opener (#33), the fanfare for a Legendary deed leading the Herald (#34, D52), and the
+ * announcer introducing the Herald's lead story (D52).
  */
-export const STINGERS = ['clash', 'crash', 'verdict', 'trophy', 'intro', 'fanfare'] as const;
+export const STINGERS = ['clash', 'crash', 'verdict', 'trophy', 'intro', 'fanfare', 'lead'] as const;
 export type Stinger = (typeof STINGERS)[number];
 
 export const barkPath = (captainId: string, emotion: BarkEmotion) => `audio/barks/${captainId}/${emotion}.wav`;
