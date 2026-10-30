@@ -218,6 +218,42 @@ test('Traits shift the odds: a Gullible target never Garbles it, a Compulsive Li
   assert.ok(garbleRate(tweak(base.source, ['Compulsive Liar', 'Lazy'])) > 0.28);
 });
 
+test('after an outage every overdue Fuse fires on the next tick, in (dueAt, no) order, with one ambient roll at most', () => {
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    let state = freshWorld({ seed, players: [P1], watched: true });
+    const [a, b, c] = activeIds(state);
+    state = { ...state, players: { [P1]: { ...state.players[P1]!, meddles: 6 } } };
+    const intents = [
+      rumour(state, P1, { source: a!, target: b! }),
+      rumour(state, P1, { source: b!, target: c! }),
+      rumour(state, P1, { source: c!, target: a! }),
+      rumour(state, P1, { source: a!, target: c! }),
+    ];
+    state = step(state, seed, 5, intents).state;
+    // Pin the due times so two share one, with the later-numbered Fuse first in the list.
+    const [f1, f2, f3, f4] = [...state.fuses].sort((x, y) => x.no - y.no);
+    const due = (f: typeof f1, m: number) => ({ ...f!, dueAt: addMinutes(state.world.now, m) });
+    state = { ...state, fuses: [due(f4, 30), due(f3, 50), due(f1, 50), due(f2, 20)] };
+
+    const r = step(state, seed, 6 * 60);
+    const landed = r.facts.filter((f) => f.kind === 'rumour').map((f) => (f.kind === 'rumour' ? f.meddleId : ''));
+    const byFuse = (f: typeof f1) => f!.meddleId;
+    assert.deepEqual(landed, [byFuse(f2), byFuse(f4), byFuse(f1), byFuse(f3)], 'due order, then Fuse number');
+    assert.equal(r.state.fuses.length, 0);
+    assert.equal(Object.keys(r.state.meddles).length, 0);
+    const incidents = r.facts.filter((f) => f.kind === 'incident').length;
+    assert.ok(incidents <= 1, `${incidents} ambient incidents after a 6-hour gap: never back-filled`);
+  }
+});
+
+test('a Fuse that is not due yet waits', () => {
+  const { state } = planted();
+  const early = { ...state, world: { ...state.world, now: addMinutes(state.world.now, -95 + 9) } };
+  const { facts, stateDiff } = simulate(early, [], 1);
+  assert.equal(facts.filter((f) => f.kind === 'rumour').length, 0);
+  assert.deepEqual(stateDiff.fuses.remove, []);
+});
+
 test('an invalid Rumour is rejected and its Meddle refunded', () => {
   const { state, source, target } = setup();
   const reserve = Object.keys(state.captains).find((id) => state.captains[id]!.roster === 'reserve')!;

@@ -68,11 +68,19 @@ let intentCounter = 0;
 export function rumour(
   state: WorldState,
   playerId: string,
-  r: { source: CaptainId; target: CaptainId; claim?: Claim; subject?: Subject; freeText?: string; firstMeddle?: boolean },
+  r: {
+    source: CaptainId;
+    target: CaptainId;
+    claim?: Claim;
+    subject?: Subject;
+    freeText?: string;
+    firstMeddle?: boolean;
+    id?: string;
+  },
 ): Intent {
   intentCounter++;
   return {
-    id: `00000000-0000-4000-8000-${String(intentCounter).padStart(12, '0')}`,
+    id: r.id ?? `00000000-0000-4000-8000-${String(intentCounter).padStart(12, '0')}`,
     playerId,
     at: state.world.now,
     kind: 'rumour',
