@@ -1,8 +1,9 @@
 // Everything a Clash card needs, read under RLS (#30): the Clash Fact, its stored dialogue (fallback or
 // generated, never a model call), the Trophy that changed hands, and the Blame line. Used by the Herald's
 // lead now, and by live play (#31) and Hall replays (#40).
-import { blameLine, content } from '@orc/content';
+import { blameLine, content, type ComposedPortrait } from '@orc/content';
 import type { ClashFact, ClashLine, Fact } from '@orc/sim';
+import { faceAt, loadFaces } from './portrait-data.ts';
 import { supabase } from './supabase.ts';
 
 export interface ClashCardData {
@@ -12,6 +13,8 @@ export interface ClashCardData {
   source: 'fallback' | 'generated';
   trophy: { key: string; from: string; to: string } | null;
   blameLine: string | null;
+  /** Each Captain's face as the Clash began (#33): his overlays then, and whether he was muffled. */
+  faces: Record<string, ComposedPortrait>;
 }
 
 /** Which of these story heads are Clashes. */
@@ -34,8 +37,11 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
   const clash = facts.find((f): f is ClashFact => f.kind === 'clash' && f.no === factNo);
   if (!clash || !dialogue.data) return null;
   const trophy = facts.find((f) => f.kind === 'trophy');
+  const ids = [clash.a, clash.b, ...(clash.saviour ? [clash.saviour] : [])];
+  const history = await loadFaces(worldId, ids);
 
   return {
+    faces: Object.fromEntries(ids.map((id) => [id, faceAt(id, history.get(id), clash.no)])),
     clash,
     lines: dialogue.data.lines as ClashLine[],
     source: dialogue.data.source as ClashCardData['source'],

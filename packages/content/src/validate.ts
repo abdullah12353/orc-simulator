@@ -1,3 +1,4 @@
+import { LEGENDARY_LAYER } from './portrait.ts';
 import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 import type { CastCard, ClashOutcome, Content } from './types.ts';
 
@@ -33,6 +34,9 @@ export function validateContent(c: Content): string[] {
     for (const field of REQUIRED_CARD_FIELDS) {
       const v = card[field];
       if (v === undefined || v === null || v === '') errors.push(`cast ${card.id}: missing field "${field}"`);
+    }
+    for (const key of Object.keys(card.faceBox ?? {})) {
+      if (key !== LEGENDARY_LAYER && !c.banks.humiliations?.[key]?.overlay) errors.push(`cast ${card.id}: face-box override "${key}" is not an overlay`);
     }
     if (typeof card.power === 'number' && (card.power < 1 || card.power > 10 || !Number.isInteger(card.power))) {
       errors.push(`cast ${card.id}: power must be an integer 1–10`);

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ACCENT_LABELS, content, type CastCard } from '@orc/content';
 import { Portrait } from './Portrait.tsx';
+import { faceAt, type FaceHistory } from './portrait-data.ts';
 import { supabase } from './supabase.ts';
 
 // The Captain card screen (#26): every active Captain with portrait, name and Epithet, Traits, Fears,
 // Power, lifetime Infamy, roster status (dead ones with their Return time, #32), the Trophies he holds
-// (#30), his current Humiliations and disguise alias (#32), and which one is Warlord. Static card fields come from the
+// (#30), his current Humiliations and disguise alias (#32; on his portrait through the compositor, #33),
+// and which one is Warlord. Static card fields come from the
 // content bundle; mutable state comes from the world's rows under RLS.
 
 interface CaptainRow {
@@ -17,6 +19,7 @@ interface CaptainRow {
   epithet: string | null;
   alias_idx: 0 | 1 | null;
   returns_at: string | null;
+  legendary_fact: number | null;
 }
 
 interface Loaded {
@@ -26,6 +29,8 @@ interface Loaded {
   trophies: Map<string, string[]>;
   /** Current Humiliation labels per Captain, newest first. */
   humiliations: Map<string, string[]>;
+  /** What is on each face now, for the portrait compositor. */
+  faces: Map<string, FaceHistory>;
   warlordId: string | null;
 }
 
@@ -54,13 +59,13 @@ export function Captains({ worldId }: { worldId: string }) {
     let cancelled = false;
     void (async () => {
       const [captains, fears, world, trophies, humiliations] = await Promise.all([
-        supabase.from('captains').select('id, roster, power, infamy, traits, epithet, alias_idx, returns_at').eq('world_id', worldId),
+        supabase.from('captains').select('id, roster, power, infamy, traits, epithet, alias_idx, returns_at, legendary_fact').eq('world_id', worldId),
         supabase.from('captain_fears').select('captain_id, fear, since').eq('world_id', worldId).order('since'),
         supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
         supabase.from('trophies').select('kind, holder_id').eq('world_id', worldId).order('acquired_at', { ascending: false }).order('no', { ascending: false }),
         supabase
           .from('humiliations')
-          .select('captain_id, kind')
+          .select('captain_id, kind, no, gained_fact')
           .eq('world_id', worldId)
           .is('ended_at', null)
           .order('no', { ascending: false }),
@@ -76,15 +81,20 @@ export function Captains({ worldId }: { worldId: string }) {
         held.set(t.holder_id, [...(held.get(t.holder_id) ?? []), text]);
       }
       const marks = new Map<string, string[]>();
+      const faces = new Map<string, FaceHistory>(
+        (captains.data ?? []).map((c) => [c.id, { rows: [], legendaryFact: c.legendary_fact === null ? null : Number(c.legendary_fact) }]),
+      );
       for (const h of humiliations.data ?? []) {
         const label = content.banks.humiliations[h.kind]?.label ?? h.kind;
         marks.set(h.captain_id, [...(marks.get(h.captain_id) ?? []), label]);
+        faces.get(h.captain_id)?.rows.push({ kind: h.kind, no: Number(h.no), gainedFact: Number(h.gained_fact), endedFact: null });
       }
       setData({
         captains: captains.data ?? [],
         fears: byCaptain,
         trophies: held,
         humiliations: marks,
+        faces,
         warlordId: world.data?.warlord_id ?? null,
       });
     })();
@@ -121,6 +131,7 @@ export function Captains({ worldId }: { worldId: string }) {
             fears={data.fears.get(c.id) ?? []}
             trophies={data.trophies.get(c.id) ?? []}
             humiliations={data.humiliations.get(c.id) ?? []}
+            face={data.faces.get(c.id)}
             warlord={c.id === data.warlordId}
           />
         ))}
@@ -139,6 +150,7 @@ export function Captains({ worldId }: { worldId: string }) {
                   fears={data.fears.get(c.id) ?? []}
                   trophies={data.trophies.get(c.id) ?? []}
                   humiliations={data.humiliations.get(c.id) ?? []}
+                  face={data.faces.get(c.id)}
                   warlord={false}
                 />
               ))}
@@ -155,12 +167,14 @@ function CaptainCard({
   fears,
   trophies,
   humiliations,
+  face,
   warlord,
 }: {
   captain: CaptainRow;
   fears: string[];
   trophies: string[];
   humiliations: string[];
+  face: FaceHistory | undefined;
   warlord: boolean;
 }) {
   const card = cards.get(captain.id);
@@ -169,7 +183,7 @@ function CaptainCard({
   const alias = captain.alias_idx !== null ? card?.aliases[captain.alias_idx] : undefined;
   return (
     <li className={`captain ${captain.roster}${warlord ? ' warlord' : ''}`}>
-      <Portrait portraitKey={card?.portraitKey ?? captain.id} name={name} />
+      <Portrait face={faceAt(captain.id, face)} name={alias ?? name} />
       <div>
         <h3>
           {alias ?? displayName(name, captain.epithet)}

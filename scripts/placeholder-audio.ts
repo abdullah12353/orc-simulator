@@ -1,11 +1,25 @@
 // Writes the placeholder audio bank into apps/web/public: one short synthesised grunt per Captain and
-// emotion (pitched per Captain, so each sounds like "himself"), and the announcer's stingers. Tiny 8 kHz
-// 8-bit mono WAVs. Deterministic: re-running gives identical files. The real ElevenLabs renders (#19)
-// replace these file for file; `--missing` only writes files that don't exist yet, so it never clobbers one.
+// emotion (pitched per Captain, so each sounds like "himself"), his Introduction clips (#33: a drawn-out
+// shout of his name and each alias, and a mumbled signature line), the announcer's stingers and one flat
+// drone per Epithet. Tiny 8 kHz 8-bit mono WAVs. Deterministic: re-running gives identical files. The real
+// ElevenLabs renders (#19) replace these file for file; `--missing` only writes files that don't exist yet,
+// so it never clobbers one.
 //   node --experimental-strip-types scripts/placeholder-audio.ts [--missing]
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { BARK_EMOTIONS, STINGERS, barkPath, content, hashString, stingerPath, type BarkEmotion, type Stinger } from '@orc/content';
+import {
+  BARK_EMOTIONS,
+  STINGERS,
+  barkPath,
+  content,
+  epithetPath,
+  hashString,
+  introShoutPath,
+  introSignaturePath,
+  stingerPath,
+  type BarkEmotion,
+  type Stinger,
+} from '@orc/content';
 
 const RATE = 8000;
 const PUBLIC = join(import.meta.dirname, '..', 'apps', 'web', 'public');
@@ -80,7 +94,7 @@ function bark(captainId: string, emotion: BarkEmotion): Float32Array {
 
 function stinger(name: Stinger): Float32Array {
   const rnd = noise(parseInt(hashString(name).slice(0, 8), 16));
-  const seconds = { clash: 1.0, crash: 0.5, verdict: 0.9, trophy: 0.5 }[name];
+  const seconds = { clash: 1.0, crash: 0.5, verdict: 0.9, trophy: 0.5, intro: 0.8 }[name];
   const n = Math.round(seconds * RATE);
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -96,12 +110,36 @@ function stinger(name: Stinger): Float32Array {
       v = rnd() * Math.exp(-s * 7); // a smash
     } else if (name === 'verdict') {
       v = (2 * ((s * 98) % 1) - 1) * Math.min(1, s * 10) * Math.exp(-s * 2.5); // a horn
+    } else if (name === 'intro') {
+      // A cymbal swell into a thud: "Ladies and gentlemen…"
+      v = s < 0.55 ? rnd() * 0.6 * (s / 0.55) : Math.sin(2 * Math.PI * 55 * (s - 0.55)) * Math.exp(-(s - 0.55) * 8);
     } else {
       v = Math.sin(2 * Math.PI * (500 + 900 * s) * s) * Math.exp(-s * 6); // a rising ting
     }
     out[i] = 0.7 * Math.max(-1, Math.min(1, v));
   }
   return out;
+}
+
+/** His Introduction shout: a long, wobbling bellow that rises then collapses. Each alias is pitched a bit off. */
+function shout(captainId: string, variant: number): Float32Array {
+  const h = parseInt(hashString(captainId).slice(0, 8), 16);
+  const base = (70 + (h % 90)) * (1 + 0.12 * variant);
+  const seed = h ^ (0x51ab + variant);
+  return voice(0.55, (t) => base * (1.2 + 0.6 * Math.sin(Math.PI * t)) * (1 + 0.05 * Math.sin(t * 70)), envelope, seed);
+}
+
+/** His signature line: three mumbled "syllables" at his pitch. */
+function signature(captainId: string): Float32Array {
+  const h = parseInt(hashString(captainId).slice(0, 8), 16);
+  const base = 70 + (h % 90);
+  return voice(0.8, (t) => base * (1 + 0.25 * Math.sin(t * 19)), (t) => envelope(t) * (0.5 + 0.5 * Math.abs(Math.sin(t * 3 * Math.PI))), h ^ 0x5161);
+}
+
+/** The announcer's Epithet: a flat, deadpan drone. */
+function epithetClip(key: string): Float32Array {
+  const h = parseInt(hashString(key).slice(0, 8), 16);
+  return voice(0.6, () => 98, (t) => envelope(t) * (0.6 + 0.4 * Math.abs(Math.sin(t * 2 * Math.PI))), h);
 }
 
 let written = 0;
@@ -114,5 +152,12 @@ function write(path: string, samples: Float32Array) {
 }
 
 for (const card of content.cast) for (const emotion of BARK_EMOTIONS) write(barkPath(card.id, emotion), bark(card.id, emotion));
+for (const card of content.cast) {
+  write(introShoutPath(card.id), shout(card.id, 0));
+  write(introShoutPath(card.id, 0), shout(card.id, 1));
+  write(introShoutPath(card.id, 1), shout(card.id, 2));
+  write(introSignaturePath(card.id), signature(card.id));
+}
 for (const name of STINGERS) write(stingerPath(name), stinger(name));
+for (const key of Object.keys(content.banks.epithets)) write(epithetPath(key), epithetClip(key));
 console.log(`Placeholder audio: wrote ${written} file(s) under ${PUBLIC}`);
