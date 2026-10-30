@@ -10,6 +10,8 @@
 import type { ClashOutcome, TemplateDef } from '@orc/content';
 import { backersOf, edgeFor } from './backing.ts';
 import { pairOf, type TickContext } from './context.ts';
+import { causeOf } from './blame.ts';
+import { holdGrudge } from './grudge.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
 import { disaster, maybeUnmask, UNMASK } from './roster.ts';
@@ -193,7 +195,7 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
 function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainId, number>, depth: number): void {
   const { state, rng } = ctx;
   const { a, b, winner, loser } = head;
-  const headCause: Cause = { fact: head.no, blame: head.blame };
+  const headCause: Cause = causeOf(head);
   const bank = state.content.banks.clash;
 
   for (const [x, y] of [
@@ -213,8 +215,11 @@ function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainI
     trophyText !== null
       ? bank.tags.trophy.replace('{trophy}', trophyText)
       : rng.pick(head.outcome === 'fled' ? bank.tags.fled : bank.tags.beaten);
-  grudge(ctx, head, headCause, loser, winner, CLASH.sting, tag);
-  if (head.saviour) grudge(ctx, head, headCause, loser, head.saviour, CLASH.saviourSting, bank.tags.saviour.replace('{magnet}', head.saviourMagnet ?? bank.anyMagnet));
+  holdGrudge(ctx, head, { holder: loser, toward: winner, sting: CLASH.sting, tag });
+  if (head.saviour) {
+    const tag = bank.tags.saviour.replace('{magnet}', head.saviourMagnet ?? bank.anyMagnet);
+    holdGrudge(ctx, head, { holder: loser, toward: head.saviour, sting: CLASH.saviourSting, tag });
+  }
 
   // Beating a stronger Captain makes him stronger (D42), as Power stood when they squared up.
   if (powers[winner]! < powers[loser]!) drift(ctx, head, winner, 1);
@@ -261,29 +266,6 @@ function takeTrophy(ctx: TickContext, head: ClashFact, headCause: Cause): string
     to: winner,
   });
   return bank[trophy.key]?.text ?? trophy.key;
-}
-
-function grudge(ctx: TickContext, head: ClashFact, headCause: Cause, holder: CaptainId, toward: CaptainId, sting: number, tag: string): void {
-  const before = ctx.getAffinity(holder, toward);
-  const after = ctx.setAffinity(holder, toward, before - sting);
-  const no = ctx.allocNo();
-  ctx.facts.push({
-    no,
-    at: ctx.state.world.now,
-    storyNo: head.no,
-    line: '',
-    tier: 'silent',
-    cast: [holder, toward],
-    ...ctx.link(no, { requires: [headCause] }),
-    infamy: [],
-    kind: 'grudge',
-    holder,
-    toward,
-    tag,
-    delta: after - before,
-  });
-  // Like a Rumour's, the tag's cause is the story head: a later Clash over it is one hop on from this one.
-  ctx.diff.grudgeTags.push({ no: ctx.allocNo(), holder, toward, tag, at: ctx.state.world.now, cause: headCause });
 }
 
 /** A third active Captain, drawn in by a Trait magnet (a Glutton by the pies) or, failing that, the noise. */

@@ -3,6 +3,7 @@
 import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { consumeDare, fireDare } from './dares.ts';
+import { holdGrudge } from './grudge.ts';
 import { gainInfamy, INFAMY } from './infamy.ts';
 import { fireReactionFuse, followUp } from './reactions.ts';
 import { maybeUnmask, UNMASK } from './roster.ts';
@@ -191,36 +192,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   // It backfires on its supposed source: the fortress now believes he said it (D42, notable).
   gainInfamy(ctx, head, r.source, INFAMY.rumourSource);
 
-  // Whoever heard it now holds a Grudge against the supposed source: affinity down, a permanent tag.
-  const before = ctx.getAffinity(reached, r.source);
-  const after = ctx.setAffinity(reached, r.source, before - RUMOUR.sting[claim]);
-  const tag = said;
-  const grudgeNo = ctx.allocNo();
-  const landing = { fact: no, blame };
-  ctx.facts.push({
-    no: grudgeNo,
-    at: state.world.now,
-    storyNo: no,
-    line: '',
-    tier: 'silent',
-    cast: [reached, r.source],
-    // The Grudge follows from the landing; the same Meddle keeps it at hop 0.
-    ...ctx.link(grudgeNo, { requires: [landing], own }),
-    infamy: [],
-    kind: 'grudge',
-    holder: reached,
-    toward: r.source,
-    tag,
-    delta: after - before,
-  });
-  ctx.diff.grudgeTags.push({
-    no: ctx.allocNo(),
-    holder: reached,
-    toward: r.source,
-    tag,
-    at: state.world.now,
-    cause: landing,
-  });
+  // Whoever heard it now holds a Grudge against the supposed source; the same Meddle keeps it at hop 0.
+  holdGrudge(ctx, head, { holder: reached, toward: r.source, sting: RUMOUR.sting[claim], tag: said, own });
   // A Rumour about a disguised Captain may blow his cover.
   maybeUnmask(ctx, head, r.target, 'rumour', UNMASK.rumour);
   // Now the hearer reacts (a Hothead goes straight for the source, #7).

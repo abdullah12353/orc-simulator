@@ -5,6 +5,7 @@
 // victim a Grudge against him.
 import { dareFits, DARE_TEMPLATES, daresFor, playsOnFear, SURPRISE, subjectText, type DareDef } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { holdGrudge } from './grudge.ts';
 import { gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
 import { disaster, humiliate } from './roster.ts';
@@ -155,26 +156,7 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   // The victim of a Prank that came off (or went wrong on him) now holds it against the target.
   const sting = DARE.sting[outcome];
   if (victim !== undefined && sting !== undefined && def.grudge) {
-    const before = ctx.getAffinity(victim, target);
-    const after = ctx.setAffinity(victim, target, before - sting);
-    const landing = { fact: no, blame };
-    const grudgeNo = ctx.allocNo();
-    ctx.facts.push({
-      no: grudgeNo,
-      at: now,
-      storyNo: no,
-      line: '',
-      tier: 'silent',
-      cast: [victim, target],
-      ...ctx.link(grudgeNo, { requires: [landing], own }),
-      infamy: [],
-      kind: 'grudge',
-      holder: victim,
-      toward: target,
-      tag: def.grudge,
-      delta: after - before,
-    });
-    ctx.diff.grudgeTags.push({ no: ctx.allocNo(), holder: victim, toward: target, tag: def.grudge, at: now, cause: landing });
+    holdGrudge(ctx, head, { holder: victim, toward: target, sting, tag: def.grudge, own });
     if (outcome === 'pulled_off') ctx.misfortune(victim, head);
   }
 

@@ -6,6 +6,7 @@
 // consequences are in. A Fact kind joins in by offering roles in `parentRoles` (named in `PARENT_ROLES`).
 // A head that isn't itself a reaction (a Return, a death's stepping in) takes the depth of whatever set it off.
 import type { ParentKind, PARENT_ROLES, TemplateDef } from '@orc/content';
+import { causeOf } from './blame.ts';
 import { resolveClash } from './clash.ts';
 import type { TickContext } from './context.ts';
 import { outcomeInfamy } from './infamy.ts';
@@ -76,7 +77,7 @@ export function followUp(ctx: TickContext, head: Fact, depth: number): void {
   for (const t of templates) {
     const cast = castRoles(ctx, t, parent.roles);
     if (!cast || !ctx.rng.chance(t.after!.chance)) continue;
-    const cause: Cause = { fact: head.no, blame: head.blame };
+    const cause: Cause = causeOf(head);
     if (depth + 1 > REACTIONS.maxDepth) {
       const { min, max } = REACTIONS.fuse;
       const fuse: Fuse = {

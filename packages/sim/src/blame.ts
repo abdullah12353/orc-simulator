@@ -3,7 +3,10 @@
 // deduped per Meddle (the nearest path wins) and cut off past the hop cap. Callbacks add comedy weight
 // but never Blame. The sim materialises Blame on every Fact, so the DB never has to recurse.
 import { isoToMs } from './time.ts';
-import type { BlameEntry, Cause, FactNo, GrudgeTag, Iso } from './types.ts';
+import type { BlameEntry, Cause, Fact, FactNo, GrudgeTag, Iso } from './types.ts';
+
+/** A Fact as a cause: requiring it carries its Blame one hop on. */
+export const causeOf = (f: Fact): Cause => ({ fact: f.no, blame: f.blame });
 
 /** Decision 8: (a) required state only, (b) a pair's last 3 Grudge tags from 7 days, (c) at most 6 hops. */
 export const BLAME = {

@@ -7,6 +7,7 @@
 // written; anything that can expose a disguise calls `maybeUnmask`. `processReturns` runs once a tick,
 // straight after the day roll.
 import { KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
+import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
@@ -46,7 +47,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   const now = state.world.now;
   const c = ctx.captain(victim);
   const bank = state.content.banks.death;
-  const headCause: Cause = { fact: head.no, blame: head.blame };
+  const headCause: Cause = causeOf(head);
 
   const why =
     c.graceUntil !== null && isoToMs(c.graceUntil) > isoToMs(now)
@@ -78,7 +79,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   gainInfamy(ctx, deathFact, victim, INFAMY.death);
   drift(ctx, deathFact, victim, -1);
   warlordFalls(ctx, deathFact, victim, 'death');
-  const death: Cause = { fact: no, blame };
+  const death = causeOf(deathFact);
   ctx.patchCaptain(victim, { roster: 'dead', returnsAt, death: { cause: death, causeTag: tag } });
   ctx.diff.world.deathsToday = ctx.deathsToday() + 1;
 
@@ -96,7 +97,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
 export function humiliate(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag): void {
   if (ctx.rosterOf(victim) !== 'active') return;
   const choice = chooseHumiliation(ctx, victim, tag);
-  if (choice) applyHumiliation(ctx, victim, choice, head.no, [{ fact: head.no, blame: head.blame }]);
+  if (choice) applyHumiliation(ctx, victim, choice, head.no, [causeOf(head)]);
 }
 
 /** Bandages that are due heal, then every Captain whose Return is due comes back, in (returnsAt, slug) order. */
@@ -123,7 +124,7 @@ export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'cl
   if (!disguise || !ctx.rng.chance(chance)) return;
   const alias = aliasOf(ctx, id, ctx.captain(id).aliasIdx ?? 0);
   const no = ctx.allocNo();
-  const { causes, blame } = ctx.link(no, { requires: [{ fact: head.no, blame: head.blame }] });
+  const { causes, blame } = ctx.link(no, { requires: [causeOf(head)] });
   const fact: Fact = {
     no,
     at: ctx.state.world.now,
@@ -139,7 +140,7 @@ export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'cl
   };
   ctx.facts.push(fact);
   gainInfamy(ctx, fact, id, INFAMY.unmasked);
-  endHumiliation(ctx, disguise, 'unmasked', no, [{ fact: no, blame }]);
+  endHumiliation(ctx, disguise, 'unmasked', no, [causeOf(fact)]);
   followUp(ctx, fact, depth);
 }
 
@@ -174,7 +175,7 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
     graceUntil,
   };
   ctx.facts.push(head);
-  const headCause: Cause = { fact: no, blame };
+  const headCause = causeOf(head);
   if (choice) applyHumiliation(ctx, id, choice, no, [headCause]);
   bench(ctx, id, head);
 
@@ -212,7 +213,7 @@ function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
     line,
     tier: 'silent',
     cast: [id],
-    ...ctx.link(no, { requires: [{ fact: head.no, blame: head.blame }] }),
+    ...ctx.link(no, { requires: [causeOf(head)] }),
     infamy: [],
     kind: 'benched',
     captainId: id,

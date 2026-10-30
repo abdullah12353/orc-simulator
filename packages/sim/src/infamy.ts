@@ -11,6 +11,7 @@
 //   unless he is the Warlord). The throne stays empty until `crownSuccessor` runs at the end of the tick.
 // - `drift(ctx, fact, id, delta)`: the ONE way to change Power (±1, kept within 1–10), with a `power` Fact.
 import { ROSTER_TEMPLATES, type OutcomeDef } from '@orc/content';
+import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
@@ -54,8 +55,6 @@ export const INFAMY = {
 export const POWER = { min: 1, max: 10 } as const;
 
 export type FallWhy = Extract<Fact, { kind: 'warlord_fell' }>['why'];
-
-const causeOf = (f: Fact): Cause => ({ fact: f.no, blame: f.blame });
 
 /** The story head `fact` belongs to (itself, for a head). Heads are always written before their consequences. */
 function headOf(ctx: TickContext, fact: Fact): Fact {
