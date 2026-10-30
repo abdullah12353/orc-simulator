@@ -268,3 +268,19 @@ test('a Rumour that lands on a Hothead goes straight to a Clash with the source,
   }
   assert.ok(checked > 10, `${checked} landings on the Hothead`);
 });
+test('a Clash over a Grudge tag the world already remembers is a Callback: 3 more comedy weight (D50)', () => {
+  const { state, holder, toward } = feud(-80);
+  const tag = { no: 1, holder, toward, tag: 'sat on his pie', at: addMinutes(state.world.now, -60), cause: null };
+  const remembered: WorldState = { ...state, grudgeTags: [tag] };
+  let compared = 0;
+  for (let seed = 1; seed <= 400 && compared < 5; seed++) {
+    const without = simulate(state, [], seed).facts.find(isClash);
+    if (!without) continue;
+    const named = simulate(remembered, [], seed).facts.find(isClash)!;
+    assert.match(named.line, /sat on his pie/);
+    assert.deepEqual(named.blame, without.blame, 'a Callback adds no Blame');
+    assert.equal(named.comedyWeight, without.comedyWeight! + 3);
+    compared++;
+  }
+  assert.ok(compared > 0, 'some Clashes to compare');
+});

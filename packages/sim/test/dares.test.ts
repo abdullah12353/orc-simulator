@@ -305,3 +305,16 @@ test('a Dare on a dead target is held until he Returns; a dead Prank victim hold
   assert.equal(head.victim, s.victim);
   assert.deepEqual(p.stateDiff.meddles, [{ id: prank.intent.id, status: 'landed', landedFact: head.no }]);
 });
+
+test('a Dare that plays on a Fear he is known for is a Callback: 3 more comedy weight (D50)', () => {
+  const onFear = planted({ dareKey: 'stunt.moat-swim' }, (s, t) => plain(s, t, { fears: [{ fear: 'Water', added: false, since: s.world.now }] }));
+  const offFear = planted({ dareKey: 'stunt.moat-swim' });
+  for (const outcome of ['pulled_off', 'refused'] as const) {
+    const a = landWith(onFear.state, outcome);
+    const b = landWith(offFear.state, outcome);
+    assert.equal(a.head.playsOnFear, true);
+    assert.equal(b.head.playsOnFear, false);
+    assert.deepEqual(a.head.blame.map((e) => [e.playerId, e.hops]), [[P1, 0]], 'a Callback adds no Blame');
+    assert.equal(a.head.comedyWeight, b.head.comedyWeight! + 3, outcome);
+  }
+});

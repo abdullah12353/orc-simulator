@@ -134,15 +134,18 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
   const variant = rng.int(3) as 0 | 1 | 2;
 
   const no = ctx.allocNo();
-  const { causes, blame } = ctx.link(no, { requires: start.requires });
   const tags = pairTags(ctx, a, b);
+  const named = tags.find((t) => t.holder === a && t.toward === b);
+  // Naming a Grudge tag the world already remembered (from before this tick) is a Callback (D50).
+  const remembered = named && ctx.state.grudgeTags.some((t) => t.no === named.no) ? [named] : [];
+  const { causes, blame } = ctx.link(no, { requires: start.requires, callbacks: remembered });
   const results = state.content.banks.clash.results;
   const names = { winner, loser, ...(saviour ? { saviour: saviour.id } : {}) };
   const magnet = { magnet: saviour?.magnet ?? '' };
   const result =
     renderLine(ctx, results[outcome][variant], names, magnet) +
     (saviour ? ` ${renderLine(ctx, results.saviour[variant], names, magnet)}` : '');
-  const tag = tags.find((t) => t.holder === a && t.toward === b)?.tag ?? state.content.banks.clash.noTag;
+  const tag = named?.tag ?? state.content.banks.clash.noTag;
 
   const head: ClashFact = {
     no,

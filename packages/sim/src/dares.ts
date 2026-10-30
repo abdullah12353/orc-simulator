@@ -110,6 +110,7 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   const target = (meddle.intent as DareIntent).target;
   const fears = ctx.fears(target).map((f) => f.fear);
   const onFear = playsOnFear(def, fears);
+  const fear = onFear ? fears.find((f) => def.tags.includes(f))! : null;
   const odds = Object.entries(onFear ? DARE.fearOdds : DARE.odds).filter(([, w]) => w > 0);
   const outcome = rng.weighted(odds, ([, w]) => w)[0] as DareOutcome;
 
@@ -118,16 +119,16 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   const roles: Record<string, CaptainId> = { target, ...(victim !== undefined ? { victim } : {}) };
   const text = renderLine(ctx, def.text, roles);
   let line = template ? renderLine(ctx, template.lines[variant], roles, { dare: text }) : '';
-  if (onFear && line) {
-    const fear = fears.find((f) => def.tags.includes(f))!;
+  if (fear && line) {
     const bank = state.content.banks.dareFear;
     line += ` ${bank[variant % bank.length]!.replace('{fear}', subjectText(state.content, { from: 'fear', key: fear }))}`;
   }
 
   const no = ctx.allocNo();
   const own: BlameEntry[] = [{ meddleId: meddle.id, playerId: meddle.playerId, verb: 'dare', landedFact: no, landedAt: now, hops: 0 }];
-  // A landing requires nothing in the world: its only Blame is its own Meddle.
-  const { causes, blame } = ctx.link(no, { own });
+  // A landing requires nothing in the world: its only Blame is its own Meddle. Playing on a Fear the
+  // world already knows him for (it is on his card) is a Callback (D50).
+  const { causes, blame } = ctx.link(no, { own, callbacks: fear ? [fear] : [] });
   const head: Fact = {
     no,
     at: now,
