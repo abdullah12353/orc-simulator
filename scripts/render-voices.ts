@@ -8,9 +8,12 @@
 //   npm run voices -- krug announcer        just those voices
 //   npm run voices -- krug-taunt            re-render one take, even if it exists
 //   npm run voices -- --pick krug-shout~2   use an alternative take as the game file (no API call)
+// Designing the voices (prompts in voices/test-cast.ts DESIGNS), instead of the web UI:
+//   npm run voices -- --design krug vorgash three Voice Design previews each, in voices/designs/
+//   npm run voices -- --save krug 2         save preview 2 to your account and write its voice ID
 // The API key comes from ELEVENLABS_API_KEY, or a git-ignored .env.voices holding ELEVENLABS_API_KEY=….
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
   BARK_EMOTIONS,
@@ -22,11 +25,13 @@ import {
   introSignaturePath,
   stingerPath,
 } from '@orc/content';
-import { SWAP_LINES, TEST_CAST } from '../voices/test-cast.ts';
+import { DESIGNS, SWAP_LINES, TEST_CAST } from '../voices/test-cast.ts';
 
 const ROOT = join(import.meta.dirname, '..');
 const PUBLIC = join(ROOT, 'apps', 'web', 'public');
 const TAKES = join(ROOT, 'voices', 'takes');
+const DESIGNED = join(ROOT, 'voices', 'designs');
+const IDS = join(ROOT, 'voices', 'voice-ids.json');
 const MODEL = flag('--model') ?? 'eleven_v3';
 
 function flag(name: string): string | undefined {
@@ -93,14 +98,76 @@ function apiKey(): string {
   return line ? line.slice('ELEVENLABS_API_KEY='.length).trim().replace(/^['"]|['"]$/g, '') : fail('no ELEVENLABS_API_KEY (env or .env.voices)');
 }
 
-async function render(key: string, voiceId: string, text: string) {
-  const res = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
+async function api(path: string, body: object): Promise<Response> {
+  const res = await fetch(`https://api.elevenlabs.io${path}`, {
     method: 'POST',
-    headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json', accept: 'audio/mpeg' },
-    body: JSON.stringify({ text, model_id: MODEL }),
+    headers: { 'xi-api-key': apiKey(), 'content-type': 'application/json' },
+    body: JSON.stringify(body),
   });
-  if (!res.ok) fail(`${key}: ElevenLabs ${res.status} ${await res.text()}`);
+  if (!res.ok) fail(`ElevenLabs ${res.status} on ${path}: ${await res.text()}`);
+  return res;
+}
+
+async function render(key: string, voiceId: string, text: string) {
+  const res = await api(`/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, { text, model_id: MODEL });
   writeFileSync(join(TAKES, `${key}.mp3`), Buffer.from(await res.arrayBuffer()));
+}
+
+/** Three Voice Design previews of each voice, as voices/designs/<voice>-<n>.mp3 (about 250 credits a voice). */
+async function design(voices: string[]) {
+  if (!voices.length) fail(`name the voices to design: ${Object.keys(DESIGNS).join(', ')}`);
+  for (const v of voices) if (!DESIGNS[v]) fail(`${v} has no design prompt in voices/test-cast.ts`);
+  mkdirSync(DESIGNED, { recursive: true });
+  for (const v of voices) {
+    const { description, preview } = DESIGNS[v]!;
+    if (preview.length < 100 || preview.length > 1000) fail(`${v}'s preview text is ${preview.length} characters; it needs 100 to 1000`);
+    console.log(`${v}: designing…`);
+    const res = await api('/v1/text-to-voice/design', { voice_description: description, text: preview, model_id: 'eleven_ttv_v3' });
+    const { previews } = (await res.json()) as { previews: { audio_base_64: string; generated_voice_id: string }[] };
+    previews.forEach((p, i) => {
+      writeFileSync(join(DESIGNED, `${v}-${i + 1}.mp3`), Buffer.from(p.audio_base_64, 'base64'));
+      console.log(`  → voices/designs/${v}-${i + 1}.mp3`);
+    });
+    writeFileSync(join(DESIGNED, `${v}.json`), JSON.stringify({ description, generated: previews.map((p) => p.generated_voice_id) }, null, 2));
+  }
+  console.log(`Listen, then save the best: npm run voices -- --save ${voices[0]} <1-3>`);
+}
+
+/** Saves a preview as a voice in the account, writes its ID, and clears the old voice's takes. */
+async function save(voice: string, n: number) {
+  const file = join(DESIGNED, `${voice}.json`);
+  if (!existsSync(file)) fail(`no designs for ${voice} yet: npm run voices -- --design ${voice}`);
+  const { description, generated }: { description: string; generated: string[] } = JSON.parse(readFileSync(file, 'utf8'));
+  const chosen = generated[n - 1] ?? fail(`pick 1 to ${generated.length}`);
+  const name = content.cast.find((c) => c.id === voice)?.name ?? 'Announcer';
+  const res = await api('/v1/text-to-voice', {
+    voice_name: name,
+    voice_description: description,
+    generated_voice_id: chosen,
+    played_not_selected_voice_ids: generated.filter((g) => g !== chosen),
+  });
+  const { voice_id } = (await res.json()) as { voice_id: string };
+  const ids: Record<string, string> = JSON.parse(readFileSync(IDS, 'utf8'));
+  const old = ids[voice];
+  ids[voice] = voice_id;
+  writeFileSync(IDS, `${JSON.stringify(ids, null, 2)}
+`);
+  console.log(`Saved ${name} (${voice_id}) in voices/voice-ids.json.`);
+  if (old) console.log(`It replaces ${old}: delete that one in My Voices to free its slot.`);
+  const stale = existsSync(TAKES) ? readdirSync(TAKES).filter((f) => f.startsWith(`${voice}-`)) : [];
+  for (const f of stale) rmSync(join(TAKES, f));
+  if (stale.length) console.log(`Cleared ${stale.length} take(s) from the old voice; npm run voices re-renders them.`);
+}
+
+const positional = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !['--model', '--pick', '--save'].includes(all[i - 1]!));
+if (process.argv.includes('--design')) {
+  await design(positional);
+  process.exit(0);
+}
+const saving = flag('--save');
+if (saving) {
+  await save(saving, Number(positional[0]));
+  process.exit(0);
 }
 
 const takes = allTakes();
@@ -113,8 +180,8 @@ if (pick) {
   process.exit(0);
 }
 
-const ids: Record<string, string> = JSON.parse(readFileSync(join(ROOT, 'voices', 'voice-ids.json'), 'utf8'));
-const args = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && all[i - 1] !== '--model');
+const ids: Record<string, string> = JSON.parse(readFileSync(IDS, 'utf8'));
+const args = positional;
 for (const a of args) if (!(a in TEST_CAST) && !takes.has(a)) fail(`${a} is neither a voice (${Object.keys(TEST_CAST).join(', ')}) nor a take`);
 
 const chosen = [...takes].filter(([key, t]) => {

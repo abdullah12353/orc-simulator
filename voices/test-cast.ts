@@ -82,3 +82,41 @@ export const TEST_CAST: Record<string, Record<string, string>> = {
     'epithet-the-magnificent': '…the Magnificent.',
   },
 };
+
+// Voice Design prompts (`npm run voices -- --design <voice>`). Every description uses the same template and
+// accent wording, so no accent gets pushed harder than another (the tone bible's swap test). The preview
+// text is what the three designs speak: 100 to 1000 characters.
+const TEMPLATE = (accent: string, age: string, persona: string, pacing: string) =>
+  `Native ${accent === 'Indian English' ? '' : 'British '}English with a thick ${accent} accent. Male, ${age}. Studio-quality recording. ${persona} Deep, gravelly, rough throat like a huge brute; ${pacing} delivery.`;
+
+export const DESIGNS: Record<string, { description: string; preview: string }> = {
+  krug: {
+    description: TEMPLATE('working-class East London cockney', '40s', "A boastful orc bruiser who is a mummy's boy. Loud, defensive, overconfident.", 'fast, punchy pub-banter'),
+    preview: "Exit means exit. I ain't leaving the throne, I ain't leaving the pub, I ain't leaving nothing. Water? Don't talk to me about water, you absolute melt. My mum says I'm the hardest orc in the fortress. Come 'ere then, you bucket-headed muppet!",
+  },
+  snarlbottom: {
+    description: TEMPLATE('upper-class received pronunciation', '50s', 'A vain, snobbish orc lord. Cruel, smug, bored.', 'slow, drawling, superior'),
+    preview: "One does not wear a bucket. One wears a heritage helm, you ghastly little turd. Frightfully sorry, I appear to have stabbed you. Do send the invoice to Mummy. Peasants, the lot of you. I shall have you flogged, old boy. Not today, I've got polo.",
+  },
+  mudgut: {
+    description: TEMPLATE('rural West Country Somerset', '60s', 'A greedy old orc glutton. Contented, stubborn, grumbling.', 'slow, wet, rumbling'),
+    preview: "I've ate worse than you for breakfast. I've ate a door. That's not a moat, boy, that's a paddling pool for pissy little cowards. He started it. I finished it. Then I ate the bastard. Now, who's had my dinner?",
+  },
+  skagrot: {
+    description: TEMPLATE('Liverpool Scouse', '30s', 'A hot-headed, superstitious orc scrapper. Twitchy, cocky, indignant.', 'quick, rattling, excitable'),
+    preview: "Swear down, there was a dragon. It was a goose. But it was a big goose. I'm not arsed, lad. I'm just gonna nut this wall till it says sorry. Stabbed meself in the arse. Still sound, that. Proper sound.",
+  },
+  grizzock: {
+    description: TEMPLATE('Glasgow Scottish', '40s', 'A furious orc brawler who will fight anything. Aggressive, proud, wound-up.', 'fast, hard, clipped'),
+    preview: "I'll take yous all on. One at a time. Starting with that wall, ya bastard. Whit d'you mean it's a bucket? It's a helmet, ya absolute fanny. Ma head's fine. It's ma pride that's deid.",
+  },
+  vorgash: {
+    description: TEMPLATE('Indian English', '40s', 'A vain orc show-off who polishes his tusks. Smug, theatrical, touchy.', 'bright, fast, self-admiring'),
+    preview: 'Look at these tusks. Polished. Every morning. You cannot buy this quality, you crusty bellend. I have never lost a fight. I have only temporarily stopped winning. Shut your face, you mouldy-arsed turnip.',
+  },
+  announcer: {
+    description:
+      'Native British English with a received pronunciation accent. Male, 50s. Broadcast-quality recording. A deadpan boxing ring announcer. Dry, flat, unimpressed. Slow, measured, every word weighted, with long pauses.',
+    preview: 'Ladies and gentlemen… and orcs. Introducing… the Polished. Extra. Extra. Orc falls in pond, claims pond started it. Krúg… has been defeated… by a bucket. Again.',
+  },
+};
