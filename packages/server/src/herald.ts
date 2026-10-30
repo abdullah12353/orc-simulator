@@ -26,8 +26,9 @@ export const HERALD = {
   waitMs: 8_000,
   /** A Herald job queued longer ago than this is taken to have died: nobody waits on it any more. */
   generatingForSeconds: 60,
-  /** A Player's first edition looks back at most this far: day zero for a Player who opens on day one,
-   * the last 24 h for a late joiner (#43). */
+  /** A Player's first edition looks back this far from when they joined: for the creator (who joins as
+   * the world is made) that is all of day zero (#27, D57); for a late joiner, the 24 h before they joined
+   * (#43). Either way it runs on to now, so first opening the app late loses nothing. */
   firstWindowHours: 24,
 } as const;
 
@@ -172,8 +173,8 @@ async function printEdition(
 ): Promise<{ result: OpenEditionResult; heraldJob: number | null }> {
   const content = deps.content ?? shippedContent;
   return deps.sql.begin(async (tx) => {
-    const [player] = await tx<{ id: string; display_name: string; world_created_at: string }[]>`
-      select p.id, p.display_name, to_json(w.created_at)#>>'{}' as world_created_at
+    const [player] = await tx<{ id: string; display_name: string; world_created_at: string; joined_at: string }[]>`
+      select p.id, p.display_name, to_json(w.created_at)#>>'{}' as world_created_at, to_json(p.joined_at)#>>'{}' as joined_at
       from players p join worlds w on w.id = p.world_id
       where p.world_id = ${input.worldId} and p.user_id = ${input.userId} and p.removed_at is null`;
     if (!player) throw new OpenEditionError('not_a_player');
@@ -185,14 +186,17 @@ async function printEdition(
     const [last] = await tx<{ id: string; no: number; covers_to: string; created_at: string }[]>`
       select id, no, to_json(covers_to)#>>'{}' as covers_to, to_json(created_at)#>>'{}' as created_at
       from editions where player_id = ${player.id} order by no desc limit 1`;
-    // A brand-new Player's window is day zero (D57), or the last 24 h for a late joiner (#43).
+    // A brand-new Player's window is the 24 h before they joined, up to now: day zero for the creator
+    // (D57), the last 24 h for a late joiner (#43). A join "after" the injected clock counts as now (the
+    // tick's rule for sightings too), and the window never starts before day zero.
+    const joined = Math.min(Date.parse(player.joined_at), Date.parse(now));
     const from = last
       ? iso(last.covers_to)
       : iso(
           new Date(
             Math.max(
               Date.parse(player.world_created_at) - DAY_ZERO.steps * DAY_ZERO.minutes * 60_000,
-              Date.parse(now) - HERALD.firstWindowHours * 3600_000,
+              joined - HERALD.firstWindowHours * 3600_000,
             ),
           ),
         );

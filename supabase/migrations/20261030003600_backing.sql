@@ -19,6 +19,8 @@ create index stakes_captain_idx on stakes (world_id, captain_id);
 
 -- Every change to a Player's gold. `player_private.gold` is its running total (from the 30 a Player
 -- starts with). Debits (stake, top_up) are written by submit_intent; the tick writes the credits.
+-- Deviation from data-model §1: reason `refund` is not in its list. It is the tick giving back a `back`
+-- debited at submit that the sim rejected (an unknown Captain), per §3 step 4 ("the commit refunds them").
 create table gold_ledger (
   id bigint generated always as identity primary key,
   world_id uuid not null references worlds (id),
