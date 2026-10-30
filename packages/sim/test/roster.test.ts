@@ -117,7 +117,7 @@ const quiet = (): Content => {
 
 /**
  * A calm world where `victim` died of `tag` (as Fact 900) and is due back now, a reserve Captain having
- * taken his place. Everyone else has Infamy 10, except `lowest` (5), who should be the one benched.
+ * taken his place. Everyone else gained 10 Infamy in the last 7 days, except `lowest` (5), who should be the one benched.
  */
 function dueBack(tag: 'beaten' | 'drowned' | 'fell', seed = 1): { state: WorldState; victim: CaptainId; lowest: CaptainId } {
   const base = freshWorld({ content: quiet(), seed, players: [P1] });
@@ -126,15 +126,22 @@ function dueBack(tag: 'beaten' | 'drowned' | 'fell', seed = 1): { state: WorldSt
   const lowest = active.find((id) => id !== KRUG && id !== base.world.warlordId && id !== victim)!;
   const stand = Object.keys(base.captains).find((id) => base.captains[id]!.roster === 'reserve')!;
   const captains = { ...base.captains };
-  for (const id of Object.keys(captains)) captains[id] = { ...captains[id]!, infamy: id === lowest ? 5 : 10 };
-  captains[KRUG] = { ...captains[KRUG]!, infamy: 0 };
-  captains[base.world.warlordId!] = { ...captains[base.world.warlordId!]!, infamy: 0 };
   const now = addMinutes(base.world.now, 5);
+  // Benching goes by Infamy in the last 7 days (#34): lifetime Infamy and older gains don't count.
+  const decoy = active.find((id) => id !== KRUG && id !== base.world.warlordId && id !== victim && id !== lowest)!;
+  for (const id of Object.keys(captains)) captains[id] = { ...captains[id]!, infamy: id === decoy ? 1 : 50 };
+  const infamy7d: WorldState['infamy7d'] = [];
+  for (const [i, id] of Object.keys(captains).sort().entries()) {
+    const amount = id === KRUG || id === base.world.warlordId ? 0 : id === lowest ? 5 : 10;
+    if (amount > 0) infamy7d.push({ captainId: id, fact: 800 + i, at: addMinutes(now, -24 * 60), amount });
+  }
+  infamy7d.unshift({ captainId: lowest, fact: 700, at: addMinutes(now, -8 * 24 * 60), amount: 100 });
   captains[victim] = { ...captains[victim]!, roster: 'dead', returnsAt: now, death: { cause: { fact: 900, blame: [] }, causeTag: tag } };
   captains[stand] = { ...captains[stand]!, roster: 'active' };
   const state: WorldState = {
     ...base,
     captains,
+    infamy7d,
     affinity: {},
     grudgeTags: [],
     world: { ...base.world, tickSeq: 1, now, nextNo: 1000 },
@@ -184,13 +191,13 @@ test('every Return is a story head carrying exactly one Humiliation that fits ho
   assert.deepEqual([...cats].sort(), ['bandage', 'disguise', 'epithet', 'fear', 'lost_bit'], 'all five categories turn up');
 });
 
-test('a Returner benches the active Captain with the least Infamy, never Krúg or the Warlord', () => {
+test('a Returner benches the active Captain with the least Infamy in the last 7 days, never Krúg or the Warlord', () => {
   const { state, victim, lowest } = dueBack('beaten');
   const { facts, stateDiff } = simulate(state, [], 3);
   const [ret] = ofKind(facts, 'return');
   const [benched] = ofKind(facts, 'benched');
   assert.ok(ret && benched);
-  assert.equal(benched.captainId, lowest, 'Krúg and the Warlord have less Infamy, but are never benched');
+  assert.equal(benched.captainId, lowest, 'Krúg and the Warlord have less, but are never benched; lifetime and old Infamy do not count');
   assert.equal(benched.storyNo, ret.no);
   assert.deepEqual(benched.causes, [ret.no]);
   const next = applyDiff(state, stateDiff);
