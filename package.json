@@ -14,7 +14,6 @@
     "test": "npm run test:unit",
     "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
-    "test:db:only": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test --test-concurrency=1 \"packages/server/test/**/*.test.ts\"",
     "content:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
     "db:start": "supabase start",
     "dev:web": "npm run dev -w @orc/web",

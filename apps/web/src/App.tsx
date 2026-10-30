@@ -1,0 +1,173 @@
+import { useEffect, useState, type FormEvent } from 'react';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from './supabase.ts';
+
+// Tracer-bullet screens (#24): magic-link sign-in, create a world, and a bare list of the world's
+// Fact lines, newest first. Live refresh over Realtime arrives with #31; until then we poll.
+const POLL_MS = 10_000;
+
+export function App() {
+  const [session, setSession] = useState<Session | null | undefined>(undefined);
+
+  useEffect(() => {
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  if (session === undefined) return <main className="page">…</main>;
+  if (!session) return <SignIn />;
+  return <Worlds />;
+}
+
+function SignIn() {
+  const [email, setEmail] = useState('');
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | { error: string }>('idle');
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setState('sending');
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.origin },
+    });
+    setState(error ? { error: error.message } : 'sent');
+  }
+
+  return (
+    <main className="page">
+      <h1>ORC NONSENSE</h1>
+      {state === 'sent' ? (
+        <p>Check your email for the magic link.</p>
+      ) : (
+        <form onSubmit={submit}>
+          <label>
+            Email
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+          </label>
+          <button disabled={state === 'sending'}>Send me a magic link</button>
+          {typeof state === 'object' && <p className="error">{state.error}</p>}
+        </form>
+      )}
+    </main>
+  );
+}
+
+interface WorldRow {
+  id: string;
+  name: string;
+}
+
+function Worlds() {
+  const [worlds, setWorlds] = useState<WorldRow[] | null>(null);
+  const [selected, setSelected] = useState<string | null>(null);
+
+  async function load() {
+    const { data } = await supabase.from('worlds').select('id, name').order('created_at');
+    setWorlds(data ?? []);
+    if (data && data.length > 0) setSelected((s) => s ?? data[0]!.id);
+  }
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (worlds === null) return <main className="page">…</main>;
+  return (
+    <main className="page">
+      <header className="bar">
+        <h1>ORC NONSENSE</h1>
+        <button className="link" onClick={() => void supabase.auth.signOut()}>
+          Sign out
+        </button>
+      </header>
+      {worlds.length > 1 && (
+        <select value={selected ?? ''} onChange={(e) => setSelected(e.target.value)}>
+          {worlds.map((w) => (
+            <option key={w.id} value={w.id}>
+              {w.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {selected ? <FactLines worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
+    </main>
+  );
+}
+
+function CreateWorld({ onCreated }: { onCreated: (worldId: string) => void }) {
+  const [name, setName] = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submit(e: FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const { data, error } = await supabase.functions.invoke<{ worldId: string }>('create-world', {
+      body: { name, displayName },
+    });
+    setBusy(false);
+    if (error || !data) return setError(error?.message ?? 'Could not create the world.');
+    onCreated(data.worldId);
+  }
+
+  return (
+    <form onSubmit={submit}>
+      <h2>Found a fortress</h2>
+      <label>
+        World name
+        <input required maxLength={60} value={name} onChange={(e) => setName(e.target.value)} />
+      </label>
+      <label>
+        Your name in the Herald
+        <input required maxLength={40} value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+      </label>
+      <button disabled={busy}>Create world</button>
+      {error && <p className="error">{error}</p>}
+    </form>
+  );
+}
+
+interface FactRow {
+  no: number;
+  at: string;
+  line: string;
+}
+
+function FactLines({ worldId }: { worldId: string }) {
+  const [facts, setFacts] = useState<FactRow[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const { data } = await supabase
+        .from('facts')
+        .select('no, at, line')
+        .eq('world_id', worldId)
+        .neq('line', '')
+        .order('at', { ascending: false })
+        .order('no', { ascending: false })
+        .limit(200);
+      if (!cancelled && data) setFacts(data);
+    }
+    void load();
+    const timer = setInterval(() => void load(), POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [worldId]);
+
+  if (facts.length === 0) return <p className="quiet">Nothing has happened yet. Give it a few ticks.</p>;
+  return (
+    <ol className="facts">
+      {facts.map((f) => (
+        <li key={f.no}>
+          <time dateTime={f.at}>{new Date(f.at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}</time>
+          <span>{f.line}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
