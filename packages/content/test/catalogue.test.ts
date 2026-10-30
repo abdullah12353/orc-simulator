@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { content, validateContent, type Content } from '@orc/content';
+import { content, FEARS, TRAITS, validateContent, type Content } from '@orc/content';
 
 // The v1 catalogue's content check (#44): the tone bible's boundaries, coverage of every Trait and Fear, and
 // Templates the sim can actually run.
@@ -46,4 +46,64 @@ test('orc banter may swear: fallback Clash scripts, catchphrases and Accusations
   c.banks.clash.scripts[key]!.lines[0]!.text = "Come 'ere, you shitty little bastard.";
   c.cast[0]!.catchphrase = 'Bollocks to the lot of you.';
   assert.deepEqual(errorsOf(c), []);
+});
+
+// ---- Coverage
+
+test('every Trait and Fear gives events something to trigger on: a Template needs it on a role, or is tagged with it', () => {
+  const covered = new Set(content.templates.flatMap((t) => [...t.roles.flatMap((r) => (r.trait ? [r.trait] : [])), ...(t.tags ?? [])]));
+  for (const key of [...TRAITS, ...FEARS]) assert.ok(covered.has(key), `no Template for ${key}`);
+
+  const c = clone();
+  const uses = (t: (typeof c.templates)[0], key: string) => t.roles.some((r) => r.trait === key) || t.tags?.includes(key);
+  c.templates = c.templates.filter((t) => !uses(t, 'Glutton') && !uses(t, 'Birds'));
+  const errors = errorsOf(c);
+  has(errors, 'Glutton', 'no Template');
+  has(errors, 'Birds', 'no Template');
+});
+
+test("a Template's tags are Traits or Fears", () => {
+  const c = clone();
+  c.templates[0]!.tags = ['Water', 'Spoons'];
+  has(errorsOf(c), c.templates[0]!.id, '"Spoons"');
+});
+
+test('the v1 catalogue is about 60 Templates', () => {
+  assert.ok(content.templates.length >= 55 && content.templates.length <= 80, `${content.templates.length} Templates`);
+});
+
+// ---- Templates the sim can run
+
+test('each trigger runs only the Template kinds the sim writes for it', () => {
+  const c = clone();
+  c.templates.find((t) => t.id === 'ambient.moat-dip')!.kind = 'clash';
+  c.templates.find((t) => t.id === 'reaction.sulk')!.kind = 'dare';
+  const errors = errorsOf(c);
+  has(errors, 'ambient.moat-dip', 'trigger ambient');
+  has(errors, 'reaction.sulk', 'trigger reaction');
+});
+
+test('outcome keys are unique per Template, and a Clash Template resolves won, defeated or fled', () => {
+  const c = clone();
+  const moat = c.templates.find((t) => t.id === 'ambient.moat-dip')!;
+  moat.outcomes.push({ ...moat.outcomes[0]! });
+  c.templates.find((t) => t.id === 'clash.grudge')!.outcomes.pop();
+  const errors = errorsOf(c);
+  has(errors, 'ambient.moat-dip', 'duplicate outcome');
+  has(errors, 'clash.grudge', 'won, defeated, fled');
+});
+
+test('a reaction must be able to fire: it follows outcomes its parent kind can have, on a parent with its roles', () => {
+  const c = clone();
+  c.templates.find((t) => t.id === 'reaction.moat-blame')!.after!.outcomes = ['splosh'];
+  c.templates.find((t) => t.id === 'reaction.sulk')!.after!.outcomes = ['won', 'drew'];
+  const errors = errorsOf(c);
+  has(errors, 'reaction.moat-blame', 'can never fire');
+  has(errors, 'reaction.sulk', '"drew"');
+});
+
+test('any role may need a Trait, and it must be a real one', () => {
+  const c = clone();
+  c.templates.find((t) => t.id === 'accident.battlements')!.roles[0]!.trait = 'Accountant';
+  has(errorsOf(c), 'accident.battlements', 'Accountant');
 });

@@ -40,10 +40,13 @@ function clashesOver(state: WorldState, n: number): ClashFact[] {
   return out;
 }
 
+/** Only the Grudge Clashes: an ambient incident's reaction can force a Clash of its own (clash.mocked, #44). */
+const grudgeClashesOver = (state: WorldState, n: number) => clashesOver(state, n).filter((c) => c.trigger !== 'forced');
+
 test('a pair at −51 in only one direction can Clash, about 5% of ticks; a pair at −50 never does', () => {
   const n = Math.max(2000, SEEDS * 100);
   const hot = feud(-51);
-  const clashes = clashesOver(hot.state, n);
+  const clashes = grudgeClashesOver(hot.state, n);
   const rate = clashes.length / n;
   assert.ok(Math.abs(rate - 0.05) < 0.015, `rate ${rate}`);
   for (const c of clashes) {
@@ -51,8 +54,8 @@ test('a pair at −51 in only one direction can Clash, about 5% of ticks; a pair
     assert.deepEqual([c.a, c.b], [hot.holder, hot.toward], 'the one holding the Grudge starts it');
   }
 
-  assert.equal(clashesOver(feud(-50).state, n).length, 0, '−50 is not below −50');
-  assert.equal(clashesOver(feud(-51, { pair: [hot.toward, hot.holder] }).state, n).length > 0, true, 'either direction will do');
+  assert.equal(grudgeClashesOver(feud(-50).state, n).length, 0, '−50 is not below −50');
+  assert.equal(grudgeClashesOver(feud(-51, { pair: [hot.toward, hot.holder] }).state, n).length > 0, true, 'either direction will do');
 });
 
 /**

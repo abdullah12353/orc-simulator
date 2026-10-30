@@ -1,10 +1,11 @@
 import { banks } from './banks.ts';
 import { cast } from './cast.ts';
+import { ACCIDENT, catalogue } from './catalogue.ts';
 import type { Content } from './types.ts';
 
 // The content bundle: the full cast (#26), starter banks, one ambient incident (#24) and the Rumour
-// Templates (#28), Clashes (#30), the roster (#32, #34) and Dares (#35).
-// The v1 catalogue arrives with #44.
+// Templates (#28), Clashes (#30), the roster (#32, #34) and Dares (#35): the engine's own Templates.
+// The rest of the v1 catalogue (#44) is in catalogue.ts.
 
 export const content: Content = {
   cast,
@@ -13,11 +14,12 @@ export const content: Content = {
       id: 'ambient.moat-dip',
       kind: 'incident',
       trigger: 'ambient',
+      tags: ['Water'],
       roles: [{ name: 'a' }, { name: 'b' }],
       // An accident (#32): now and then the moat keeps him.
       outcomes: [
-        { key: 'splash', weight: 6, infamy: { a: 3 } },
-        { key: 'sank', weight: 1, death: { role: 'a', tag: 'drowned' } },
+        { key: 'splash', weight: ACCIDENT.harmless, infamy: { a: 3 } },
+        { key: 'sank', weight: ACCIDENT.deadly, death: { role: 'a', tag: 'drowned' } },
       ],
       lines: [
         '{a} fell into the moat while explaining to {b} how not to fall into the moat.',
@@ -30,10 +32,11 @@ export const content: Content = {
       id: 'accident.battlements',
       kind: 'incident',
       trigger: 'ambient',
+      tags: ['Heights'],
       roles: [{ name: 'a' }],
       outcomes: [
-        { key: 'wobble', weight: 5, infamy: { a: 2 } },
-        { key: 'fell', weight: 1, death: { role: 'a', tag: 'fell' } },
+        { key: 'wobble', weight: ACCIDENT.harmless, infamy: { a: 2 } },
+        { key: 'fell', weight: ACCIDENT.deadly, death: { role: 'a', tag: 'fell' } },
       ],
       lines: [
         '{a} leaned over the battlements to see how high they were. Very.',
@@ -235,7 +238,7 @@ export const content: Content = {
       ],
       baseWeight: 9,
     },
-    // Reactions (#30), placeholders until the v1 catalogue (#44).
+    // Reactions (#30); the v1 catalogue (#44) adds the rest.
     {
       id: 'reaction.sulk',
       kind: 'incident',
@@ -321,6 +324,7 @@ export const content: Content = {
       ],
       baseWeight: 9,
     },
+    ...catalogue,
   ],
   banks,
 };

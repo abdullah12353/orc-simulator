@@ -105,6 +105,11 @@ export interface TemplateDef {
   outcomes: OutcomeDef[];
   lines: [string, string, string];
   baseWeight: number;
+  /**
+   * The Traits and Fears the event plays on, beyond any a role needs (#44): an accident tagged by the Fear it
+   * is about. Content-only for now: the content check uses them to see every Trait and Fear is covered.
+   */
+  tags?: string[];
 }
 
 /** An Epithet from the prerecorded announcer bank ("the Damp"). */

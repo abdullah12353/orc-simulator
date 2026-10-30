@@ -193,10 +193,10 @@ test('every death cause tag has a Humiliation that fits it, and Humiliations onl
 test('a deadly outcome kills a role its Template casts, with a known cause tag', () => {
   const broken = clone(content);
   const moat = broken.templates.find((t) => t.id === 'ambient.moat-dip')!;
-  moat.outcomes[1]!.death = { role: 'ghost', tag: 'squashed' as never };
+  moat.outcomes[1]!.death = { role: 'ghost', tag: 'skewered' as never };
   const errors = validateContent(broken);
   assert.ok(errors.some((e) => e.includes('ambient.moat-dip') && e.includes('"ghost"')), errors.join('\n'));
-  assert.ok(errors.some((e) => e.includes('ambient.moat-dip') && e.includes('"squashed"')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('ambient.moat-dip') && e.includes('"skewered"')), errors.join('\n'));
 });
 
 test('Humiliations name real Epithets and Fears with Rumour subjects, and portrait overlays for marks', () => {

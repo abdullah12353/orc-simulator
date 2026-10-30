@@ -46,8 +46,11 @@ export const CLASH = {
   saviourSting: 10,
   /** How many of the pair's newest Grudge tags the Fact carries for narration. */
   topTags: 3,
-  /** A Clash defeat kills about 1 time in 3 (D40); a loser who fled lives. */
-  death: 1 / 3,
+  /**
+   * A Clash defeat kills 1 time in 5; a loser who fled lives. Tuned in #44 for about 1–3 deaths a day (D40):
+   * day zero's old Grudges burn out in ~11 Clashes, so 1 in 3 made ~3.8 deadly disasters before the cap.
+   */
+  death: 1 / 5,
 } as const;
 
 export interface ClashStart {
