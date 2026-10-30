@@ -206,6 +206,12 @@ TOTAL_STAGES=14
 cd "$(dirname "$0")/.."
 ENV_FILE=".env.deploy"
 
+# In PowerShell, plain `bash` is WSL's Linux, which can't use the Windows Node, npx or Docker CLI.
+if grep -qi microsoft /proc/version 2>/dev/null; then
+  warn "This is WSL's bash. Run the wizard with Git Bash instead, from PowerShell:"
+  note "& \"C:\\Program Files\\Git\\bin\\bash.exe\" scripts/setup-deploy.sh"
+  exit 1
+fi
 # Git Bash doesn't always inherit Node's PATH entry; fall back to the default Windows install folder.
 if ! command -v node >/dev/null 2>&1 && [[ -x "/c/Program Files/nodejs/node.exe" ]]; then
   PATH="/c/Program Files/nodejs:$PATH"
