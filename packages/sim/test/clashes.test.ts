@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
 import { applyDiff, clashShape, fallbackDialogue, shapeProblem, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
-import { activeIds, addMinutes, freshWorld, SEEDS } from './support.ts';
+import { activeIds, addMinutes, freshWorld, rumour, SEEDS, step } from './support.ts';
 
 type ClashFact = Extract<Fact, { kind: 'clash' }>;
 const isClash = (f: Fact): f is ClashFact => f.kind === 'clash';
@@ -197,4 +197,74 @@ test('a Clash vents the Grudge, and the loser holds a new one against the winner
     // −60 + 25 = −35 for a winning holder; −35 − 15 = −50 for a losing one: either way, no longer below −50.
     assert.ok(next.affinity[`${head.a}>${head.b}`]! >= -50, `${next.affinity[`${head.a}>${head.b}`]}`);
   }
+});
+
+// ---- Blame (decision 8b): a Grudge Clash requires the tags that put the pair below −50.
+
+const P1 = '11111111-1111-4111-8111-111111111111';
+
+/** P1's Rumour, planted from `source` about `holder`, lands on `holder` himself (tick seeds tried until it does). */
+function rumourLandsOn(state: WorldState, holder: CaptainId, source: CaptainId) {
+  const intent = rumour(state, P1, { source, target: holder, claim: 'coup', subject: { from: 'trait', key: state.captains[holder]!.traits[0] } });
+  const planted = step(state, 1, 5, [intent]).state;
+  const due: WorldState = { ...planted, world: { ...planted.world, tickSeq: planted.world.tickSeq + 1, prevTickAt: planted.world.now, now: addMinutes(planted.world.now, 95) } };
+  for (let seed = 1; ; seed++) {
+    const { facts, stateDiff } = simulate(due, [], seed);
+    const head = facts.find((f) => f.kind === 'rumour');
+    if (head?.kind === 'rumour' && head.reached === holder && !facts.some(isClash)) {
+      return { intent, head, state: applyDiff(due, stateDiff) };
+    }
+  }
+}
+
+test('Blame carries from the Rumour that made the Grudge into the Clash, one hop on', () => {
+  const { state: calm, holder, toward } = feud(-25);
+  const base = { ...calm, players: { [P1]: { gold: 30, meddles: 3, firstMeddleDone: true, renderedFor: [] } } };
+  // A coup plot stings 40: −25 → −65, below −50.
+  const { intent, head, state } = rumourLandsOn(base, holder, toward);
+  assert.ok(state.affinity[`${holder}>${toward}`]! < -50);
+
+  const later: WorldState = { ...state, world: { ...state.world, tickSeq: state.world.tickSeq + 1, now: addMinutes(state.world.now, 5) } };
+  const clash = clashesOver(later, 400)[0];
+  assert.ok(clash, 'the pair Clashes');
+  assert.equal(clash.trigger, 'grudge');
+  assert.deepEqual([clash.a, clash.b], [holder, toward]);
+  assert.deepEqual(clash.causes, [head.no], 'the Rumour that made the Grudge is its cause');
+  assert.deepEqual(
+    clash.blame.map((b) => [b.meddleId, b.playerId, b.landedFact, b.hops]),
+    [[intent.id, P1, head.no, 1]],
+  );
+  assert.ok((clash.comedyWeight ?? 0) >= 8 + 2, 'a Meddle-caused Clash weighs more');
+});
+
+test('a Rumour that lands on a Hothead goes straight to a Clash with the source, carrying its Blame', () => {
+  const base0 = freshWorld({ seed: 1 });
+  const [holder, toward] = plainPair(base0);
+  const hothead = { ...base0.captains[holder]!, traits: ['Hothead', 'Snob'] as [string, string] };
+  const base: WorldState = {
+    ...base0,
+    captains: { ...base0.captains, [holder]: hothead },
+    affinity: {},
+    grudgeTags: [],
+    players: { [P1]: { gold: 30, meddles: 3, firstMeddleDone: true, renderedFor: [] } },
+  };
+  const intent = rumour(base, P1, { source: toward, target: holder, claim: 'insult', subject: { from: 'trait', key: 'Snob' } });
+  const planted = step(base, 1, 5, [intent]).state;
+  const due: WorldState = { ...planted, world: { ...planted.world, tickSeq: 3, now: addMinutes(planted.world.now, 95) } };
+  let checked = 0;
+  for (let seed = 1; seed <= 60; seed++) {
+    const { facts } = simulate(due, [], seed);
+    const head = facts.find((f) => f.kind === 'rumour');
+    if (head?.kind !== 'rumour' || head.reached !== holder) continue;
+    const clash = facts.find(isClash);
+    assert.ok(clash, 'a Hothead never lets it go');
+    assert.equal(clash.trigger, 'forced');
+    assert.equal(clash.templateId, 'clash.hothead');
+    assert.deepEqual([clash.a, clash.b], [holder, toward]);
+    assert.deepEqual(clash.causes, [head.no]);
+    assert.deepEqual(clash.blame.map((b) => [b.meddleId, b.hops]), [[intent.id, 1]]);
+    assert.ok(clash.line.includes(content.cast.find((c) => c.id === holder)!.name));
+    checked++;
+  }
+  assert.ok(checked > 10, `${checked} landings on the Hothead`);
 });
