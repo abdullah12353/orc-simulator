@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@orc/content": "../../../packages/content/src/index.ts",
+    "@orc/sim": "../../../packages/sim/src/index.ts",
+    "@orc/server": "../../../packages/server/src/index.ts",
+    "postgres": "npm:postgres@3.4.7"
+  }
+}

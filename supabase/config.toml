@@ -433,3 +433,6 @@ verify_jwt = true
 
 [functions.open-edition]
 verify_jwt = true
+
+[functions.create-clipping]
+verify_jwt = true

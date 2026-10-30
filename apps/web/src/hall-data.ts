@@ -1,5 +1,5 @@
 // The Hall of Shame's reads (#40, data-model §4.2, §4.3, §4.5), all under RLS: the shelves (`hall_legends`,
-// `hall_moments`; #41 adds Clippings), a Captain's story (`captain_story`), one Player's rap sheet
+// `hall_moments`; Clippings are in clipping-data.ts), a Captain's story (`captain_story`), one Player's rap sheet
 // (`rap_sheet(player)`, one Player per request) and the timeline (`hall_timeline`). Everything comes back
 // newest first and is never ranked (D55). "Trace it back" is `trace_back(world, fact)`, oldest first.
 // Replays reuse the Clash card's own loader, which reads `clash_dialogue` and never calls a model.
@@ -8,7 +8,7 @@ import { supabase } from './supabase.ts';
 
 /** One entry on a shelf, the timeline or a rap sheet: a story head, captioned. */
 export interface HallEntry {
-  /** The shelf it came from; `clipping` is #41's. */
+  /** The shelf it came from. */
   shelf: 'legend' | 'moment' | 'clipping' | 'rap';
   factNo: number;
   at: string;
@@ -16,6 +16,8 @@ export interface HallEntry {
   caption: string;
   /** The Captain who went Legendary (Legends only). */
   captainId: string | null;
+  /** The Clipping (Clippings only, #41). */
+  clippingId: string | null;
 }
 
 /** One step of a Captain's story: a death, Return, Humiliation (Epithets included), Trophy or Legendary. */
@@ -53,6 +55,7 @@ function entry(shelf: HallEntry['shelf'], r: Row): HallEntry {
     kind: str(r.kind),
     caption: str(r.caption),
     captainId: r.captain_id == null ? null : str(r.captain_id),
+    clippingId: r.clipping_id == null ? null : str(r.clipping_id),
   };
 }
 
@@ -88,7 +91,7 @@ export async function loadMoments(worldId: string, limit = 50): Promise<HallEntr
 export async function loadTimeline(worldId: string, limit = 100): Promise<HallEntry[]> {
   const q = supabase
     .from('hall_timeline')
-    .select(`shelf, captain_id, ${SHELF_COLUMNS}`)
+    .select(`shelf, captain_id, clipping_id, ${SHELF_COLUMNS}`)
     .eq('world_id', worldId)
     .order('at', { ascending: false })
     .order('fact_no', { ascending: false })
