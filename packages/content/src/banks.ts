@@ -174,4 +174,149 @@ export const banks: Banks = {
     two: 'It all began when {first}, and {last} finished the job.',
     many: 'It all began when {first}, {middle} kept it going, and {last} finished the job.',
   },
+  // Trophies (#30). A starter set; the v1 catalogue (#44) grows it to about 25.
+  trophies: {
+    'nose-ring': { text: 'nose ring', mocks: 'vanity' },
+    'lucky-spoon': { text: 'lucky spoon', mocks: 'superstition' },
+    'best-helmet': { text: 'best helmet (a bucket)', mocks: 'vanity' },
+    'left-boot': { text: 'left boot', mocks: 'cowardice' },
+    'mums-letter': { text: 'letter from his mum', mocks: 'his mum' },
+    'pie-tin': { text: 'emergency pie tin', mocks: 'appetite' },
+    'tusk-polish': { text: 'tusk polish', mocks: 'vanity' },
+    'drinking-horn': { text: 'drinking horn', mocks: 'drinking' },
+    'night-light': { text: 'night light', mocks: 'fear of the dark' },
+    medal: { text: 'medal (self-awarded)', mocks: 'showing off' },
+    teddy: { text: 'battle teddy', mocks: 'cowardice' },
+    'skull-hat': { text: 'skull hat', mocks: 'vanity' },
+  },
+  // Clashes (#30): fallback dialogue (D26) and the Herald's templated Clash headlines. Scripts are orc
+  // banter (sweary is fine); results and tags end up in Herald lines, so they stay clean.
+  clash: {
+    results: {
+      won: [
+        '{winner} won, and has not stopped mentioning it.',
+        '{loser} lost, loudly, and has asked for a rematch in writing.',
+        '{winner} came out on top. {loser} came out of the moat.',
+      ],
+      defeated: [
+        '{loser} started it. {winner} finished it.',
+        'It went badly for {loser}, who started it and now regrets several things.',
+        '{winner} won. Nobody, least of all {loser}, saw that coming.',
+      ],
+      fled: [
+        '{loser} ran off before it began and is hiding in the latrines.',
+        '{loser} remembered an urgent appointment elsewhere. {winner} claims the win.',
+        '{loser} fled at speed, leaving one boot and his dignity behind.',
+      ],
+      saviour: [
+        'Then {saviour} barged in after the {magnet} and made everything worse.',
+        '{saviour} arrived to help, distracted by the {magnet}. It did not help.',
+        'Help came, in the form of {saviour}, who was mostly after the {magnet}.',
+      ],
+    },
+    noTag: 'something neither of them can remember',
+    scripts: {
+      'won-pint': {
+        outcomes: ['won', 'defeated'],
+        saviour: false,
+        lines: [
+          { speaker: 'winner', text: "Don't think I forgot what you did, you lumpy sod." },
+          { speaker: 'loser', text: 'That was ages ago! Let it go, you sad bastard.' },
+          { speaker: 'loser', text: 'Right. Fine. Ow. Someone get me a pint and a doctor. Pint first.' },
+        ],
+      },
+      'won-mum': {
+        outcomes: ['won', 'defeated'],
+        saviour: false,
+        lines: [
+          { speaker: 'winner', text: "Come 'ere then. This one's been a long time coming." },
+          { speaker: 'loser', text: 'You hit like my mum. And she hits HARD, so watch it.' },
+          { speaker: 'loser', text: "I'm telling my mum. She'll sort you out, you see if she don't." },
+        ],
+      },
+      'won-moat': {
+        outcomes: ['won'],
+        saviour: false,
+        lines: [
+          { speaker: 'winner', text: 'I have waited a long time for this, you absolute turnip.' },
+          { speaker: 'loser', text: "Waited? You've been asleep in the latrine since Tuesday." },
+          { speaker: 'loser', text: "Not the moat. NOT THE MOAT! ...It's only up to me knees. Still." },
+        ],
+      },
+      'defeated-upset': {
+        outcomes: ['defeated'],
+        saviour: false,
+        lines: [
+          { speaker: 'loser', text: 'Today you pay for what you did, you crusty little bellend.' },
+          { speaker: 'winner', text: 'Me? I was eating a sandwich. I am STILL eating a sandwich.' },
+          { speaker: 'loser', text: 'Beaten by a sandwich-eater. Nobody tell the Herald. Nobody.' },
+        ],
+      },
+      'fled-latrine': {
+        outcomes: ['fled'],
+        saviour: false,
+        lines: [
+          { speaker: 'winner', text: 'Oi! Stand still so I can hit you.' },
+          { speaker: 'loser', text: "Can't stop, got a thing. A very important thing. Over there." },
+          { speaker: 'loser', text: "I'm not running, I'm advancing backwards! Tactically! Fast!" },
+        ],
+      },
+      'fled-boot': {
+        outcomes: ['fled'],
+        saviour: false,
+        lines: [
+          { speaker: 'winner', text: 'Right, you. Outside. Now.' },
+          { speaker: 'loser', text: 'Outside? In this weather? Have you seen the weather, you mad sod?' },
+          { speaker: 'loser', text: 'Keep the boot! It was never my favourite boot! Bye!' },
+        ],
+      },
+      'saviour-pies': {
+        outcomes: ['won', 'defeated', 'fled'],
+        saviour: true,
+        lines: [
+          { speaker: 'winner', text: "I've had it up to here with you." },
+          { speaker: 'loser', text: "Up to where? You're four foot tall, you shit." },
+          { speaker: 'saviour', text: "OI! Mind the {magnet}! Out of the way, I'm saving someone!" },
+          { speaker: 'loser', text: 'Saving WHO? You knocked me flat, you great useless lump!' },
+        ],
+      },
+      'saviour-crowd': {
+        outcomes: ['won', 'defeated', 'fled'],
+        saviour: true,
+        lines: [
+          { speaker: 'loser', text: "Come on then! I'll take you, and your mum, and your mum's mum." },
+          { speaker: 'winner', text: 'Leave my nan out of this, you mouldy-arsed turnip.' },
+          { speaker: 'saviour', text: "DON'T PANIC, I'M HERE! ...Is that the {magnet}? Hold on." },
+          { speaker: 'loser', text: 'He stood on my head. He stood on my head for the {magnet}.' },
+        ],
+      },
+      'saviour-help': {
+        outcomes: ['won', 'defeated'],
+        saviour: true,
+        lines: [
+          { speaker: 'winner', text: 'This ends today, {loser}.' },
+          { speaker: 'loser', text: "It ends when I say it ends, and I haven't said, so there." },
+          { speaker: 'saviour', text: "I'll help! Which one of you is the good one? Never mind!" },
+          { speaker: 'loser', text: 'Why is everyone hitting ME? Help is not supposed to hit you!' },
+        ],
+      },
+    },
+    magnets: {
+      Glutton: 'pies',
+      'Show-off': 'crowd',
+      Drunkard: 'free ale',
+      Hoarder: 'loose change',
+      Superstitious: 'lucky horseshoe',
+      Sleepwalker: 'comfy hay bale',
+      Vain: 'big mirror',
+      Gullible: 'shouting',
+    },
+    anyMagnet: 'noise',
+    tags: {
+      beaten: ['gave him a hiding in front of everyone', 'beat him in a Clash and sang about it', 'knocked him into the moat'],
+      fled: ['chased him round the latrines', 'made him run off without a boot'],
+      trophy: 'took his {trophy}',
+      saviour: 'barged into his Clash after the {magnet}',
+    },
+  },
 };

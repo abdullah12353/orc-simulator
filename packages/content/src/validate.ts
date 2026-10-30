@@ -1,5 +1,5 @@
 import { ACCENTS, CASTING, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
-import type { CastCard, Content } from './types.ts';
+import type { CastCard, ClashOutcome, Content } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
 const FEAR_POOL = new Set<string>(FEARS);
@@ -119,6 +119,122 @@ export function validateContent(c: Content): string[] {
 
   errors.push(...validateRumours(c, templateIds));
   errors.push(...validateBlameLines(c));
+  errors.push(...validateClashes(c));
+  errors.push(...validateReactions(c));
+  return errors;
+}
+
+/** The roles a reaction can cast from its parent Fact, per parent kind (incidents offer their Template's roles). */
+export const PARENT_ROLES = {
+  rumour: ['source', 'target', 'reached'],
+  clash: ['a', 'b', 'winner', 'loser', 'saviour'],
+} as const;
+
+const CLASH_OUTCOMES: ClashOutcome[] = ['won', 'defeated', 'fled'];
+const placeholders = (text: string) => [...String(text).matchAll(/\{([^}]*)\}/g)].map((m) => m[1]!);
+
+/** Clash banks and Templates (#30): what the Grudge roll, the headline and the fallback dialogue need. */
+function validateClashes(c: Content): string[] {
+  const errors: string[] = [];
+  const clash = c.banks.clash;
+  if (Object.keys(c.banks.trophies ?? {}).length === 0) errors.push('banks.trophies: Clashes need at least 1 Trophy');
+  for (const [key, t] of Object.entries(c.banks.trophies ?? {})) {
+    if (!t?.text?.trim()) errors.push(`banks.trophies.${key}: needs text`);
+  }
+
+  const resultNames = new Set(['winner', 'loser', 'saviour', 'magnet']);
+  for (const kind of [...CLASH_OUTCOMES, 'saviour'] as const) {
+    const list = clash?.results?.[kind];
+    if (!Array.isArray(list) || list.length !== 3) {
+      errors.push(`banks.clash.results.${kind}: needs exactly 3 phrasings`);
+      continue;
+    }
+    for (const p of list) {
+      for (const name of placeholders(p)) {
+        if (!resultNames.has(name)) errors.push(`banks.clash.results.${kind}: "{${name}}" is not a Clash name or the magnet`);
+      }
+    }
+  }
+  if (!clash?.noTag?.trim()) errors.push('banks.clash.noTag: needs text');
+  if (!clash?.anyMagnet?.trim()) errors.push('banks.clash.anyMagnet: needs text');
+  for (const [trait, magnet] of Object.entries(clash?.magnets ?? {})) {
+    if (!TRAIT_POOL.has(trait)) errors.push(`banks.clash.magnets: "${trait}" is not a Trait`);
+    if (!magnet?.trim()) errors.push(`banks.clash.magnets.${trait}: needs text`);
+  }
+  const tags = clash?.tags;
+  if (!tags?.beaten?.length || !tags?.fled?.length) errors.push('banks.clash.tags: needs beaten and fled tags');
+  if (!String(tags?.trophy ?? '').includes('{trophy}')) errors.push('banks.clash.tags.trophy: missing {trophy}');
+  if (!String(tags?.saviour ?? '').includes('{magnet}')) errors.push('banks.clash.tags.saviour: missing {magnet}');
+
+  const scriptNames = new Set(['winner', 'loser', 'saviour', 'magnet']);
+  const covered = new Set<string>();
+  for (const [key, s] of Object.entries(clash?.scripts ?? {})) {
+    const where = `banks.clash.scripts.${key}`;
+    const lines = Array.isArray(s?.lines) ? s.lines : [];
+    const want = s?.saviour ? 4 : 3;
+    if (lines.length !== want) errors.push(`${where}: needs ${want} lines${s?.saviour ? ' with a wrong saviour' : ''}`);
+    if (lines.at(-1)?.speaker !== 'loser') errors.push(`${where}: the loser must speak last`);
+    const saviourLines = lines.filter((l) => l.speaker === 'saviour').length;
+    if (s?.saviour && saviourLines !== 1) errors.push(`${where}: a wrong-saviour script needs 4 lines, one of them his`);
+    if (!s?.saviour && saviourLines > 0) errors.push(`${where}: only a wrong-saviour script gives the saviour a line`);
+    for (const l of lines) {
+      if (!['winner', 'loser', 'saviour'].includes(l?.speaker) || !l?.text?.trim()) errors.push(`${where}: a line needs a speaker and text`);
+      for (const name of placeholders(l?.text ?? '')) {
+        if (!scriptNames.has(name) || (name === 'saviour' && !s.saviour)) {
+          errors.push(`${where}: "{${name}}" can't be used in a script`);
+        }
+      }
+    }
+    for (const o of s?.outcomes ?? []) covered.add(`${o}:${Boolean(s.saviour)}`);
+  }
+  for (const o of CLASH_OUTCOMES) {
+    for (const saviour of [false, true]) {
+      if (!covered.has(`${o}:${saviour}`)) {
+        errors.push(`banks.clash.scripts: no fallback script for "${o}" ${saviour ? 'with' : 'without'} a wrong saviour`);
+      }
+    }
+  }
+
+  const clashTemplates = c.templates.filter((t) => t.kind === 'clash');
+  if (clashTemplates.filter((t) => t.trigger === 'grudge').length !== 1) {
+    errors.push('templates: there must be exactly one Grudge Clash Template (kind clash, trigger grudge)');
+  }
+  for (const t of clashTemplates) {
+    const roles = (t.roles ?? []).map((r) => r.name).sort().join(',');
+    if (roles !== 'a,b') errors.push(`template ${t.id}: a Clash Template casts exactly the roles a and b`);
+    if (t.trigger !== 'grudge' && t.trigger !== 'reaction') errors.push(`template ${t.id}: a Clash starts from a Grudge or a reaction`);
+    for (const slot of ['tag', 'result']) {
+      if (!(t.slots ?? []).includes(slot)) errors.push(`template ${t.id}: a Clash Template needs the {${slot}} slot`);
+    }
+  }
+  return errors;
+}
+
+/** Reaction Templates (#30): what they follow, and roles cast only from what that parent offers. */
+function validateReactions(c: Content): string[] {
+  const errors: string[] = [];
+  // An incident offers its own Template's roles, so any incident role name is fair.
+  const incidentRoles = new Set(c.templates.filter((t) => t.kind === 'incident').flatMap((t) => t.roles.map((r) => r.name)));
+  for (const t of c.templates) {
+    const where = `template ${t.id}`;
+    if (t.trigger !== 'reaction') {
+      if (t.after) errors.push(`${where}: only a reaction Template has "after"`);
+      if (t.roles?.some((r) => r.from)) errors.push(`${where}: only a reaction Template casts roles "from" a parent`);
+      continue;
+    }
+    if (!t.after || !['incident', 'rumour', 'clash'].includes(t.after.kind)) {
+      errors.push(`${where}: a reaction Template needs "after" naming the Fact kind it follows`);
+      continue;
+    }
+    if (!(t.after.chance > 0 && t.after.chance <= 1)) errors.push(`${where}: after.chance must be in (0, 1]`);
+    const offered: ReadonlySet<string> = t.after.kind === 'incident' ? incidentRoles : new Set(PARENT_ROLES[t.after.kind]);
+    for (const role of t.roles ?? []) {
+      if (role.from !== undefined && !offered.has(role.from)) {
+        errors.push(`${where}: role "${role.name}" casts from "${role.from}", which a ${t.after.kind} doesn't offer`);
+      }
+      if (role.trait !== undefined && !TRAIT_POOL.has(role.trait)) errors.push(`${where}: role "${role.name}" needs unknown Trait "${role.trait}"`);
+    }
+  }
   return errors;
 }
 

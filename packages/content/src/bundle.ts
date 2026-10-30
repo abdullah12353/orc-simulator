@@ -65,6 +65,77 @@ export const content: Content = {
       ],
       baseWeight: 7,
     },
+    // Clashes (#30). `{tag}` is the Grudge behind it, `{result}` the outcome sentence from `banks.clash.results`.
+    {
+      id: 'clash.grudge',
+      kind: 'clash',
+      trigger: 'grudge',
+      roles: [{ name: 'a' }, { name: 'b' }],
+      slots: ['tag', 'result'],
+      outcomes: [
+        { key: 'won', weight: 1 },
+        { key: 'defeated', weight: 1 },
+        { key: 'fled', weight: 1 },
+      ],
+      lines: [
+        '{a} finally went for {b}, who {tag}. {result}',
+        'A long-running Grudge boiled over when {a} remembered that {b} {tag}. {result}',
+        '{a} squared up to {b} in the yard. The matter: {b} {tag}. {result}',
+      ],
+      baseWeight: 8,
+    },
+    // "A Hothead target goes straight to a Clash" (#7): a Rumour lands on a Hothead, who goes for the source.
+    {
+      id: 'clash.hothead',
+      kind: 'clash',
+      trigger: 'reaction',
+      after: { kind: 'rumour', chance: 1 },
+      roles: [
+        { name: 'a', from: 'reached', trait: 'Hothead' },
+        { name: 'b', from: 'source' },
+      ],
+      slots: ['tag', 'result'],
+      outcomes: [
+        { key: 'won', weight: 1 },
+        { key: 'defeated', weight: 1 },
+        { key: 'fled', weight: 1 },
+      ],
+      lines: [
+        '{a} heard that {b} {tag}, and did not wait to hear the rest. {result}',
+        '{a}, a Hothead, went straight for {b}, who {tag}, apparently. {result}',
+        'Within minutes of hearing that {b} {tag}, {a} was rolling up his sleeves. {result}',
+      ],
+      baseWeight: 9,
+    },
+    // Reactions (#30), placeholders until the v1 catalogue (#44).
+    {
+      id: 'reaction.sulk',
+      kind: 'incident',
+      trigger: 'reaction',
+      after: { kind: 'clash', outcomes: ['won', 'defeated'], chance: 0.25 },
+      roles: [{ name: 'loser', from: 'loser' }, { name: 'winner', from: 'winner' }],
+      outcomes: [{ key: 'sulk', weight: 1 }],
+      lines: [
+        '{loser} is sulking on the battlements and will not come down until {winner} apologises.',
+        '{loser} has written a strongly worded letter to {winner}. It is mostly drawings.',
+        '{loser} has told everyone that he let {winner} win. Nobody believes him, including {loser}.',
+      ],
+      baseWeight: 3,
+    },
+    {
+      id: 'reaction.moat-blame',
+      kind: 'incident',
+      trigger: 'reaction',
+      after: { kind: 'incident', outcomes: ['splash'], chance: 0.2 },
+      roles: [{ name: 'a', from: 'a' }, { name: 'b', from: 'b' }],
+      outcomes: [{ key: 'blame', weight: 1 }],
+      lines: [
+        '{a}, still damp, has formally blamed {b} for the moat.',
+        '{a} has demanded {b} drain the moat. {b} has offered a cup.',
+        '{a} is telling anyone who will listen that {b} moved the moat.',
+      ],
+      baseWeight: 3,
+    },
   ],
   banks,
 };
