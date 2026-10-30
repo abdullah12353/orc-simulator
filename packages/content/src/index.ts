@@ -6,7 +6,32 @@ export { content } from './bundle.ts';
 export { ACCENTS, ACCENT_LABELS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 export { subjectText, type SubjectRef } from './subjects.ts';
 export { blameLine, type BlameName } from './blame-line.ts';
-export { BARK_EMOTIONS, STINGERS, barkPath, stingerPath, type BarkEmotion, type Stinger } from './audio.ts';
+export {
+  BARK_EMOTIONS,
+  STINGERS,
+  barkPath,
+  epithetPath,
+  introShoutPath,
+  introSignaturePath,
+  stingerPath,
+  type BarkEmotion,
+  type Stinger,
+} from './audio.ts';
+export {
+  composePortrait,
+  marksAsOf,
+  type HumiliationRow,
+  LEGENDARY_LAYER,
+  LEGENDARY_SLOT,
+  OVERLAY_LIMIT,
+  PORTRAIT_TEMPLATE,
+  overlayPath,
+  portraitPath,
+  type ComposedPortrait,
+  type LayerNudge,
+  type PortraitLayer,
+  type PortraitMark,
+} from './portrait.ts';
 export { validateContent, RUMOUR_TEMPLATES, PARENT_ROLES, ROSTER_TEMPLATES } from './validate.ts';
 export { hashString, hashValue, stableStringify } from './hash.ts';
 export { TONE_BIBLE } from './tone-bible.ts';

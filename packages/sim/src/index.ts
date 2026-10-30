@@ -18,3 +18,4 @@ export { SELECTION } from './select.ts';
 export { VARIETY } from './context.ts';
 export { clashShape, shapeProblem, fallbackDialogue, type ClashLine, type ClashShape } from './dialogue.ts';
 export { ROSTER, UNMASK } from './roster.ts';
+export { introductionScript, shoutName, type IntroBeat, type IntroBeatKind, type IntroductionScript } from './introduction.ts';

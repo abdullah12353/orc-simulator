@@ -12,7 +12,7 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @orc/web && npm run typecheck -w @orc/clock",
     "test": "npm run test:unit",
-    "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\"",
+    "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\" \"apps/web/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
     "audio:placeholders": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/placeholder-audio.ts",
     "content:check":"node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",

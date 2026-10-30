@@ -3,6 +3,8 @@ import { nameClip } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { ClashCard } from './ClashCard.tsx';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
+import { IntroductionCard } from './IntroductionCard.tsx';
+import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { supabase } from './supabase.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
@@ -10,6 +12,24 @@ import { supabase } from './supabase.ts';
 // under RLS (owner-only). Shapes mirror packages/server/src/herald.ts.
 
 type Slot = 'lead' | 'headline' | 'gutter';
+
+/** Stories that play as a set piece: a Clash card, or a Captain's Introduction (#33). */
+type SetPiece = 'clash' | 'introduction';
+type Playing = { kind: 'clash'; data: ClashCardData } | { kind: 'introduction'; data: IntroductionCardData };
+
+async function setPieceHeads(worldId: string, storyNos: number[]): Promise<Map<number, SetPiece>> {
+  const [clashes, intros] = await Promise.all([clashHeads(worldId, storyNos), introductionHeads(worldId, storyNos)]);
+  return new Map<number, SetPiece>([...[...clashes].map((no) => [no, 'clash'] as const), ...[...intros].map((no) => [no, 'introduction'] as const)]);
+}
+
+async function loadSetPiece(worldId: string, kind: SetPiece, story: { storyNo: number; blameLine: string | null }): Promise<Playing | null> {
+  if (kind === 'clash') {
+    const data = await loadClashCard(worldId, story.storyNo, story.blameLine);
+    return data && { kind, data };
+  }
+  const data = await loadIntroduction(worldId, story.storyNo);
+  return data && { kind, data };
+}
 
 interface Story {
   rank: number;
@@ -98,8 +118,9 @@ export function Herald({ worldId }: { worldId: string }) {
   const [opened, setOpened] = useState<Opened | { error: string } | null>(null);
   const [archive, setArchive] = useState<Edition[]>([]);
   const [showing, setShowing] = useState<string | null>(null);
-  const [clashes, setClashes] = useState<Set<number>>(new Set());
-  const [playing, setPlaying] = useState<ClashCardData | null>(null);
+  const [pieces, setPieces] = useState<Map<number, SetPiece>>(new Map());
+  const [playing, setPlaying] = useState<Playing | null>(null);
+  const learn = (heads: Map<number, SetPiece>) => setPieces((known) => new Map([...known, ...heads]));
 
   useEffect(() => {
     let cancelled = false;
@@ -119,23 +140,27 @@ export function Herald({ worldId }: { worldId: string }) {
       if (!cancelled && past.data) {
         const editions = (past.data as EditionRow[]).map(fromRow);
         setArchive(editions);
-        const heads = await clashHeads(worldId, [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))]);
-        if (!cancelled) setClashes((known) => new Set([...known, ...heads]));
+        const heads = await setPieceHeads(worldId, [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))]);
+        if (!cancelled) learn(heads);
       }
     })();
 
-    /** The lead set piece: a Clash lead plays as its card, full screen, the first time this edition is opened. */
+    /**
+     * The lead set piece (D52): a Clash lead plays as its card, a Return or step-in lead as his
+     * Introduction (#33), full screen, the first time this edition is opened.
+     */
     async function autoPlayLead(edition: Edition) {
       const lead = edition.stories.find((st) => st.slot === 'lead');
       if (!lead) return;
-      const heads = await clashHeads(worldId, edition.stories.map((st) => st.storyNo));
+      const heads = await setPieceHeads(worldId, edition.stories.map((st) => st.storyNo));
       if (cancelled) return;
-      setClashes((known) => new Set([...known, ...heads]));
-      if (!heads.has(lead.storyNo) || localStorage.getItem(playedKey(edition.id))) return;
-      const card = await loadClashCard(worldId, lead.storyNo, lead.blameLine);
-      if (cancelled || !card) return;
+      learn(heads);
+      const kind = heads.get(lead.storyNo);
+      if (!kind || localStorage.getItem(playedKey(edition.id))) return;
+      const piece = await loadSetPiece(worldId, kind, lead);
+      if (cancelled || !piece) return;
       localStorage.setItem(playedKey(edition.id), '1');
-      setPlaying(card);
+      setPlaying(piece);
     }
     return () => {
       cancelled = true;
@@ -150,13 +175,17 @@ export function Herald({ worldId }: { worldId: string }) {
   const edition = shown.id === latest.id ? { ...shown, accusation: latest.accusation } : shown;
   const isLatest = edition.id === latest.id;
   const watch = async (story: Story) => {
-    const card = await loadClashCard(worldId, story.storyNo, story.blameLine);
-    if (card) setPlaying(card);
+    const kind = pieces.get(story.storyNo);
+    const piece = kind && (await loadSetPiece(worldId, kind, story));
+    if (piece) setPlaying(piece);
   };
 
   return (
     <section className="herald">
-      {playing && <ClashCard key={playing.clash.no} data={playing} reader={opened.reader} onDone={() => setPlaying(null)} />}
+      {playing?.kind === 'clash' && (
+        <ClashCard key={playing.data.clash.no} data={playing.data} reader={opened.reader} onDone={() => setPlaying(null)} />
+      )}
+      {playing?.kind === 'introduction' && <IntroductionCard key={playing.data.no} data={playing.data} onDone={() => setPlaying(null)} />}
       {isLatest && opened.stopPress.length > 0 && (
         <aside className="stop-press">
           <h3>Stop press</h3>
@@ -167,7 +196,7 @@ export function Herald({ worldId }: { worldId: string }) {
           </ul>
         </aside>
       )}
-      <EditionView edition={edition} reader={opened.reader} clashes={clashes} onWatch={watch} />
+      <EditionView edition={edition} reader={opened.reader} pieces={pieces} onWatch={watch} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>
@@ -188,20 +217,24 @@ const when = (iso: string) =>
 function EditionView({
   edition,
   reader,
-  clashes,
+  pieces,
   onWatch,
 }: {
   edition: Edition;
   reader: string;
-  clashes: Set<number>;
+  pieces: Map<number, SetPiece>;
   onWatch: (story: Story) => void;
 }) {
-  const watch = (s: Story) =>
-    clashes.has(s.storyNo) && (
-      <button className="watch" onClick={() => onWatch(s)}>
-        Watch the Clash
-      </button>
+  const watch = (s: Story) => {
+    const kind = pieces.get(s.storyNo);
+    return (
+      kind && (
+        <button className="watch" onClick={() => onWatch(s)}>
+          {kind === 'clash' ? 'Watch the Clash' : 'Watch the Introduction'}
+        </button>
+      )
     );
+  };
   // At most one Accusation per edition (D53), printed above its story's true Blame line.
   const accused = (s: Story) =>
     edition.accusation?.storyNo === s.storyNo && <AccusationQuote accusation={edition.accusation} />;

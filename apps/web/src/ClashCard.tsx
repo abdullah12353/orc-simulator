@@ -4,14 +4,15 @@
 // interruption → the outcome stamp → the Trophy flies to the winner → the Blame line in Herald type.
 // Line text is read from `data.lines` as each beat plays, so generated lines arriving mid-card (#37)
 // swap in from the next line on.
-import { useEffect, useMemo, useState } from 'react';
-import { BARK_EMOTIONS, barkPath, content } from '@orc/content';
+import { useMemo } from 'react';
+import { BARK_EMOTIONS, barkPath, content, type BarkEmotion } from '@orc/content';
 import { clashShape } from '@orc/sim';
-import { bark, sting, audio } from './audio.ts';
+import { bark as playBark, sting, audio } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { useCardPlayer, type Beat } from './card-player.ts';
 import type { ClashCardData } from './clash-card-data.ts';
-import { Portrait } from './Portrait.tsx';
+import { MuteButton } from './MuteButton.tsx';
+import { bareFace, Portrait } from './Portrait.tsx';
 
 type Kind = 'stinger' | 'slam-a' | 'slam-b' | 'line' | 'crash' | 'outcome' | 'trophy' | 'blame';
 type ClashBeat = Beat<Kind> & { line?: number };
@@ -25,6 +26,8 @@ const lineMs = (text: string) => Math.max(2000, Math.min(3200, 1300 + 40 * text.
 /** The beats of one Clash: about 15 s, about 4 s more with a wrong saviour. */
 export function clashBeats(data: ClashCardData): ClashBeat[] {
   const { clash, lines } = data;
+  // A mouth bandage muffles his barks (#33); his lines are subtitles anyway, marked as muffled.
+  const bark = (id: string, emotion: BarkEmotion) => playBark(id, emotion, { muffled: data.faces[id]?.muffled });
   const shape = clashShape(clash);
   const loserSound = clash.outcome === 'fled' ? 'scared' : 'pain';
   const beats: ClashBeat[] = [
@@ -106,7 +109,7 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
     if (settled && id === clash.loser) classes.push('loser');
     return (
       <div className={classes.join(' ')}>
-        <Portrait portraitKey={cards.get(id)?.portraitKey ?? id} name={nameOf(id)} size={160} />
+        <Portrait face={data.faces[id] ?? bareFace(id)} name={nameOf(id)} size={160} />
         {reached('trophy') && data.trophy && id === clash.winner && <span className="kept">{trophyText}</span>}
       </div>
     );
@@ -134,7 +137,7 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
       {clash.saviour && (
         <div className={`crash${beat?.kind === 'crash' ? ' on' : ''}`}>
           <span className="burst">OI!</span>
-          <Portrait portraitKey={cards.get(clash.saviour)?.portraitKey ?? clash.saviour} name={nameOf(clash.saviour)} size={150} />
+          <Portrait face={data.faces[clash.saviour] ?? bareFace(clash.saviour)} name={nameOf(clash.saviour)} size={150} />
         </div>
       )}
 
@@ -149,6 +152,7 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
             <span className="who">
               {nameOf(speaking.speaker)}
               {beat?.kind === 'crash' ? ', uninvited' : ''}
+              {data.faces[speaking.speaker]?.muffled ? ' (muffled)' : ''}
             </span>
             <span className="txt">{speaking.text}</span>
           </>
@@ -172,10 +176,4 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
       <p className="tap-hint">Tap to skip ahead</p>
     </div>
   );
-}
-
-function MuteButton() {
-  const [muted, setMuted] = useState(audio.muted);
-  useEffect(() => audio.onMutedChange(setMuted), []);
-  return <button onClick={() => audio.setMuted(!muted)}>{muted ? 'Sound off' : 'Sound on'}</button>;
 }

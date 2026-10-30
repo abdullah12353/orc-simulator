@@ -1,9 +1,11 @@
 // The live stage (#31): mounted for the open world whatever tab is showing. On each live nudge it
 // refetches the Facts of the ticks it hasn't seen and plays the new Clashes and notable events one at a
-// time, queued so they never overlap.
+// time (Introductions for Returns and step-ins, #33), queued so they never overlap.
 import { useEffect, useRef, useState } from 'react';
 import { ClashCard } from './ClashCard.tsx';
 import { loadClashCard, loadClashDialogue, type ClashCardData } from './clash-card-data.ts';
+import { IntroductionCard } from './IntroductionCard.tsx';
+import { loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { useDialogue, useLive } from './live.ts';
 import { enqueue, liveItems, type LiveFact, type LiveItem } from './live-queue.ts';
 import { supabase } from './supabase.ts';
@@ -62,7 +64,24 @@ export function LiveStage({ worldId }: { worldId: string }) {
   const next = () => setQueue((q) => q.slice(1));
   if (!playing) return null;
   if (playing.kind === 'clash') return <LiveClash key={playing.no} worldId={worldId} no={playing.no} reader={reader} onDone={next} />;
+  if (playing.kind === 'introduction') return <LiveIntroduction key={playing.no} worldId={worldId} no={playing.no} onDone={next} />;
   return <LiveNotice key={playing.no} line={playing.line} onDone={next} />;
+}
+
+function LiveIntroduction({ worldId, no, onDone }: { worldId: string; no: number; onDone: () => void }) {
+  const [data, setData] = useState<IntroductionCardData | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void loadIntroduction(worldId, no).then((card) => {
+      if (cancelled) return;
+      if (card) setData(card);
+      else onDone(); // not readable (yet): skip rather than stall the queue
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [worldId, no]);
+  return data ? <IntroductionCard data={data} onDone={onDone} /> : null;
 }
 
 function LiveClash({ worldId, no, reader, onDone }: { worldId: string; no: number; reader: string; onDone: () => void }) {

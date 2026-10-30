@@ -461,6 +461,62 @@ button.link {
   color: #999;
 }
 
+/* ---- The Introduction card (#33): the same Fight Night stage, one Captain, spotlit. */
+.intro-card {
+  background: radial-gradient(ellipse at 50% 40%, #3b2f12 0%, #0d0b0a 65%);
+}
+.intro-card .intro-portrait {
+  position: absolute;
+  top: 8vh;
+  left: 50%;
+  transform: translate(-50%, -160%) rotate(-6deg);
+  transition: transform 0.3s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.intro-card .intro-portrait.in { transform: translate(-50%, 0) rotate(0); }
+.intro-card .intro-portrait.shouting { animation: judder 0.08s linear 6; }
+.intro-card .intro-portrait .portrait { width: min(60vw, 280px); height: auto; }
+.intro-card .intro-name {
+  position: absolute;
+  top: calc(8vh + min(75vw, 350px) + 1rem);
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.intro-card .intro-name .shout {
+  display: block;
+  font: 900 clamp(2rem, 9vw, 5rem) / 1 Impact, 'Arial Black', sans-serif;
+  color: #ffd400;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 0 0 30px #f80a;
+  animation: slam-in 0.25s cubic-bezier(0.2, 2, 0.4, 1);
+}
+.intro-card .intro-name .epithet {
+  display: block;
+  margin-top: 0.4rem;
+  font: 700 clamp(1.1rem, 4vw, 2rem) / 1.1 Georgia, serif;
+  letter-spacing: 0.12em;
+  color: #d8cfb8;
+}
+.intro-card .intro-name .really {
+  display: block;
+  margin-top: 0.3rem;
+  font: italic 0.9rem system-ui, sans-serif;
+  color: #a8a29e;
+}
+.intro-card .intro-line {
+  position: absolute;
+  bottom: 4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(800px, 90vw);
+  text-align: center;
+  font: 700 clamp(1.1rem, 3vw, 1.8rem) Georgia, serif;
+  color: #f1e3b5;
+}
+@keyframes slam-in {
+  from { transform: scale(2.5); opacity: 0; }
+}
+
 /* Live stage (#31): a notable event while you watch. Clashes play as their full-screen card. */
 .live-notice {
   position: fixed;

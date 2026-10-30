@@ -24,8 +24,13 @@ export interface CastCard {
   catchphrase: string;
   /** Two disguise aliases ("Krúg Bootleg"). */
   aliases: [string, string];
-  /** Key into the portrait art; placeholder art until the portrait pipeline ships (#33). */
+  /** Key into the portrait art (`portraits/<key>.webp`, drawn to the shared template face box, #18). */
   portraitKey: string;
+  /**
+   * Sparse face-box overrides (D60): a nudge for an overlay (Humiliation kind, or `legendary`) where this
+   * portrait's outline leaves the shared box, e.g. the hook on a wide shoulder. Usually absent.
+   */
+  faceBox?: Record<string, { x?: number; y?: number; scale?: number }>;
   /** One of the 6 Captains who can make Accusations. */
   accuser: boolean;
   /** Starting Epithet (a key into `banks.epithets`); about a third of the cast starts with one. */

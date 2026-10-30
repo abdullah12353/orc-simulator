@@ -1,6 +1,6 @@
 // What plays live (#31): from a tick's new Facts, Clashes play as their card and other notable story
 // heads (anything not silent) show as a short notice. One thing plays at a time, in the order the
-// world produced them; Introductions (#33) join as their own kind.
+// world produced them. Returns and step-ins play as the Captain's Introduction (#33).
 
 export interface LiveFact {
   no: number;
@@ -11,7 +11,13 @@ export interface LiveFact {
   line: string;
 }
 
-export type LiveItem = { kind: 'clash'; no: number } | { kind: 'notice'; no: number; line: string };
+export type LiveItem =
+  | { kind: 'clash'; no: number }
+  | { kind: 'introduction'; no: number }
+  | { kind: 'notice'; no: number; line: string };
+
+/** Story heads that play a Captain's Introduction (#33). `crowned` (#34) joins them. */
+export const INTRODUCTION_KINDS: readonly string[] = ['return', 'stepped_in', 'crowned'];
 
 /** How much may wait to play. Past it the oldest notices go first; Clashes are never dropped. */
 export const LIVE_BACKLOG = 8;
@@ -23,6 +29,7 @@ export function liveItems(facts: LiveFact[]): LiveItem[] {
     .sort((a, b) => a.no - b.no)
     .flatMap((f): LiveItem[] => {
       if (f.kind === 'clash') return [{ kind: 'clash', no: f.no }];
+      if (INTRODUCTION_KINDS.includes(f.kind)) return [{ kind: 'introduction', no: f.no }];
       return f.line ? [{ kind: 'notice', no: f.no, line: f.line }] : [];
     });
 }
