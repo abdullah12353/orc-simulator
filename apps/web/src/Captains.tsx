@@ -5,7 +5,7 @@ import { faceAt, type FaceHistory } from './portrait-data.ts';
 import { supabase } from './supabase.ts';
 
 // The Captain card screen (#26): every active Captain with portrait, name and Epithet, Traits, Fears,
-// Power, lifetime Infamy, roster status (dead ones with their Return time, #32), the Trophies he holds
+// Power, Infamy this week and lifetime (#34), the Legendary stamp, roster status (dead ones with their Return time, #32), the Trophies he holds
 // (#30), his current Humiliations and disguise alias (#32; on his portrait through the compositor, #33),
 // and which one is Warlord. Static card fields come from the
 // content bundle; mutable state comes from the world's rows under RLS.
@@ -31,6 +31,8 @@ interface Loaded {
   humiliations: Map<string, string[]>;
   /** What is on each face now, for the portrait compositor. */
   faces: Map<string, FaceHistory>;
+  /** Infamy gained in the last 7 days (what succession and benching go by). */
+  week: Map<string, number>;
   warlordId: string | null;
 }
 
@@ -58,7 +60,7 @@ export function Captains({ worldId }: { worldId: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const [captains, fears, world, trophies, humiliations] = await Promise.all([
+      const [captains, fears, world, trophies, humiliations, week] = await Promise.all([
         supabase.from('captains').select('id, roster, power, infamy, traits, epithet, alias_idx, returns_at, legendary_fact').eq('world_id', worldId),
         supabase.from('captain_fears').select('captain_id, fear, since').eq('world_id', worldId).order('since'),
         supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
@@ -69,9 +71,10 @@ export function Captains({ worldId }: { worldId: string }) {
           .eq('world_id', worldId)
           .is('ended_at', null)
           .order('no', { ascending: false }),
+        supabase.from('infamy_7d').select('captain_id, infamy').eq('world_id', worldId),
       ]);
       if (cancelled) return;
-      const error = captains.error ?? fears.error ?? world.error ?? trophies.error ?? humiliations.error;
+      const error = captains.error ?? fears.error ?? world.error ?? trophies.error ?? humiliations.error ?? week.error;
       if (error) return setData({ error: error.message });
       const byCaptain = new Map<string, string[]>();
       for (const f of fears.data ?? []) byCaptain.set(f.captain_id, [...(byCaptain.get(f.captain_id) ?? []), f.fear]);
@@ -95,6 +98,7 @@ export function Captains({ worldId }: { worldId: string }) {
         trophies: held,
         humiliations: marks,
         faces,
+        week: new Map((week.data ?? []).map((w: { captain_id: string; infamy: number }) => [w.captain_id, w.infamy])),
         warlordId: world.data?.warlord_id ?? null,
       });
     })();
@@ -132,6 +136,7 @@ export function Captains({ worldId }: { worldId: string }) {
             trophies={data.trophies.get(c.id) ?? []}
             humiliations={data.humiliations.get(c.id) ?? []}
             face={data.faces.get(c.id)}
+            week={data.week.get(c.id) ?? 0}
             warlord={c.id === data.warlordId}
           />
         ))}
@@ -151,6 +156,7 @@ export function Captains({ worldId }: { worldId: string }) {
                   trophies={data.trophies.get(c.id) ?? []}
                   humiliations={data.humiliations.get(c.id) ?? []}
                   face={data.faces.get(c.id)}
+                  week={data.week.get(c.id) ?? 0}
                   warlord={false}
                 />
               ))}
@@ -168,6 +174,7 @@ function CaptainCard({
   trophies,
   humiliations,
   face,
+  week,
   warlord,
 }: {
   captain: CaptainRow;
@@ -175,6 +182,7 @@ function CaptainCard({
   trophies: string[];
   humiliations: string[];
   face: FaceHistory | undefined;
+  week: number;
   warlord: boolean;
 }) {
   const card = cards.get(captain.id);
@@ -188,6 +196,7 @@ function CaptainCard({
         <h3>
           {alias ?? displayName(name, captain.epithet)}
           {warlord && <span className="badge">Warlord</span>}
+          {captain.legendary_fact !== null && <span className="badge legendary">Legendary</span>}
         </h3>
         {alias && <p className="quiet">(really {displayName(name, captain.epithet)}, in disguise)</p>}
         {card && (
@@ -203,7 +212,9 @@ function CaptainCard({
           <dt>Power</dt>
           <dd>{captain.power}</dd>
           <dt>Infamy</dt>
-          <dd>{captain.infamy}</dd>
+          <dd>
+            {week} this week · {captain.infamy} lifetime
+          </dd>
           <dt>Status</dt>
           <dd>{warlord ? 'Warlord' : statusText(captain)}</dd>
           <dt>Humiliations</dt>

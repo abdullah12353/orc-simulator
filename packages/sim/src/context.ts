@@ -12,6 +12,7 @@ import type {
   Fact,
   FactNo,
   Humiliation,
+  Introduction,
   PlayerId,
   StateDiff,
   TemplateId,
@@ -23,6 +24,8 @@ import type {
 export const MEDDLE_CAP = 6;
 /** Directed affinity runs −100..+100 (D49). */
 export const AFFINITY_LIMIT = 100;
+/** The 7-day Infamy window (data-model §4.4): succession and benching go by Infamy gained in it. */
+export const INFAMY_WINDOW_DAYS = 7;
 /** The variety rule (D47): a Template seen in the last 24 h, or a pair seen in the last hour, counts half. */
 export const VARIETY = { templateHours: 24, pairHours: 1 } as const;
 
@@ -43,6 +46,7 @@ export function emptyDiff(): StateDiff {
     playerDeltas: [],
     intents: [],
     recent: { templates: {}, pairs: {} },
+    infamy: [],
   };
 }
 
@@ -60,6 +64,8 @@ export class TickContext {
   readonly clashedPairs = new Set<string>();
   /** Misfortunes reported this tick, in order (see `misfortune`). */
   readonly misfortunes: Misfortune[] = [];
+  /** The Warlord who fell this tick, and his fall (`warlordFalls` in infamy.ts): the crowning requires it. */
+  throneFall: { captainId: CaptainId; cause: Cause } | null = null;
   readonly state: WorldState;
   readonly rng: Rng;
   private nextNo: number;
@@ -148,6 +154,33 @@ export class TickContext {
     if (!base) throw new Error(`unknown Captain ${id}`);
     const patch = this.captainPatches.get(id);
     return patch ? { ...base, ...patch, fears: this.fears(id) } : { ...base, fears: this.fears(id) };
+  }
+
+  /**
+   * Infamy he gained in the last 7 days (data-model §4.4), this tick's included. Gains go through
+   * `gainInfamy` (infamy.ts), which records them in `diff.infamy`.
+   */
+  infamy7d(id: CaptainId): number {
+    const since = isoToMs(this.state.world.now) - INFAMY_WINDOW_DAYS * 86_400_000;
+    let sum = 0;
+    for (const g of this.state.infamy7d) if (g.captainId === id && isoToMs(g.at) > since) sum += g.amount;
+    for (const g of this.diff.infamy) if (g.captainId === id) sum += g.amount;
+    return sum;
+  }
+
+  /** The Warlord as he stands at this point in the tick: null while the throne is empty (after a fall). */
+  warlord(): CaptainId | null {
+    return 'warlordId' in this.diff.world ? (this.diff.world.warlordId ?? null) : this.state.world.warlordId;
+  }
+
+  setWarlord(id: CaptainId | null): void {
+    this.diff.world.warlordId = id;
+  }
+
+  /** His Introduction as he stands now: his alias while disguised, his Epithet, and the Legendary stamp. */
+  introduction(id: CaptainId): Introduction {
+    const c = this.captain(id);
+    return { captainId: id, aliasIdx: c.aliasIdx, epithet: c.epithet, legendary: c.legendaryFact !== null };
   }
 
   rosterOf(id: CaptainId): CaptainState['roster'] | undefined {

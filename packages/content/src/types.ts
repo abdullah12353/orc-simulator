@@ -70,6 +70,11 @@ export interface OutcomeDef {
    * picks his Return's Humiliation). The death cap and grace can still turn it into a Humiliation instead.
    */
   death?: { role: string; tag: CauseTag };
+  /**
+   * Infamy (#34, D42) this outcome gives the Captains cast in these roles: stupidity only, 1–30 (silent 1–4,
+   * notable 5–15, disaster 15–30). A death adds its own on top.
+   */
+  infamy?: Record<string, number>;
 }
 
 /**
@@ -81,9 +86,10 @@ export interface TemplateDef {
   /**
    * `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). `clash` Templates start
    * a Clash and voice its headline: their lines get the `{tag}` and `{result}` slots (see `ClashBanks`).
-   * `return`, `stepped_in` and `unmasked` voice the roster's story heads (#32, see ROSTER_TEMPLATES).
+   * `return`, `stepped_in`, `unmasked` and `crowned` voice the roster's story heads (#32, #34, see
+   * ROSTER_TEMPLATES).
    */
-  kind: 'incident' | 'rumour' | 'clash' | 'return' | 'stepped_in' | 'unmasked';
+  kind: 'incident' | 'rumour' | 'clash' | 'return' | 'stepped_in' | 'unmasked' | 'crowned';
   /**
    * `ambient`: rolled on a tick. `meddle`: a Meddle landing. `grudge`: the Grudge Clash roll (one Template,
    * roles `a` and `b`). `reaction`: follows another Fact (see `after`), up to 3 deep in a tick. `roster`:
@@ -145,6 +151,16 @@ export interface Banks {
   humiliations: Record<BankKey, HumiliationDef>;
   /** Sentences for deaths, averted deaths and benchings (#32). */
   death: DeathBank;
+  /** The throne (#34): the Warlord's fall, by why, and a Captain becoming Legendary. */
+  throne: ThroneBank;
+}
+
+/** Sentences for the throne (#34). `fell` and `legendary` use `{captain}`; they are appended to the story's line. */
+export interface ThroneBank {
+  fell: Record<'death' | 'clash_loss' | 'botched_dare', string[]>;
+  legendary: string[];
+  /** Who he took the throne from, in a `crowned` line, when it was already empty. */
+  emptyThrone: string;
 }
 
 export type HumiliationCat = 'bandage' | 'lost_bit' | 'disguise' | 'epithet' | 'fear';

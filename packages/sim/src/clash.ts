@@ -4,10 +4,11 @@
 // about 1 Clash in 5, and the winner takes a Trophy in about half of defeats.
 //
 // The seam for later tickets: `resolveClash` writes the head, then its consequences in order (the death
-// roll last). Infamy and Warlord falls (#34) and payouts (#36) join `consequences`; the Backing edge (#36)
-// fills in `backingEdge`.
+// roll last). The loser's Infamy and a Warlord's fall (#34) go on the head; payouts (#36) join
+// `consequences`; the Backing edge (#36) fills in `backingEdge`.
 import type { ClashOutcome, TemplateDef } from '@orc/content';
 import { pairOf, type TickContext } from './context.ts';
+import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
 import { disaster, maybeUnmask, UNMASK } from './roster.ts';
 import { renderLine } from './rumours.ts';
@@ -95,8 +96,8 @@ export function rollGrudgeClashes(ctx: TickContext): void {
 
 /** a's chance to win before Backing: logistic on the Power gap, plus each side's Trait shifts. */
 export function powerOdds(ctx: TickContext, a: CaptainId, b: CaptainId): number {
-  const ca = ctx.state.captains[a]!;
-  const cb = ctx.state.captains[b]!;
+  const ca = ctx.captain(a);
+  const cb = ctx.captain(b);
   const shift = (traits: readonly string[]) => traits.reduce((s, t) => s + (CLASH.traitShift[t] ?? 0), 0);
   const p = 1 / (1 + Math.exp(-CLASH.powerSlope * (ca.power - cb.power))) + shift(ca.traits) - shift(cb.traits);
   return round3(clamp(p));
@@ -114,11 +115,12 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
   ctx.clashedPairs.add(pairOf(a, b));
 
   const pA = powerOdds(ctx, a, b);
+  const powers = { [a]: ctx.captain(a).power, [b]: ctx.captain(b).power };
   const edgeA = backingEdge(ctx, a);
   const edgeB = backingEdge(ctx, b);
   const aWins = rng.next() < clamp(pA + edgeA - edgeB);
   const [winner, loser] = aWins ? [a, b] : [b, a];
-  const fled = state.captains[loser]!.traits.includes('Coward') && rng.chance(CLASH.cowardFlees);
+  const fled = ctx.captain(loser).traits.includes('Coward') && rng.chance(CLASH.cowardFlees);
   const outcome: ClashOutcome = fled ? 'fled' : aWins ? 'won' : 'defeated';
   const saviour = rng.chance(CLASH.saviour) ? pickSaviour(ctx, a, b) : null;
 
@@ -168,16 +170,22 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
   };
   ctx.facts.push(head);
   ctx.misfortune(loser, head);
-  consequences(ctx, head);
+  // Losing is stupid (a win earns nothing, D42); a wrong saviour makes it a disaster, and looks daft himself.
+  gainInfamy(ctx, head, loser, saviour ? INFAMY.clash.withSaviour : fled ? INFAMY.clash.fled : INFAMY.clash.lost);
+  if (saviour) gainInfamy(ctx, head, saviour.id, INFAMY.clash.saviour);
+  // A Warlord who loses any Clash, fled or not, loses the throne (D43).
+  warlordFalls(ctx, head, loser, 'clash_loss');
+  consequences(ctx, head, powers);
   followUp(ctx, head, start.depth);
   return head;
 }
 
 /**
  * What a Clash leaves behind, in order: the Grudge lets off steam, the winner may take a Trophy, the
- * loser holds a new Grudge against the winner (and against a wrong saviour). Each requires the head.
+ * loser holds a new Grudge against the winner (and against a wrong saviour), a winner who beat someone
+ * stronger gains a point of Power, and the loser may die. Each requires the head.
  */
-function consequences(ctx: TickContext, head: ClashFact): void {
+function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainId, number>): void {
   const { state, rng } = ctx;
   const { a, b, winner, loser } = head;
   const headCause: Cause = { fact: head.no, blame: head.blame };
@@ -202,6 +210,9 @@ function consequences(ctx: TickContext, head: ClashFact): void {
       : rng.pick(head.outcome === 'fled' ? bank.tags.fled : bank.tags.beaten);
   grudge(ctx, head, headCause, loser, winner, CLASH.sting, tag);
   if (head.saviour) grudge(ctx, head, headCause, loser, head.saviour, CLASH.saviourSting, bank.tags.saviour.replace('{magnet}', head.saviourMagnet ?? bank.anyMagnet));
+
+  // Beating a stronger Captain makes him stronger (D42), as Power stood when they squared up.
+  if (powers[winner]! < powers[loser]!) drift(ctx, head, winner, 1);
 
   // The loser may die (or be Humiliated instead, at the cap or in grace); a disguised survivor may be Unmasked.
   if (head.outcome !== 'fled' && rng.chance(CLASH.death)) disaster(ctx, head, loser, 'beaten');

@@ -101,6 +101,13 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
   const { text: stampText, verdict } = stamp(data);
   const trophyText = data.trophy ? (content.banks.trophies[data.trophy.key]?.text ?? data.trophy.key) : null;
   const side = (id: string) => (id === clash.a ? 'left' : 'right');
+  // The Warlord is marked wherever he appears (#34).
+  const plate = (id: string) => (
+    <>
+      {nameOf(id)}
+      {id === data.warlord && <span className="badge">Warlord</span>}
+    </>
+  );
 
   const portrait = (id: string, which: 'left' | 'right') => {
     const classes = ['side', which];
@@ -128,8 +135,8 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
           ✕
         </button>
       </div>
-      <div className="nameplate np-left">{reached('slam-a') && nameOf(clash.a)}</div>
-      <div className="nameplate np-right">{reached('slam-b') && nameOf(clash.b)}</div>
+      <div className="nameplate np-left">{reached('slam-a') && plate(clash.a)}</div>
+      <div className="nameplate np-right">{reached('slam-b') && plate(clash.b)}</div>
       {portrait(clash.a, 'left')}
       {portrait(clash.b, 'right')}
       <div className={`vs${beat?.kind === 'slam-b' ? ' on' : ''}`}>VS</div>

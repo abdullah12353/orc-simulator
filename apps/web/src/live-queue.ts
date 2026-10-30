@@ -16,7 +16,7 @@ export type LiveItem =
   | { kind: 'introduction'; no: number }
   | { kind: 'notice'; no: number; line: string };
 
-/** Story heads that play a Captain's Introduction (#33). `crowned` (#34) joins them. */
+/** Story heads that play a Captain's Introduction: Returns and step-ins (#33), and crownings (#34). */
 export const INTRODUCTION_KINDS: readonly string[] = ['return', 'stepped_in', 'crowned'];
 
 /** How much may wait to play. Past it the oldest notices go first; Clashes are never dropped. */

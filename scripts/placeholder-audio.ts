@@ -94,7 +94,7 @@ function bark(captainId: string, emotion: BarkEmotion): Float32Array {
 
 function stinger(name: Stinger): Float32Array {
   const rnd = noise(parseInt(hashString(name).slice(0, 8), 16));
-  const seconds = { clash: 1.0, crash: 0.5, verdict: 0.9, trophy: 0.5, intro: 0.8 }[name];
+  const seconds = { clash: 1.0, crash: 0.5, verdict: 0.9, trophy: 0.5, intro: 0.8, fanfare: 1.4 }[name];
   const n = Math.round(seconds * RATE);
   const out = new Float32Array(n);
   for (let i = 0; i < n; i++) {
@@ -110,6 +110,10 @@ function stinger(name: Stinger): Float32Array {
       v = rnd() * Math.exp(-s * 7); // a smash
     } else if (name === 'verdict') {
       v = (2 * ((s * 98) % 1) - 1) * Math.min(1, s * 10) * Math.exp(-s * 2.5); // a horn
+    } else if (name === 'fanfare') {
+      // A Legendary deed (#34): three rising horn blasts, the last one held.
+      const note = s < 0.3 ? 196 : s < 0.6 ? 262 : 330;
+      v = (2 * ((s * note) % 1) - 1) * 0.7 * Math.min(1, ((s % 0.3) + 0.01) * 20) * (s < 0.6 ? 1 : Math.exp(-(s - 0.6) * 2));
     } else if (name === 'intro') {
       // A cymbal swell into a thud: "Ladies and gentlemen…"
       v = s < 0.55 ? rnd() * 0.6 * (s / 0.55) : Math.sin(2 * Math.PI * 55 * (s - 0.55)) * Math.exp(-(s - 0.55) * 8);

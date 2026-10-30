@@ -57,6 +57,21 @@ function play(worldSeed: number, ticks: number) {
         assert.equal(story.length, 1, `Return ${f.no} carries exactly one Humiliation`);
       }
     }
+    // Power and Infamy (#34): Power only ever drifts by 1 (each change a `power` Fact) within 1–10; lifetime
+    // Infamy grows by exactly the gains on Facts; Legendary at 150; there is always a living, active Warlord.
+    for (const f of r.facts) {
+      if (f.kind === 'power') assert.equal(Math.abs(f.to - f.from), 1, `power Fact ${f.no}: ${f.from} → ${f.to}`);
+    }
+    for (const c of Object.values(state.captains)) {
+      const before = m.state.captains[c.id]!;
+      const drifts = r.facts.filter((f): f is Extract<Fact, { kind: 'power' }> => f.kind === 'power' && f.captainId === c.id);
+      assert.equal(c.power - before.power, drifts.reduce((n, f) => n + f.to - f.from, 0), `${c.id}: Power moves only by power Facts`);
+      assert.ok(c.power >= 1 && c.power <= 10, `${c.id}: Power ${c.power}`);
+      const gains = r.facts.flatMap((f) => f.infamy).filter((g) => g.captainId === c.id);
+      assert.equal(c.infamy - before.infamy, gains.reduce((n, g) => n + g.amount, 0), `${c.id}: Infamy moves only by gains`);
+      assert.equal(c.legendaryFact !== null, c.infamy >= 150, `${c.id}: Legendary ⇔ 150 lifetime Infamy`);
+    }
+    assert.equal(state.captains[state.world.warlordId!]?.roster, 'active', `tick ${state.world.tickSeq}: a living, active Warlord`);
     for (const c of Object.values(state.captains)) {
       assert.equal(c.roster === 'dead', c.death !== null && c.returnsAt !== null, `${c.id}: dead ⇔ a death and a Return time`);
       assert.ok(c.fears.length <= 3 && c.fears.some((f) => !f.added), `${c.id}: at most 3 Fears, his starting one kept`);
@@ -86,12 +101,16 @@ test('invariants hold over long runs with Players Meddling, and the same inputs 
   let clashes = 0;
   let deaths = 0;
   let returns = 0;
+  let drifts = 0;
+  let crownings = 0;
   for (let worldSeed = 1; worldSeed <= SEEDS; worldSeed++) {
     const a = play(worldSeed, 300);
     landed += a.facts.filter((f) => f.kind === 'rumour').length;
     clashes += a.facts.filter((f) => f.kind === 'clash').length;
     deaths += a.facts.filter((f) => f.kind === 'death').length;
     returns += a.facts.filter((f) => f.kind === 'return').length;
+    drifts += a.facts.filter((f) => f.kind === 'power').length;
+    crownings += a.facts.filter((f) => f.kind === 'crowned').length;
     if (worldSeed <= 3) {
       const b = play(worldSeed, 300);
       assert.equal(b.hash, a.hash, `world seed ${worldSeed} replays to the same state`);
@@ -102,4 +121,6 @@ test('invariants hold over long runs with Players Meddling, and the same inputs 
   assert.ok(clashes > SEEDS, `only ${clashes} Clashes`);
   assert.ok(deaths > SEEDS, `only ${deaths} deaths`);
   assert.ok(returns > SEEDS / 2, `only ${returns} Returns`);
+  assert.ok(drifts > SEEDS, `only ${drifts} Power changes`);
+  assert.ok(crownings > 0, 'no Warlord ever fell');
 });

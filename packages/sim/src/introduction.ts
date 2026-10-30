@@ -1,5 +1,5 @@
-// The Captain Introduction (#33, gdd §4.4, #10): a set piece of about 7 s for Return, `stepped_in` (and
-// later `crowned`) heads. Announcer stinger → portrait slam → the Captain shouts his own name, badly →
+// The Captain Introduction (#33, gdd §4.4, #10): a set piece of about 7 s for Return, `stepped_in` and
+// `crowned` (#34) heads. Announcer stinger → portrait slam → the Captain shouts his own name, badly →
 // the announcer adds the Epithet, deadpan → one signature line in the Captain's voice. Every sound is
 // prerecorded (paths from @orc/content's audio bank). This is the script; the PWA's card plays it.
 import { epithetPath, introShoutPath, introSignaturePath, stingerPath, type Content } from '@orc/content';

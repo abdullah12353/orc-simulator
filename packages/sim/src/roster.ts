@@ -8,6 +8,7 @@
 // straight after the day roll.
 import { KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { renderLine } from './rumours.ts';
 import { addMinutes, isoToMs } from './time.ts';
 import type { CaptainId, Cause, Fact, FactNo, Humiliation, Introduction } from './types.ts';
@@ -71,6 +72,10 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   ctx.facts.push(deathFact);
   ctx.misfortune(victim, deathFact);
   appendLine(head, line);
+  // Dying makes him weaker and more famous at once (D42), and a dead Warlord rules nothing (D43).
+  gainInfamy(ctx, deathFact, victim, INFAMY.death);
+  drift(ctx, deathFact, victim, -1);
+  warlordFalls(ctx, deathFact, victim, 'death');
   const death: Cause = { fact: no, blame };
   ctx.patchCaptain(victim, { roster: 'dead', returnsAt, death: { cause: death, causeTag: tag } });
   ctx.diff.world.deathsToday = ctx.deathsToday() + 1;
@@ -120,6 +125,7 @@ export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'cl
     by,
   };
   ctx.facts.push(fact);
+  gainInfamy(ctx, fact, id, INFAMY.unmasked);
   endHumiliation(ctx, disguise, 'unmasked', no, [{ fact: no, blame }]);
 }
 
@@ -136,7 +142,7 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
   const no = ctx.allocNo();
   const { causes, blame } = ctx.link(no, { requires: death.cause ? [death.cause] : [] });
   const intro: Introduction = {
-    ...introOf(ctx, id),
+    ...ctx.introduction(id),
     ...(choice?.def.cat === 'disguise' ? { aliasIdx: choice.aliasIdx } : {}),
     ...(choice?.def.cat === 'epithet' ? { epithet: choice.def.epithet! } : {}),
   };
@@ -169,11 +175,14 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
   }
 }
 
-/** A Returner makes 13: the active Captain with the lowest Infamy goes to the reserve, never Krúg or the Warlord. */
+/**
+ * A Returner makes 13: the active Captain with the least Infamy in the last 7 days goes to the reserve (slug
+ * breaks a tie), never Krúg or the Warlord.
+ */
 function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
   const active = ctx.activeCaptains();
   if (active.length <= ROSTER.activeSize) return;
-  const warlord = 'warlordId' in ctx.diff.world ? ctx.diff.world.warlordId : ctx.state.world.warlordId;
+  const warlord = ctx.warlord();
   const [id] = active
     .filter((x) => x !== returner && x !== KRUG && x !== warlord)
     .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || (a < b ? -1 : 1));
@@ -196,9 +205,9 @@ function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
   appendLine(head, line);
 }
 
-/** Who gets benched first: lifetime Infamy for now. The Infamy ticket (#34) switches it to 7-day Infamy. */
+/** Who gets benched first: the least Infamy in the last 7 days (data-model §4.4). */
 function benchScore(ctx: TickContext, id: CaptainId): number {
-  return ctx.captain(id).infamy;
+  return ctx.infamy7d(id);
 }
 
 /** A reserve Captain, drawn at random, steps into the active roster with his Introduction (a story head). */
@@ -221,7 +230,7 @@ function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
     ...ctx.link(no, { requires: [death] }),
     infamy: [],
     kind: 'stepped_in',
-    intro: introOf(ctx, id),
+    intro: ctx.introduction(id),
     replacing: dead,
   });
 }
@@ -320,6 +329,7 @@ function applyHumiliation(ctx: TickContext, id: CaptainId, choice: Choice, story
   };
   ctx.facts.push(fact);
   ctx.misfortune(id, fact);
+  gainInfamy(ctx, fact, id, INFAMY.humiliation);
   ctx.upsertHumiliation({ no: ctx.allocNo(), captainId: id, cat: def.cat, key, gained, expiresAt, ended: false });
   for (const old of replaced) endHumiliation(ctx, old, 'replaced', storyNo, [gained]);
 }
@@ -349,11 +359,6 @@ function endHumiliation(
   });
   ctx.upsertHumiliation({ ...h, ended: true });
   if (h.cat === 'disguise') ctx.patchCaptain(h.captainId, { aliasIdx: null });
-}
-
-function introOf(ctx: TickContext, id: CaptainId): Introduction {
-  const c = ctx.captain(id);
-  return { captainId: id, aliasIdx: c.aliasIdx, epithet: c.epithet, legendary: c.legendaryFact !== null };
 }
 
 /** A roster Template's line (variant drawn), or a silent Fact if the bundle lacks the Template. */

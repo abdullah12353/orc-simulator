@@ -50,6 +50,15 @@ export async function insertFacts(
       from jsonb_array_elements(${jsonb(tx, blame)}) as b`;
   }
 
+  // Infamy, one row per (Fact, Captain) (#34): the 7-day window and payouts sum these over facts.at.
+  const gains = rows.flatMap(({ fact }) => fact.infamy.map((g) => ({ fact: fact.no, captainId: g.captainId, amount: g.amount })));
+  if (gains.length > 0) {
+    await tx`
+      insert into infamy_gains (world_id, fact_no, captain_id, amount)
+      select ${worldId}, (g->>'fact')::bigint, g->>'captainId', (g->>'amount')::smallint
+      from jsonb_array_elements(${jsonb(tx, gains)}) as g`;
+  }
+
   // Every Clash gets its fallback script now, in this transaction; narration upgrades it later.
   const dialogue = rows.flatMap(({ fact }) =>
     fact.kind === 'clash' ? [{ fact: fact.no, at: fact.at, key: fact.fallbackKey, lines: fallbackDialogue(content, fact) }] : [],
@@ -79,8 +88,8 @@ export async function upsertTrophies(tx: Tx, worldId: string, trophies: Trophy[]
       origin_fact = excluded.origin_fact, acquired_at = excluded.acquired_at`;
 }
 
-/** The Captain fields a tick can change so far (#32). Power, Infamy and Legendary arrive with #34. */
-const CAPTAIN_FIELDS = new Set(['id', 'roster', 'epithet', 'aliasIdx', 'returnsAt', 'graceUntil', 'death']);
+/** The Captain fields a tick can change: the roster and marks (#32), Power, lifetime Infamy and Legendary (#34). */
+const CAPTAIN_FIELDS = new Set(['id', 'roster', 'epithet', 'aliasIdx', 'returnsAt', 'graceUntil', 'death', 'power', 'infamy', 'legendaryFact']);
 
 /**
  * Applies Captain patches (merged per Captain, in order). A death stamps `died_at` with `now` and records
@@ -97,6 +106,9 @@ export async function updateCaptains(tx: Tx, worldId: string, patches: StateDiff
   await tx`
     update captains c set
       roster = case when p ? 'roster' then (p->>'roster')::roster else c.roster end,
+      power = case when p ? 'power' then (p->>'power')::smallint else c.power end,
+      infamy = case when p ? 'infamy' then (p->>'infamy')::int else c.infamy end,
+      legendary_fact = case when p ? 'legendaryFact' then (p->>'legendaryFact')::bigint else c.legendary_fact end,
       epithet = case when p ? 'epithet' then p->>'epithet' else c.epithet end,
       alias_idx = case when p ? 'aliasIdx' then (p->>'aliasIdx')::smallint else c.alias_idx end,
       returns_at = case when p ? 'returnsAt' then (p->>'returnsAt')::timestamptz else c.returns_at end,
@@ -249,13 +261,15 @@ export async function insertWorldState(
     graceUntil: c.graceUntil,
     deathFact: c.death?.cause.fact ?? null,
     deathCauseTag: c.death?.causeTag ?? null,
+    legendaryFact: c.legendaryFact,
   }));
   await tx`
     insert into captains (world_id, id, roster, power, infamy, traits, epithet, alias_idx, returns_at, grace_until,
-                          death_fact, death_cause_tag, died_at)
+                          death_fact, death_cause_tag, legendary_fact, died_at)
     select ${worldId}, c->>'id', (c->>'roster')::roster, (c->>'power')::smallint, (c->>'infamy')::int,
            array(select jsonb_array_elements_text(c->'traits')), c->>'epithet', (c->>'aliasIdx')::smallint,
            (c->>'returnsAt')::timestamptz, (c->>'graceUntil')::timestamptz, (c->>'deathFact')::bigint, c->>'deathCauseTag',
+           (c->>'legendaryFact')::bigint,
            (select f.at from facts f where f.world_id = ${worldId} and f.no = (c->>'deathFact')::bigint)
     from jsonb_array_elements(${jsonb(tx, captains)}) as c`;
   await upsertHumiliations(tx, worldId, history.humiliations, history.facts, state.world.now);

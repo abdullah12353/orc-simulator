@@ -31,3 +31,17 @@ test('Return and stepped_in heads play as Introductions, in story order with the
     ],
   );
 });
+
+test('a crowned Captain plays his Introduction (#34); the fall itself is part of the story that caused it', () => {
+  assert.deepEqual(
+    liveItems([
+      fact(20, 'clash'),
+      fact(21, 'warlord_fell', { story_no: 20, tier: 'silent' }),
+      fact(22, 'crowned'),
+    ]),
+    [
+      { kind: 'clash', no: 20 },
+      { kind: 'introduction', no: 22 },
+    ],
+  );
+});

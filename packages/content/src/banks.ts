@@ -391,6 +391,32 @@ export const banks: Banks = {
       '{captain} has been moved to the reserve. His chair has already been sat in.',
     ],
   },
+  // The throne and Legendary (#34). Sentences appended to the story they happen in; each names {captain}.
+  throne: {
+    fell: {
+      death: [
+        'The Warlord is dead, so {captain} is no longer the Warlord.',
+        'The throne is empty: {captain} has died in office.',
+        '{captain} has left the throne the hard way.',
+      ],
+      clash_loss: [
+        '{captain} has lost the throne along with the fight.',
+        'Having lost, {captain} is no longer Warlord. Nobody can find his crown.',
+        'The fortress no longer takes orders from {captain}.',
+      ],
+      botched_dare: [
+        '{captain} botched it so badly he is no longer Warlord.',
+        'The throne has been taken off {captain} for his own safety.',
+        '{captain} has been stripped of the throne. He is still holding the armrest.',
+      ],
+    },
+    legendary: [
+      'It is the stupidest thing anyone can remember: {captain} is now Legendary.',
+      'Historians agree: {captain} has become Legendary.',
+      'With this, {captain} enters legend. The fortress is not proud.',
+    ],
+    emptyThrone: 'an empty chair',
+  },
   // Accusations (D20, #39): hand-written, spoken by the accuser over his prerecorded clip of the Player's
   // mangled name. They blame the Player's meddling, never the Player as a person (tone bible §2).
   accusations: [
