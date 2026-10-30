@@ -166,7 +166,7 @@ function validateRoster(c: Content): string[] {
   }
   for (const [key, h] of Object.entries(bank)) {
     const where = `banks.humiliations.${key}`;
-    if (!h.text?.trim()) errors.push(`${where}: needs text`);
+    if (!h.text?.trim() || !h.label?.trim()) errors.push(`${where}: needs a label and text`);
     for (const name of placeholders(h.text ?? '')) {
       if (!HUMILIATION_TEXT.has(name)) errors.push(`${where}: "{${name}}" can't be used (only {name}, {alias}, {epithet})`);
     }

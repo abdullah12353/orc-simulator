@@ -141,6 +141,8 @@ export type HumiliationCat = 'bandage' | 'lost_bit' | 'disguise' | 'epithet' | '
 
 export interface HumiliationDef {
   cat: HumiliationCat;
+  /** Short, for the Captain card: "Head bandage". */
+  label: string;
   /**
    * How he comes back, completing "{name} is back from the dead, …": "wrapped head to toe in bandages".
    * May use `{alias}` (a disguise's alias) and `{epithet}` (an Epithet Humiliation's new Epithet).
