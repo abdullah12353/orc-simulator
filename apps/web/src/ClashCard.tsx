@@ -4,28 +4,29 @@
 // interruption → the outcome stamp → the Trophy flies to the winner → the Blame line in Herald type.
 // Line text is read from `data.lines` as each beat plays, so generated lines arriving mid-card (#37)
 // swap in from the next line on.
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
 import { BARK_EMOTIONS, barkPath, content, type BarkEmotion } from '@orc/content';
-import { clashShape } from '@orc/sim';
+import { clashShape, type ClashLine } from '@orc/sim';
 import { bark as playBark, sting, audio } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { useCardPlayer, type Beat } from './card-player.ts';
+import { dialogueBeat } from './clash-beats.ts';
+import { captainName } from './captain-names.ts';
 import type { ClashCardData } from './clash-card-data.ts';
 import { MuteButton } from './MuteButton.tsx';
 import { bareFace, Portrait } from './Portrait.tsx';
 
-type Kind = 'stinger' | 'slam-a' | 'slam-b' | 'line' | 'crash' | 'outcome' | 'trophy' | 'blame';
+/** A `dialogue` beat is a line, or the wrong saviour crashing in: which, it decides as it plays (#37). */
+type Kind = 'stinger' | 'slam-a' | 'slam-b' | 'dialogue' | 'outcome' | 'trophy' | 'blame';
 type ClashBeat = Beat<Kind> & { line?: number };
 
-const cards = new Map(content.cast.map((c) => [c.id, c]));
-const nameOf = (id: string) => cards.get(id)?.name ?? id;
-
-/** How long a subtitled line holds: long enough to read, never so long it drags. */
-const lineMs = (text: string) => Math.max(2000, Math.min(3200, 1300 + 40 * text.length));
-
-/** The beats of one Clash: about 15 s, about 4 s more with a wrong saviour. */
-export function clashBeats(data: ClashCardData): ClashBeat[] {
-  const { clash, lines } = data;
+/**
+ * The beats of one Clash: about 15 s, about 4 s more with a wrong saviour. `lines` gives the lines as they
+ * are now: each dialogue beat reads them when it starts, so generated lines that land mid-card with the
+ * saviour in another position move his crash with him.
+ */
+export function clashBeats(data: ClashCardData, lines: () => ClashLine[]): ClashBeat[] {
+  const { clash } = data;
   // A mouth bandage muffles his barks (#33); his lines are subtitles anyway, marked as muffled.
   const bark = (id: string, emotion: BarkEmotion) => playBark(id, emotion, { muffled: data.faces[id]?.muffled });
   const shape = clashShape(clash);
@@ -36,20 +37,18 @@ export function clashBeats(data: ClashCardData): ClashBeat[] {
     { kind: 'slam-b', ms: 1000, enter: () => void bark(clash.b, 'taunt') },
   ];
   for (let i = 0; i < shape.lines; i++) {
-    const speaker = lines[i]?.speaker;
-    if (clash.saviour && speaker === clash.saviour) {
-      beats.push({
-        kind: 'crash',
-        line: i,
-        ms: 3600,
-        enter: () => {
-          void sting('crash');
-          void bark(clash.saviour!, 'oi');
-        },
-      });
-    } else {
-      beats.push({ kind: 'line', line: i, ms: lineMs(lines[i]?.text ?? '') });
-    }
+    beats.push({
+      kind: 'dialogue',
+      line: i,
+      get ms() {
+        return dialogueBeat(lines(), i, clash.saviour).ms;
+      },
+      enter: () => {
+        if (dialogueBeat(lines(), i, clash.saviour).kind !== 'crash') return;
+        void sting('crash');
+        void bark(clash.saviour!, 'oi');
+      },
+    });
   }
   beats.push({
     kind: 'outcome',
@@ -74,7 +73,7 @@ export function clashBeats(data: ClashCardData): ClashBeat[] {
 }
 
 /** The stamp: FLED, SOMEHOW WON for an upset, otherwise DEFEATED (over the loser). */
-function stamp(data: ClashCardData): { text: string; verdict: string } {
+function stamp(data: ClashCardData, nameOf: (id: string) => string): { text: string; verdict: string } {
   const { clash } = data;
   const winnerOdds = clash.winner === clash.a ? clash.pA : 1 - clash.pA;
   const winner = nameOf(clash.winner).toUpperCase();
@@ -85,10 +84,12 @@ function stamp(data: ClashCardData): { text: string; verdict: string } {
 }
 
 export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reader: string; onDone: () => void }) {
+  const current = useRef(data.lines);
+  current.current = data.lines;
   const beats = useMemo(() => {
     const ids = [data.clash.a, data.clash.b, ...(data.clash.saviour ? [data.clash.saviour] : [])];
     audio.preload(ids.flatMap((id) => BARK_EMOTIONS.map((e) => barkPath(id, e))));
-    return clashBeats(data);
+    return clashBeats(data, () => current.current);
     // One run per Clash: generated lines swap in through `data.lines`, never by rebuilding the beats.
   }, [data.clash.no]);
   const { beat, index, skip, finish } = useCardPlayer(beats, onDone);
@@ -96,9 +97,12 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
   const at = (kind: Kind) => beats.findIndex((b) => b.kind === kind);
   const reached = (kind: Kind) => at(kind) >= 0 && index >= at(kind);
 
+  // A disguised Captain goes by his alias (US78).
+  const nameOf = (id: string) => data.names[id] ?? captainName(id);
   const speaking = beat?.line !== undefined ? lines[beat.line] : undefined;
+  const crashing = beat?.line !== undefined && dialogueBeat(lines, beat.line, clash.saviour).kind === 'crash';
   const settled = reached('outcome');
-  const { text: stampText, verdict } = stamp(data);
+  const { text: stampText, verdict } = stamp(data, nameOf);
   const trophyText = data.trophy ? (content.banks.trophies[data.trophy.key]?.text ?? data.trophy.key) : null;
   const side = (id: string) => (id === clash.a ? 'left' : 'right');
   // The Warlord is marked wherever he appears (#34).
@@ -112,7 +116,7 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
   const portrait = (id: string, which: 'left' | 'right') => {
     const classes = ['side', which];
     if (reached(which === 'left' ? 'slam-a' : 'slam-b')) classes.push('in');
-    if (speaking && speaking.speaker !== id && beat?.kind === 'line') classes.push('dim');
+    if (speaking && speaking.speaker !== id && !crashing) classes.push('dim');
     if (settled && id === clash.loser) classes.push('loser');
     return (
       <div className={classes.join(' ')}>
@@ -124,7 +128,7 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
 
   return (
     <div
-      className={`clash-card${beat?.kind === 'crash' ? ' judder' : ''}`}
+      className={`clash-card${crashing ? ' judder' : ''}`}
       role="dialog"
       aria-label={`Clash: ${nameOf(clash.a)} v ${nameOf(clash.b)}`}
       onClick={skip}
@@ -142,23 +146,21 @@ export function ClashCard({ data, reader, onDone }: { data: ClashCardData; reade
       <div className={`vs${beat?.kind === 'slam-b' ? ' on' : ''}`}>VS</div>
 
       {clash.saviour && (
-        <div className={`crash${beat?.kind === 'crash' ? ' on' : ''}`}>
+        <div className={`crash${crashing ? ' on' : ''}`}>
           <span className="burst">OI!</span>
           <Portrait face={data.faces[clash.saviour] ?? bareFace(clash.saviour)} name={nameOf(clash.saviour)} size={150} />
         </div>
       )}
 
       <div className={`stamp${settled ? ' on' : ''}`}>{stampText}</div>
-      {data.trophy && (
-        <div className={`trophy from-${side(data.trophy.from)}${reached('trophy') ? ' fly' : ''}`}>{trophyText}</div>
-      )}
+      {data.trophy && <div className={`trophy from-${side(data.trophy.from)}${reached('trophy') ? ' fly' : ''}`}>{trophyText}</div>}
 
       <div className="sub">
         {speaking && (
           <>
             <span className="who">
               {nameOf(speaking.speaker)}
-              {beat?.kind === 'crash' ? ', uninvited' : ''}
+              {crashing ? ', uninvited' : ''}
               {data.faces[speaking.speaker]?.muffled ? ' (muffled)' : ''}
             </span>
             <span className="txt">{speaking.text}</span>

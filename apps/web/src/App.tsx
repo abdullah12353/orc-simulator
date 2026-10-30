@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
-import { nextStep, type FirstOpenStep } from './first-open.ts';
 import { loadKrugIntroduction, useFirstOpen } from './first-open-data.ts';
 import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
@@ -129,7 +128,8 @@ function Worlds({ initial }: { initial?: string }) {
       <InstallPrompt />
       {selected && <PushOptIn key={`push-${selected}`} worldId={selected} />}
       {selected && <InvitePanel key={selected} worldId={selected} />}
-      {selected ? <WorldTabs worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
+      {/* Keyed by world: nothing of one world's state (first open, Herald, Hall picks) leaks into the next. */}
+      {selected ? <WorldTabs key={selected} worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
     </main>
   );
 }
@@ -138,20 +138,19 @@ function WorldTabs({ worldId }: { worldId: string }) {
   const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'hall' | 'facts'>('herald');
   const [story, setStory] = useState<number | null>(pushLink?.worldId === worldId ? pushLink.storyNo : null);
   useSeen(worldId);
-  // First open (#43, D58): Krúg's Introduction, then the edition, then the guided first Rumour. Never again.
-  const firstOpen = useFirstOpen(worldId);
-  const [done, setDone] = useState<FirstOpenStep | null>(null);
-  const step = firstOpen === undefined ? undefined : nextStep(firstOpen, done);
+  // First open (#43, D58): Krúg's Introduction, then the edition, then the guided first Rumour. Never again,
+  // but a first open cut short (the app closed) resumes where it stopped.
+  const { step, finish } = useFirstOpen(worldId);
   if (step === undefined) return <p className="quiet">…</p>;
-  if (step === 'introduction') return <FirstIntroduction worldId={worldId} onDone={() => setDone('introduction')} />;
+  if (step === 'introduction') return <FirstIntroduction worldId={worldId} onDone={() => finish('introduction')} />;
   return (
     <>
-      {step === 'edition' && (
+      {(step === 'edition' || (step === 'rumour' && tab !== 'meddle')) && (
         <p className="first-open">
-          That's the news. Now make some.{' '}
+          {step === 'edition' ? "That's the news. Now make some." : 'Your first Rumour is waiting.'}{' '}
           <button
             onClick={() => {
-              setDone('edition');
+              if (step === 'edition') finish('edition');
               setTab('meddle');
             }}
           >
@@ -191,7 +190,9 @@ function WorldTabs({ worldId }: { worldId: string }) {
         </button>
       </nav>
       {tab === 'herald' && story === null && <Herald worldId={worldId} />}
-      {tab === 'meddle' && <Meddle worldId={worldId} guided={step === 'rumour'} onSent={() => setDone('rumour')} />}
+      {tab === 'meddle' && (
+        <Meddle worldId={worldId} guided={step === 'rumour'} onSent={() => finish('rumour')} onSkipGuide={() => finish('rumour')} />
+      )}
       {tab === 'stable' && <Stable worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}
       {tab === 'hall' && <Hall worldId={worldId} />}
@@ -204,10 +205,10 @@ function WorldTabs({ worldId }: { worldId: string }) {
 function FirstIntroduction({ worldId, onDone }: { worldId: string; onDone: () => void }) {
   const [data, setData] = useState<IntroductionCardData | null | undefined>(undefined);
   useEffect(() => {
-    let live = true;
-    void loadKrugIntroduction(worldId).then((d) => live && setData(d));
+    let cancelled = false;
+    void loadKrugIntroduction(worldId).then((d) => !cancelled && setData(d));
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [worldId]);
   useEffect(() => {

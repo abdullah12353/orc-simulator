@@ -3,7 +3,7 @@
 // lead now, and by live play (#31) and Hall replays (#40).
 import { blameLine, content, type ComposedPortrait } from '@orc/content';
 import type { ClashFact, ClashLine, Fact } from '@orc/sim';
-import { faceAt, loadFaces } from './portrait-data.ts';
+import { faceAt, loadFaces, nameAt } from './portrait-data.ts';
 import { supabase } from './supabase.ts';
 
 export interface ClashCardData {
@@ -17,6 +17,8 @@ export interface ClashCardData {
   faces: Record<string, ComposedPortrait>;
   /** Who was Warlord going into it (#34): the one who fell in it, or else the Warlord now. */
   warlord: string | null;
+  /** What each Captain went by in it: a disguised one by his alias (US78). */
+  names: Record<string, string>;
 }
 
 /** Which of these story heads are Clashes. */
@@ -49,6 +51,7 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
   return {
     warlord: fell?.kind === 'warlord_fell' ? fell.captainId : ((world?.data?.warlord_id as string | null | undefined) ?? null),
     faces: Object.fromEntries(ids.map((id) => [id, faceAt(id, history.get(id), clash.no)])),
+    names: Object.fromEntries(ids.map((id) => [id, nameAt(id, history.get(id), clash.no)])),
     clash,
     lines: dialogue.data.lines as ClashLine[],
     source: dialogue.data.source as ClashCardData['source'],
@@ -77,5 +80,8 @@ async function loadBlameLine(worldId: string, factNo: number): Promise<string | 
   if (rows.length === 0) return null;
   const { data: players } = await supabase.from('players').select('id, display_name').eq('world_id', worldId);
   const names = new Map(((players ?? []) as { id: string; display_name: string }[]).map((p) => [p.id, p.display_name]));
-  return blameLine(content, rows.map((r) => ({ name: names.get(r.player_id) ?? 'Someone', verb: r.verb })));
+  return blameLine(
+    content,
+    rows.map((r) => ({ name: names.get(r.player_id) ?? 'Someone', verb: r.verb })),
+  );
 }

@@ -1,6 +1,7 @@
 // Clippings (#41): cut a story from one of my editions (create-clipping builds and freezes the snapshot
 // server-side), and read the world's Clippings shelf (`hall_clippings`, newest first, members only).
 import type { ClippingSnapshot } from '@orc/sim';
+import { nextRange } from './paging.ts';
 import { supabase } from './supabase.ts';
 
 export type { ClippingSnapshot };
@@ -35,15 +36,16 @@ const fromRow = (r: Row): Clipping => ({
 });
 const COLUMNS = 'clipping_id, fact_no, at, caption, clipped_by, snapshot';
 
-/** The Clippings shelf: newest first. */
-export async function loadClippings(worldId: string, limit = 50): Promise<Clipping[]> {
+/** A page of the Clippings shelf, newest first, `shown` rows in. */
+export async function loadClippings(worldId: string, shown = 0, size = 50): Promise<Clipping[]> {
+  const { from, to } = nextRange(shown, size);
   const { data, error } = await supabase
     .from('hall_clippings')
     .select(COLUMNS)
     .eq('world_id', worldId)
     .order('at', { ascending: false })
     .order('clipping_id', { ascending: false })
-    .limit(limit);
+    .range(from, to);
   if (error) throw new Error(error.message);
   return ((data ?? []) as Row[]).map(fromRow);
 }

@@ -3,6 +3,7 @@ import { ClashCard } from './ClashCard.tsx';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import { loadPlayers } from './hall-data.ts';
 import { IntroductionCard } from './IntroductionCard.tsx';
+import { OnStage } from './OnStage.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { supabase } from './supabase.ts';
 
@@ -35,27 +36,47 @@ async function loadStory(worldId: string, storyNo: number): Promise<Loaded> {
 export function StoryView({ worldId, storyNo, onClose }: { worldId: string; storyNo: number; onClose: () => void }) {
   const [story, setStory] = useState<Loaded | { error: string } | null>(null);
   const [playing, setPlaying] = useState(true);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    let live = true;
+    let cancelled = false;
+    setStory(null);
     void loadStory(worldId, storyNo)
-      .then((s) => live && setStory(s))
-      .catch((e: unknown) => live && setStory({ error: e instanceof Error ? e.message : String(e) }));
+      .then((s) => !cancelled && setStory(s))
+      .catch((e: unknown) => !cancelled && setStory({ error: e instanceof Error ? e.message : String(e) }));
     return () => {
-      live = false;
+      cancelled = true;
     };
-  }, [worldId, storyNo]);
+  }, [worldId, storyNo, attempt]);
 
   if (story === null) return <p className="quiet">…</p>;
   if ('error' in story) {
     return (
-      <p className="error" onClick={onClose}>
-        {story.error}
+      <p className="error" role="alert">
+        Couldn't open that story: {story.error}{' '}
+        <button className="link" onClick={() => setAttempt((n) => n + 1)}>
+          Try again
+        </button>{' '}
+        <button className="link" onClick={onClose}>
+          Back to the fortress
+        </button>
       </p>
     );
   }
-  if (playing && story.clash) return <ClashCard data={story.clash} reader={story.reader} onDone={() => setPlaying(false)} />;
-  if (playing && story.intro) return <IntroductionCard data={story.intro} onDone={() => setPlaying(false)} />;
+  if (playing && story.clash) {
+    return (
+      <OnStage name="story">
+        <ClashCard data={story.clash} reader={story.reader} onDone={() => setPlaying(false)} />
+      </OnStage>
+    );
+  }
+  if (playing && story.intro) {
+    return (
+      <OnStage name="story">
+        <IntroductionCard data={story.intro} onDone={() => setPlaying(false)} />
+      </OnStage>
+    );
+  }
   return (
     <section className="story-view">
       {story.lines.length === 0 ? (

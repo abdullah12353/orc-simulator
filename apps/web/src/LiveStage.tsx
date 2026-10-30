@@ -1,6 +1,7 @@
 // The live stage (#31): mounted for the open world whatever tab is showing. On each live nudge it
 // refetches the Facts of the ticks it hasn't seen and plays the new Clashes and notable events one at a
-// time (Introductions for Returns and step-ins, #33), queued so they never overlap.
+// time (Introductions for Returns and step-ins, #33), queued so they never overlap. Cards also take their
+// turn on the app's one stage (OnStage), so they never play over the Herald's lead or a Hall replay.
 import { useEffect, useRef, useState } from 'react';
 import { ClashCard } from './ClashCard.tsx';
 import { loadClashCard, loadClashDialogue, type ClashCardData } from './clash-card-data.ts';
@@ -8,6 +9,7 @@ import { IntroductionCard } from './IntroductionCard.tsx';
 import { loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { useDialogue, useLive } from './live.ts';
 import { enqueue, liveItems, type LiveFact, type LiveItem } from './live-queue.ts';
+import { OnStage } from './OnStage.tsx';
 import { supabase } from './supabase.ts';
 
 /** How long a notice holds: long enough to read, never so long it drags. */
@@ -81,7 +83,11 @@ function LiveIntroduction({ worldId, no, onDone }: { worldId: string; no: number
       cancelled = true;
     };
   }, [worldId, no]);
-  return data ? <IntroductionCard data={data} onDone={onDone} /> : null;
+  return data ? (
+    <OnStage name="live">
+      <IntroductionCard data={data} onDone={onDone} />
+    </OnStage>
+  ) : null;
 }
 
 function LiveClash({ worldId, no, reader, onDone }: { worldId: string; no: number; reader: string; onDone: () => void }) {
@@ -114,7 +120,11 @@ function LiveClash({ worldId, no, reader, onDone }: { worldId: string; no: numbe
       cancelled = true;
     };
   }, [worldId, no]);
-  return data ? <ClashCard data={data} reader={reader} onDone={onDone} /> : null;
+  return data ? (
+    <OnStage name="live">
+      <ClashCard data={data} reader={reader} onDone={onDone} />
+    </OnStage>
+  ) : null;
 }
 
 function LiveNotice({ line, onDone }: { line: string; onDone: () => void }) {

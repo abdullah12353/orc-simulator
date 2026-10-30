@@ -1,7 +1,7 @@
 // #43 First open and hints: the order of the first open, the guided Rumour's suggested picks, the hints.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { HINTS, nextStep, suggestRumour, type Hint } from '../src/first-open.ts';
+import { HINTS, nextStep, progressAfter, resumeFirstOpen, suggestRumour, type Hint } from '../src/first-open.ts';
 
 test("a first open runs Krúg's Introduction, then the edition, then the guided Rumour, then nothing", () => {
   assert.equal(nextStep(true, null), 'introduction');
@@ -38,4 +38,27 @@ test('every hint is a single line', () => {
   for (const hint of ['dare', 'backing', 'stable'] satisfies Hint[]) {
     assert.ok(HINTS[hint].length > 0 && HINTS[hint].length <= 140 && !HINTS[hint].includes('\n'), hint);
   }
+});
+
+// Closing the app mid-way must not lose the rest of the first open: begin_first_open is true only once, so
+// the device remembers how far it got (per world and Player) and picks up from there.
+test('a first open that was cut short resumes where it stopped, from what the device remembers', () => {
+  assert.deepEqual(resumeFirstOpen(true, null), { running: true, done: null });
+  assert.deepEqual(resumeFirstOpen(false, 'begun'), { running: true, done: null }, 'closed during the Introduction');
+  assert.deepEqual(resumeFirstOpen(false, 'introduction'), { running: true, done: 'introduction' }, 'closed on the edition');
+  assert.deepEqual(resumeFirstOpen(false, 'edition'), { running: true, done: 'edition' }, 'closed before the guided Rumour');
+  assert.equal(nextStep(true, resumeFirstOpen(false, 'edition').done), 'rumour');
+});
+
+test('a finished first open, or none at all, never comes back', () => {
+  assert.deepEqual(resumeFirstOpen(false, null), { running: false, done: null });
+  assert.deepEqual(resumeFirstOpen(false, 'rumour'), { running: false, done: null });
+  assert.deepEqual(resumeFirstOpen(false, 'nonsense'), { running: false, done: null });
+});
+
+test('the device remembers each step until the last, then forgets', () => {
+  assert.equal(progressAfter(null), 'begun');
+  assert.equal(progressAfter('introduction'), 'introduction');
+  assert.equal(progressAfter('edition'), 'edition');
+  assert.equal(progressAfter('rumour'), null);
 });
