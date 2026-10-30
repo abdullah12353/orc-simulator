@@ -58,6 +58,28 @@ button.link {
   padding: 0.6rem 0;
   border-bottom: 1px solid #44403c;
 }
+.invites {
+  margin: 1rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #44403c;
+}
+.invites summary {
+  cursor: pointer;
+}
+.invites ul {
+  list-style: none;
+  padding: 0;
+}
+.invites li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+.invites li input {
+  flex: 1 1 100%;
+}
 .facts time {
   color: #a8a29e;
   font-variant-numeric: tabular-nums;

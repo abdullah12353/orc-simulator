@@ -1,6 +1,7 @@
 // End-to-end smoke test of the served stack, doing what the PWA does over HTTP:
 // magic-link sign-in (code read from Mailpit) → create-world → ticks via the tick endpoint →
-// read the world's Fact lines under RLS. `npm run smoke:local`. Needs the functions served by the
+// read the world's Fact lines under RLS → invite a friend, who joins; a revoked invite is refused.
+// `npm run smoke:local`. Needs the functions served by the
 // stack (they're served from the worktree that ran `supabase start`).
 import { execSync } from 'node:child_process';
 
@@ -28,21 +29,25 @@ async function call(path, { method = 'GET', body, token, headers = {} } = {}) {
 
 // 1. Magic link: request it, find the link in Mailpit and follow it like a browser would. Auth
 // redirects to the app with the session in the URL fragment.
-await call('/auth/v1/otp', { method: 'POST', body: { email, create_user: true } });
-let link;
-for (let i = 0; i < 30 && !link; i++) {
-  await new Promise((r) => setTimeout(r, 500));
-  const list = await (await fetch(`${mailpit}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json();
-  const id = list.messages?.[0]?.ID;
-  if (!id) continue;
-  const msg = await (await fetch(`${mailpit}/api/v1/message/${id}`)).json();
-  link = /href="([^"]*\/auth\/v1\/verify[^"]*)"/.exec(msg.HTML ?? '')?.[1]?.replaceAll('&amp;', '&');
+async function signIn(email) {
+  await call('/auth/v1/otp', { method: 'POST', body: { email, create_user: true } });
+  let link;
+  for (let i = 0; i < 30 && !link; i++) {
+    await new Promise((r) => setTimeout(r, 500));
+    const list = await (await fetch(`${mailpit}/api/v1/search?query=${encodeURIComponent(`to:${email}`)}`)).json();
+    const id = list.messages?.[0]?.ID;
+    if (!id) continue;
+    const msg = await (await fetch(`${mailpit}/api/v1/message/${id}`)).json();
+    link = /href="([^"]*\/auth\/v1\/verify[^"]*)"/.exec(msg.HTML ?? '')?.[1]?.replaceAll('&amp;', '&');
+  }
+  if (!link) throw new Error('no magic link arrived in Mailpit');
+  const redirect = await fetch(link, { redirect: 'manual' });
+  const token = new URLSearchParams(new URL(redirect.headers.get('location')).hash.slice(1)).get('access_token');
+  if (!token) throw new Error(`magic link did not sign in: ${redirect.status} ${redirect.headers.get('location')}`);
+  console.log('signed in by magic link as', email);
+  return token;
 }
-if (!link) throw new Error('no magic link arrived in Mailpit');
-const redirect = await fetch(link, { redirect: 'manual' });
-const token = new URLSearchParams(new URL(redirect.headers.get('location')).hash.slice(1)).get('access_token');
-if (!token) throw new Error(`magic link did not sign in: ${redirect.status} ${redirect.headers.get('location')}`);
-console.log('signed in by magic link as', email);
+const token = await signIn(email);
 
 // 2. Create a world through the Edge Function, as the signed-in creator.
 const { worldId } = await call('/functions/v1/create-world', {
@@ -68,3 +73,26 @@ const anonRes = await fetch(`${api}/rest/v1/facts?world_id=eq.${worldId}&select=
 });
 if (anonRes.ok) throw new Error(`anon can read Facts: ${await anonRes.text()}`);
 console.log(`anon is refused (${anonRes.status}): ok`);
+
+// 5. Invites: the creator makes a link, a friend signs in and joins under their own name, the creator
+// revokes it, and the next friend is refused with a clear reason (what the PWA shows).
+const invite = await call('/rest/v1/rpc/create_invite', { method: 'POST', token, body: { world_id: worldId } });
+const friend = await signIn(`smoke-friend-${Date.now()}@test.local`);
+const [info] = await call('/rest/v1/rpc/invite_info', { method: 'POST', token: friend, body: { token: invite.token } });
+if (info.status !== 'ok' || info.world_name !== 'Smoke Fortress') throw new Error(`invite_info: ${JSON.stringify(info)}`);
+await call('/rest/v1/rpc/join_world', { method: 'POST', token: friend, body: { token: invite.token, display_name: 'Pal' } });
+const names = await call(`/rest/v1/players?world_id=eq.${worldId}&select=display_name&order=joined_at`, { token: friend });
+console.log('the friend joined; Players:', names.map((p) => p.display_name).join(', '));
+const privateRows = await call('/rest/v1/player_private?select=player_id,gold,meddles_available', { token: friend });
+if (privateRows.length !== 1) throw new Error(`the friend sees ${privateRows.length} player_private rows`);
+
+await call('/rest/v1/rpc/revoke_invite', { method: 'POST', token, body: { token: invite.token } });
+const late = await signIn(`smoke-late-${Date.now()}@test.local`);
+const refused = await fetch(`${api}/rest/v1/rpc/join_world`, {
+  method: 'POST',
+  headers: { apikey: anon, authorization: `Bearer ${late}`, 'content-type': 'application/json' },
+  body: JSON.stringify({ token: invite.token, display_name: 'Late' }),
+});
+const reason = (await refused.json()).message;
+if (refused.ok || reason !== 'invite_revoked') throw new Error(`revoked invite: ${refused.status} ${reason}`);
+console.log(`a revoked invite is refused (${refused.status} ${reason}): ok`);

@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './supabase.ts';
+import { clearPendingInvite, pendingInvite } from './invite-link.ts';
+import { InvitePanel, JoinWorld } from './Invites.tsx';
 
 // Tracer-bullet screens (#24): magic-link sign-in, create a world, and a bare list of the world's
 // Fact lines, newest first. Live refresh over Realtime arrives with #31; until then we poll.
@@ -8,6 +10,8 @@ const POLL_MS = 10_000;
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
+  const [invite, setInvite] = useState<string | null>(pendingInvite);
+  const [joined, setJoined] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     void supabase.auth.getSession().then(({ data }) => setSession(data.session));
@@ -16,11 +20,23 @@ export function App() {
   }, []);
 
   if (session === undefined) return <main className="page">…</main>;
-  if (!session) return <SignIn />;
-  return <Worlds />;
+  if (!session) return <SignIn invite={invite} />;
+  if (invite) {
+    return (
+      <JoinWorld
+        token={invite}
+        onDone={(worldId) => {
+          clearPendingInvite();
+          setInvite(null);
+          setJoined(worldId ?? undefined);
+        }}
+      />
+    );
+  }
+  return <Worlds key={joined} initial={joined} />;
 }
 
-function SignIn() {
+function SignIn({ invite }: { invite: string | null }) {
   const [email, setEmail] = useState('');
   const [state, setState] = useState<'idle' | 'sending' | 'sent' | { error: string }>('idle');
 
@@ -29,7 +45,9 @@ function SignIn() {
     setState('sending');
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: window.location.origin },
+      // Back to the invite after sign-in. If Auth doesn't allow that URL it falls back to the site
+      // URL, and the remembered invite (localStorage) still opens the accept screen.
+      options: { emailRedirectTo: invite ? `${window.location.origin}/join/${invite}` : window.location.origin },
     });
     setState(error ? { error: error.message } : 'sent');
   }
@@ -37,6 +55,7 @@ function SignIn() {
   return (
     <main className="page">
       <h1>ORC NONSENSE</h1>
+      {invite && state !== 'sent' && <p>You've been invited to a fortress. Sign in with your email to join.</p>}
       {state === 'sent' ? (
         <p>Check your email for the magic link.</p>
       ) : (
@@ -58,9 +77,9 @@ interface WorldRow {
   name: string;
 }
 
-function Worlds() {
+function Worlds({ initial }: { initial?: string }) {
   const [worlds, setWorlds] = useState<WorldRow[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initial ?? null);
 
   async function load() {
     const { data } = await supabase.from('worlds').select('id, name').order('created_at');
@@ -89,7 +108,8 @@ function Worlds() {
           ))}
         </select>
       )}
-      {selected ? <FactLines worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
+      {selected && <InvitePanel key={selected} worldId={selected} />}
+      {selected ? <FactLines worldId={selected} /> :<CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
     </main>
   );
 }
