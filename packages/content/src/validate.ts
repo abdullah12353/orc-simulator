@@ -1,5 +1,5 @@
 import { LEGENDARY_LAYER } from './portrait.ts';
-import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
+import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, PARENT_ROLES, TRAITS } from './pools.ts';
 import type { CastCard, ClashOutcome, Content } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
@@ -232,13 +232,6 @@ function validateRoster(c: Content): string[] {
   return errors;
 }
 
-/** The roles a reaction can cast from its parent Fact, per parent kind (incidents offer their Template's roles). */
-export const PARENT_ROLES = {
-  rumour: ['source', 'target', 'reached'],
-  clash: ['a', 'b', 'winner', 'loser', 'saviour'],
-  dare: ['target', 'victim'],
-} as const;
-
 const CLASH_OUTCOMES: ClashOutcome[] = ['won', 'defeated', 'fled'];
 const placeholders = (text: string) => [...String(text).matchAll(/\{([^}]*)\}/g)].map((m) => m[1]!);
 
@@ -331,7 +324,7 @@ function validateReactions(c: Content): string[] {
       if (t.roles?.some((r) => r.from)) errors.push(`${where}: only a reaction Template casts roles "from" a parent`);
       continue;
     }
-    if (!t.after || !['incident', 'rumour', 'clash', 'dare'].includes(t.after.kind)) {
+    if (!t.after || !(t.after.kind === 'incident' || Object.hasOwn(PARENT_ROLES, t.after.kind))) {
       errors.push(`${where}: a reaction Template needs "after" naming the Fact kind it follows`);
       continue;
     }

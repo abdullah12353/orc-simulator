@@ -9,6 +9,7 @@
 import { KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
+import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
 import { addMinutes, isoToMs } from './time.ts';
 import type { CaptainId, Cause, Fact, FactNo, Humiliation, Introduction } from './types.ts';
@@ -36,9 +37,10 @@ export const UNMASK = { clash: 0.5, rumour: 0.3 } as const;
 /**
  * A disaster in the story headed by `head` would kill `victim` (if he's still active). At the day's death
  * cap, or inside his grace, it becomes `death_averted` plus one Humiliation fitting `tag`. Otherwise he
- * dies: he Returns 2–12 h later, his disguise falls off, and a reserve Captain steps in.
+ * dies: he Returns 2–12 h later, his disguise falls off, and a reserve Captain steps in. `depth` is the
+ * reaction depth of `head`: the stepping in reacts on from there.
  */
-export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag): void {
+export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag, depth = 0): void {
   if (ctx.rosterOf(victim) !== 'active') return;
   const { state, rng } = ctx;
   const now = state.world.now;
@@ -84,7 +86,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   for (const h of ctx.humiliations().filter((x) => x.captainId === victim && x.cat === 'disguise')) {
     endHumiliation(ctx, h, 'died', head.no, [death]);
   }
-  stepIn(ctx, victim, death);
+  stepIn(ctx, victim, death, depth);
 }
 
 /**
@@ -112,9 +114,10 @@ export function processReturns(ctx: TickContext): void {
 
 /**
  * A disguised, living Captain is exposed with `chance`, as a story of its own that requires `head` (the
- * Clash he lost, or the Rumour about him). His disguise ends and he goes by his own name again.
+ * Clash he lost, or the Rumour about him). His disguise ends and he goes by his own name again. `depth` is
+ * the reaction depth of `head`.
  */
-export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'clash' | 'rumour', chance: number): void {
+export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'clash' | 'rumour', chance: number, depth = 0): void {
   if (ctx.rosterOf(id) !== 'active') return;
   const disguise = ctx.humiliations().find((h) => h.captainId === id && h.cat === 'disguise');
   if (!disguise || !ctx.rng.chance(chance)) return;
@@ -137,6 +140,7 @@ export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'cl
   ctx.facts.push(fact);
   gainInfamy(ctx, fact, id, INFAMY.unmasked);
   endHumiliation(ctx, disguise, 'unmasked', no, [{ fact: no, blame }]);
+  followUp(ctx, fact, depth);
 }
 
 /** The Return head, then its Humiliation, then whoever it benches; his held Meddles go back on a Fuse. */
@@ -183,6 +187,7 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
     ctx.diff.meddles.push({ id: m.id, status: 'pending', heldOn: null });
     ctx.diff.fuses.add.push({ no: ctx.allocNo(), dueAt: addMinutes(now, min + rng.int(max - min + 1)), meddleId: m.id });
   }
+  followUp(ctx, head, 0);
 }
 
 /**
@@ -221,7 +226,7 @@ function benchScore(ctx: TickContext, id: CaptainId): number {
 }
 
 /** A reserve Captain, drawn at random, steps into the active roster with his Introduction (a story head). */
-function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
+function stepIn(ctx: TickContext, dead: CaptainId, death: Cause, depth: number): void {
   if (ctx.activeCaptains().length >= ROSTER.activeSize) return;
   const reserve = Object.keys(ctx.state.captains)
     .filter((id) => ctx.rosterOf(id) === 'reserve')
@@ -230,7 +235,7 @@ function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
   const id = ctx.rng.pick(reserve);
   ctx.patchCaptain(id, { roster: 'active' });
   const no = ctx.allocNo();
-  ctx.facts.push({
+  const head: Fact = {
     no,
     at: ctx.state.world.now,
     storyNo: no,
@@ -242,7 +247,9 @@ function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
     kind: 'stepped_in',
     intro: ctx.introduction(id),
     replacing: dead,
-  });
+  };
+  ctx.facts.push(head);
+  followUp(ctx, head, depth);
 }
 
 interface Choice {

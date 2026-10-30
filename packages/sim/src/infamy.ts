@@ -12,6 +12,7 @@
 // - `drift(ctx, fact, id, delta)`: the ONE way to change Power (±1, kept within 1–10), with a `power` Fact.
 import { ROSTER_TEMPLATES, type OutcomeDef } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
 import type { CaptainId, Cause, Fact } from './types.ts';
 
@@ -187,6 +188,9 @@ export function crownSuccessor(ctx: TickContext): void {
   ctx.facts.push(head);
   ctx.setWarlord(id);
   gainInfamy(ctx, head, id, INFAMY.throne);
+  followUp(ctx, head, 0);
+  // Whatever that set off may have toppled him in turn: the throne is never left empty at the end of a tick.
+  if (ctx.warlord() === null) crownSuccessor(ctx);
 }
 
 /** Power moves by `delta` (±1), kept within 1–10, with a silent `power` consequence in `fact`'s story. */

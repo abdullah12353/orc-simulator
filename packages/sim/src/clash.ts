@@ -177,7 +177,7 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
   if (saviour) gainInfamy(ctx, head, saviour.id, INFAMY.clash.saviour);
   // A Warlord who loses any Clash, fled or not, loses the throne (D43).
   warlordFalls(ctx, head, loser, 'clash_loss');
-  consequences(ctx, head, powers);
+  consequences(ctx, head, powers, start.depth);
   followUp(ctx, head, start.depth);
   return head;
 }
@@ -187,7 +187,7 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
  * loser holds a new Grudge against the winner (and against a wrong saviour), a winner who beat someone
  * stronger gains a point of Power, and the loser may die. Each requires the head.
  */
-function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainId, number>): void {
+function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainId, number>, depth: number): void {
   const { state, rng } = ctx;
   const { a, b, winner, loser } = head;
   const headCause: Cause = { fact: head.no, blame: head.blame };
@@ -217,8 +217,8 @@ function consequences(ctx: TickContext, head: ClashFact, powers: Record<CaptainI
   if (powers[winner]! < powers[loser]!) drift(ctx, head, winner, 1);
 
   // The loser may die (or be Humiliated instead, at the cap or in grace); a disguised survivor may be Unmasked.
-  if (head.outcome !== 'fled' && rng.chance(CLASH.death)) disaster(ctx, head, loser, 'beaten');
-  else maybeUnmask(ctx, head, loser, 'clash', UNMASK.clash);
+  if (head.outcome !== 'fled' && rng.chance(CLASH.death)) disaster(ctx, head, loser, 'beaten', depth);
+  else maybeUnmask(ctx, head, loser, 'clash', UNMASK.clash, depth);
 }
 
 /** The winner takes one of the loser's Trophies, or a new one from the bank. Returns its text. */
