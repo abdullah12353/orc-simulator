@@ -1,8 +1,9 @@
 // open-edition (data-model §4.1): a Player's own "Since You Left" edition of The Gutter Herald, built on
 // open. It works out the window, decides between a new edition and a Stop press, ranks the story heads
 // and fills the lead, the headlines and the gutter. This is the templated edition: headlines are the
-// Facts' template lines, and each Meddle-caused story carries its templated Blame line (#29). The
-// Accusation, "Your Stable" and the model call come later.
+// Facts' template lines, and each Meddle-caused story carries its templated Blame line (#29). At most
+// one Accusation (#39) runs as a pull quote over its story's true Blame line. "Your Stable" and the
+// model call come later.
 import { blameLine, content as shippedContent, hashString, type BlameName, type Content } from '@orc/content';
 import { DAY_ZERO, londonDate } from '@orc/sim';
 import { jsonb, type Sql, type Tx } from './db.ts';
@@ -36,6 +37,20 @@ export interface EditionStory {
   blameLine: string | null;
 }
 
+/**
+ * The edition's one Accusation (D53): an accuser's pull quote, printed above the true Blame line of the
+ * story it belongs to, playing his clip of the accused's mangled name.
+ */
+export interface EditionAccusation {
+  factNo: number;
+  storyNo: number;
+  accuser: string;
+  /** The accuser's words, with the mangled name in them. */
+  line: string;
+  /** The name clip in storage (the current render). */
+  clipKey: string;
+}
+
 export interface Edition {
   id: string;
   no: number;
@@ -45,6 +60,7 @@ export interface Edition {
   masthead: Masthead;
   status: 'templated' | 'generated';
   stories: EditionStory[];
+  accusation: EditionAccusation | null;
 }
 
 export interface StopPressLine {
@@ -137,11 +153,13 @@ export async function openEdition(
 
     const no = (last?.no ?? 0) + 1;
     const masthead = buildMasthead(content, now, `${input.worldId}:${player.id}:${no}`);
-    const [edition] = await tx<{ id: string }[]>`
-      insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead, status)
-      values (${input.worldId}, ${player.id}, ${no}, ${from}, ${now}, ${now}, ${jsonb(tx, masthead)}, 'templated')
-      returning id`;
     const printed = candidates.slice(0, HERALD.lastRank);
+    const accusation = await loadAccusation(tx, input.worldId, { storyNos: printed.map((c) => c.no) });
+    const [edition] = await tx<{ id: string }[]>`
+      insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead, status, accusation_fact)
+      values (${input.worldId}, ${player.id}, ${no}, ${from}, ${now}, ${now}, ${jsonb(tx, masthead)}, 'templated',
+              ${accusation?.factNo ?? null})
+      returning id`;
     const blame = await loadBlameNames(tx, input.worldId, printed.map((c) => c.no));
     const stories: EditionStory[] = printed.map((c, i) => ({
       rank: i + 1,
@@ -162,7 +180,17 @@ export async function openEdition(
     await tx`update player_private set last_edition_no = ${no} where player_id = ${player.id}`;
 
     return {
-      edition: { id: edition!.id, no, coversFrom: from, coversTo: now, createdAt: now, masthead, status: 'templated', stories },
+      edition: {
+        id: edition!.id,
+        no,
+        coversFrom: from,
+        coversTo: now,
+        createdAt: now,
+        masthead,
+        status: 'templated',
+        stories,
+        accusation,
+      },
       created: true,
       reader: player.display_name,
       stopPress: [],
@@ -199,12 +227,48 @@ async function loadBlameNames(tx: Tx, worldId: string, storyNos: number[]): Prom
   return names;
 }
 
+/**
+ * §4.1: the highest-weight `accusation` Fact whose story is among `storyNos` (by its story's comedy
+ * weight, then newest), only if the accused Player (still in the world) has a render for that accuser.
+ * Or, for an edition already printed, its stored `factNo` (still only while the render exists).
+ */
+async function loadAccusation(
+  tx: Tx,
+  worldId: string,
+  which: { storyNos: number[] } | { factNo: number | null },
+): Promise<EditionAccusation | null> {
+  const storyNos = 'storyNos' in which ? which.storyNos : null;
+  const factNo = 'factNo' in which ? which.factNo : null;
+  if (storyNos ? storyNos.length === 0 : factNo === null) return null;
+  const [row] = await tx<{ no: number; story_no: number; accuser: string; line: string; clip_key: string }[]>`
+    select a.no::float8 as no, a.story_no::float8 as story_no, r.accuser_id as accuser, a.line, r.clip_key
+    from facts a
+    join facts h on h.world_id = a.world_id and h.no = a.story_no
+    join name_renders r on r.player_id = (a.payload->>'accused')::uuid and r.accuser_id = a.payload->>'accuser'
+    join players p on p.id = r.player_id and p.world_id = a.world_id and p.removed_at is null
+    where a.world_id = ${worldId} and a.kind = 'accusation'
+      and ${storyNos ? tx`a.story_no = any(${storyNos}::bigint[])` : tx`a.no = ${factNo}`}
+    order by h.comedy_weight desc nulls last, a.at desc, a.no
+    limit 1`;
+  return row ? { factNo: row.no, storyNo: row.story_no, accuser: row.accuser, line: row.line, clipKey: row.clip_key } : null;
+}
+
 async function loadEdition(tx: Tx, id: string): Promise<Edition> {
   const [e] = await tx<
-    { id: string; no: number; covers_from: string; covers_to: string; created_at: string; masthead: Masthead; status: Edition['status'] }[]
+    {
+      id: string;
+      world_id: string;
+      no: number;
+      covers_from: string;
+      covers_to: string;
+      created_at: string;
+      masthead: Masthead;
+      status: Edition['status'];
+      accusation_fact: number | null;
+    }[]
   >`
-    select id, no, to_json(covers_from)#>>'{}' as covers_from, to_json(covers_to)#>>'{}' as covers_to,
-           to_json(created_at)#>>'{}' as created_at, masthead, status
+    select id, world_id, no, to_json(covers_from)#>>'{}' as covers_from, to_json(covers_to)#>>'{}' as covers_to,
+           to_json(created_at)#>>'{}' as created_at, masthead, status, accusation_fact::float8 as accusation_fact
     from editions where id = ${id}`;
   const stories = await tx<
     { rank: number; story_no: number; slot: Slot; headline: string; standfirst: string | null; body: string | null; blame_line: string | null }[]
@@ -228,6 +292,7 @@ async function loadEdition(tx: Tx, id: string): Promise<Edition> {
       body: s.body,
       blameLine: s.blame_line,
     })),
+    accusation: await loadAccusation(tx, e!.world_id, { factNo: e!.accusation_fact }),
   };
 }
 

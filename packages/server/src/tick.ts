@@ -13,6 +13,7 @@ import {
   type GrudgeTag,
   type Intent,
   type Meddle,
+  type NameRender,
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
@@ -203,6 +204,16 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     where p.world_id = ${world.id} and p.removed_at is null
     order by p.id
     for update of pp`;
+  // Name renders (D59): an accuser can only name a Player he has a clip for. In accuser order, as memory has them.
+  const renderRows = await tx<{ player_id: string; accuser_id: string; clip_key: string; says: string }[]>`
+    select r.player_id, r.accuser_id, r.clip_key, r.says
+    from name_renders r join players p on p.id = r.player_id
+    where p.world_id = ${world.id} and p.removed_at is null
+    order by r.player_id, r.accuser_id collate "C"`;
+  const renders = new Map<string, NameRender[]>();
+  for (const r of renderRows) {
+    renders.set(r.player_id, [...(renders.get(r.player_id) ?? []), { accuser: r.accuser_id, clipKey: r.clip_key, says: r.says }]);
+  }
   const meddleRows = await tx<MeddleRow[]>`
     select id, player_id, verb, source_id, target_id, claim, subject, free_text, status, held_on
     from meddles where world_id = ${world.id} and status in ('pending', 'held') order by id`;
@@ -287,7 +298,12 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     players: Object.fromEntries(
       playerRows.map((p) => [
         p.id,
-        { gold: p.gold, meddles: p.meddles_available, firstMeddleDone: p.first_meddle_done, renderedFor: [] },
+        {
+          gold: p.gold,
+          meddles: p.meddles_available,
+          firstMeddleDone: p.first_meddle_done,
+          renderedFor: renders.get(p.id) ?? [],
+        },
       ]),
     ),
     meddles: Object.fromEntries(meddleRows.map((m) => [m.id, toMeddle(m)])),

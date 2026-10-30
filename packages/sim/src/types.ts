@@ -44,7 +44,7 @@ export interface WorldState {
   trophies: Trophy[];
   humiliations: Humiliation[];
   stakes: { playerId: PlayerId; captainId: CaptainId; amount: number }[];
-  players: Record<PlayerId, { gold: number; meddles: number; firstMeddleDone: boolean; renderedFor: CaptainId[] }>;
+  players: Record<PlayerId, { gold: number; meddles: number; firstMeddleDone: boolean; renderedFor: NameRender[] }>;
   meddles: Record<MeddleId, Meddle>;
   fuses: Fuse[];
   infamy7d: { captainId: CaptainId; fact: FactNo; at: Iso; amount: number }[];
@@ -53,6 +53,18 @@ export interface WorldState {
    * a templated Fact. Feeds the variety rule (D47). Entries outside the windows may linger; the sim ignores them.
    */
   recent: { templates: Record<TemplateId, Iso>; pairs: Record<string, Iso> };
+}
+
+/**
+ * A prerecorded clip of one accuser saying a Player's mangled name (a `name_renders` row, D59). Only a
+ * Player with one for an accuser can be Accused by him. Deviates from data-model §2 (`renderedFor:
+ * CaptainId[]`): the sim needs the clip key for the Fact and the mangled name for its line.
+ */
+export interface NameRender {
+  accuser: CaptainId;
+  clipKey: string;
+  /** The mangled name the clip says (one of `players.mangled_names`). */
+  says: string;
 }
 
 export type Roster = 'active' | 'reserve' | 'dead';
