@@ -287,7 +287,7 @@ test('a surprise Dare lands as a real Dare that fits him; a surprise Prank picks
   assert.deepEqual([...kinds].sort(), ['prank', 'stunt']);
 });
 
-test('a Dare on a dead target is held until he Returns; a Prank on a dead victim waits for the victim', () => {
+test('a Dare on a dead target is held until he Returns; a dead Prank victim holds nothing (data-model decision 16)', () => {
   const dead = (s: WorldState, id: CaptainId): WorldState => ({
     ...s,
     captains: { ...s.captains, [id]: { ...s.captains[id]!, roster: 'dead', returnsAt: addMinutes(s.world.now, 600) } },
@@ -300,6 +300,8 @@ test('a Dare on a dead target is held until he Returns; a Prank on a dead victim
   const s = setup();
   const prank = planted({ dareKey: 'prank.frog-helmet', victim: s.victim }, (st) => dead(st, s.victim));
   const p = simulate(prank.state, [], 3);
-  assert.equal(ofKind(p.facts, 'dare').length, 0);
-  assert.deepEqual(p.stateDiff.meddles, [{ id: prank.intent.id, status: 'held', heldOn: s.victim }]);
+  const [head] = ofKind(p.facts, 'dare');
+  assert.ok(head, 'only a dead target holds a Meddle: the Prank lands');
+  assert.equal(head.victim, s.victim);
+  assert.deepEqual(p.stateDiff.meddles, [{ id: prank.intent.id, status: 'landed', landedFact: head.no }]);
 });

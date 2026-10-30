@@ -76,12 +76,14 @@ function invalidDare(ctx: TickContext, d: Intent & DareIntent): string | null {
   return null;
 }
 
-/** A Dare's Fuse came due. Held (no Fact: still secret) while the target, or a Prank's victim, is dead. */
+/**
+ * A Dare's Fuse came due. Held (no Fact: still secret) while the target is dead. A dead Prank victim
+ * holds nothing, like a Rumour's dead source: only a dead target holds a Meddle (data-model decision 16).
+ */
 export function fireDare(ctx: TickContext, meddle: Meddle & { intent: DareIntent }): void {
   const d = meddle.intent;
-  const deadOne = [d.target, d.victim].find((id) => id !== undefined && ctx.rosterOf(id) === 'dead');
-  if (deadOne) {
-    ctx.diff.meddles.push({ id: meddle.id, status: 'held', heldOn: deadOne });
+  if (ctx.rosterOf(d.target) === 'dead') {
+    ctx.diff.meddles.push({ id: meddle.id, status: 'held', heldOn: d.target });
     return;
   }
   const pick = pickDare(ctx, d);
