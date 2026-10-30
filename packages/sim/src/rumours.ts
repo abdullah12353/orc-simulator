@@ -38,23 +38,32 @@ const isClaim = (c: unknown): c is Claim => (CLAIMS as readonly unknown[]).inclu
 export function consumeIntents(ctx: TickContext, intents: Intent[]): void {
   for (const intent of intents) {
     if (intent.kind === 'back' || intent.kind === 'withdraw') continue; // backing.ts consumes these (#36)
-    if (intent.kind === 'dare') {
-      consumeDare(ctx, intent); // dares.ts (#35)
-      continue;
+    consumeMeddle(ctx, intent);
+    // A Player's first Meddle is used up once submitted, even if it's rejected here: submit_intent sets
+    // `first_meddle_done` at once (#43), so memory agrees with the database after the tick.
+    if ((intent.kind === 'rumour' || intent.kind === 'dare') && ctx.state.players[intent.playerId]) {
+      ctx.markFirstMeddle(intent.playerId);
     }
-    if (!ctx.state.players[intent.playerId]) {
-      // A Player who has left: nothing to refund.
-      ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason: 'unknown_player' });
-      continue;
-    }
-    const reason = intent.kind === 'rumour' ? invalidRumour(ctx, intent) : 'unsupported_kind';
-    if (reason) {
-      ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason });
-      if (intent.kind === 'rumour') ctx.addMeddles(intent.playerId, 1);
-      continue;
-    }
-    plantRumour(ctx, intent as Intent & RumourIntent);
   }
+}
+
+function consumeMeddle(ctx: TickContext, intent: Intent): void {
+  if (intent.kind === 'dare') {
+    consumeDare(ctx, intent); // dares.ts (#35)
+    return;
+  }
+  if (!ctx.state.players[intent.playerId]) {
+    // A Player who has left: nothing to refund.
+    ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason: 'unknown_player' });
+    return;
+  }
+  const reason = intent.kind === 'rumour' ? invalidRumour(ctx, intent) : 'unsupported_kind';
+  if (reason) {
+    ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason });
+    if (intent.kind === 'rumour') ctx.addMeddles(intent.playerId, 1);
+    return;
+  }
+  plantRumour(ctx, intent as Intent & RumourIntent);
 }
 
 function invalidRumour(ctx: TickContext, r: Intent & RumourIntent): string | null {
