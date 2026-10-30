@@ -28,10 +28,13 @@ export function PushOptIn({ worldId }: { worldId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let live = true;
-    if (support === 'available') void isSubscribed(worldId).then((v) => live && setOn(v)).catch(() => live && setOn(false));
+    let cancelled = false;
+    if (support === 'available')
+      void isSubscribed(worldId)
+        .then((v) => !cancelled && setOn(v))
+        .catch(() => !cancelled && setOn(false));
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [worldId, support]);
 
@@ -57,7 +60,9 @@ export function PushOptIn({ worldId }: { worldId: string }) {
 
   return (
     <p className="pushes">
-      {on ? 'Pushes are on for this fortress.' : 'Get a nudge when your orcs die, come back, take the throne, or your meddling lands.'}{' '}
+      {on
+        ? 'Pushes are on for this fortress.'
+        : 'Get a nudge when the Captains you back die, come back or take the throne, or when your Meddles land.'}{' '}
       <button className="link" disabled={busy} onClick={() => void toggle()}>
         {on ? 'Turn off' : 'Turn on pushes'}
       </button>
