@@ -16,10 +16,12 @@ const failsWith = (reason: string) => (e: unknown) => {
   return true;
 };
 
-async function joinAs(world: World, name: string) {
+/** Joins by invite at the clock's time (join_world stamps the real clock, so the test moves it onto the fake one). */
+async function joinAs(world: World, name: string, clock?: Clock) {
   const [inv] = await asUserCommitted(world.userId, (tx) => tx`select token from create_invite(${world.worldId})`);
   const userId = await newUser();
   const [row] = await asUserCommitted(userId, (tx) => tx`select join_world(${inv!.token}, ${name}) as id`);
+  if (clock) await db()`update players set joined_at = ${clock.iso()} where id = ${row!.id}`;
   return { worldId: world.worldId, userId, playerId: row!.id as string };
 }
 
@@ -54,7 +56,7 @@ test("a late joiner's first edition covers the last 24 h, not day zero", async (
   ]);
 
   clock.advance(72 * 60); // three days later, a friend joins
-  const late = await joinAs(world, 'Dazza');
+  const late = await joinAs(world, 'Dazza', clock);
   const out = await openEdition({ sql: db(), now: clock.now }, { userId: late.userId, worldId: world.worldId });
 
   assert.equal(out.created, true);
@@ -67,15 +69,32 @@ test("a late joiner's first edition covers the last 24 h, not day zero", async (
   assert.ok(out.edition.stories.every((s) => s.storyNo > old!), 'nothing from day zero either');
 });
 
-test('the first window never reaches back more than 24 h: a friend who joins 90 min in gets most of day zero', async () => {
+test('a first window reaches back 24 h from when the Player joined: a friend who joins 90 min in gets most of day zero', async () => {
   const clock = fakeClock();
   const createdAt = clock.iso();
   const world = await freshWorld({ clock });
   clock.advance(90);
-  const friend = await joinAs(world, 'Dazza');
+  const friend = await joinAs(world, 'Dazza', clock);
+  clock.advance(3 * 60); // and first opens the app 3 h after joining
   const out = await openEdition({ sql: db(), now: clock.now }, { userId: friend.userId, worldId: world.worldId });
-  assert.equal(iso(out.edition.coversFrom), iso(Date.parse(createdAt) - 22.5 * HOUR_MS), 'the last 24 h');
+  assert.equal(iso(out.edition.coversFrom), iso(Date.parse(createdAt) - 22.5 * HOUR_MS), 'the 24 h before they joined');
+  assert.equal(iso(out.edition.coversTo), clock.iso(), 'and everything since');
   assert.ok(out.edition.stories.length > 0, 'day zero still fills it');
+});
+
+test("the creator's first edition is all of day zero, however long after creating the world they first open it", async () => {
+  const clock = fakeClock();
+  const createdAt = clock.iso();
+  const world = await freshWorld({ clock });
+  const [early] = await insertStoryFacts(world.worldId, createdAt, [
+    { minute: -(24 * 60) + 30, weight: 40, line: 'Half an hour into day zero, Krúg sat on the war drum.' },
+  ]);
+  clock.advance(3 * 60);
+  const out = await openEdition({ sql: db(), now: clock.now }, { userId: world.userId, worldId: world.worldId });
+  assert.equal(out.edition.no, 1);
+  assert.equal(iso(out.edition.coversFrom), iso(Date.parse(createdAt) - 24 * HOUR_MS), 'day zero, from its start');
+  assert.equal(iso(out.edition.coversTo), clock.iso());
+  assert.ok(out.edition.stories.some((s) => s.storyNo === early), "day zero's first hours are in it");
 });
 
 test('first_meddle_done is set once the guided Rumour is submitted, and that Rumour gets the 2–5 min Fuse', async () => {
