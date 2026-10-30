@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
+import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
 import { useLive, useSeen } from './live.ts';
 import { LiveStage } from './LiveStage.tsx';
@@ -121,7 +122,7 @@ function Worlds({ initial }: { initial?: string }) {
 }
 
 function WorldTabs({ worldId }: { worldId: string }) {
-  const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'facts'>('herald');
+  const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'hall' | 'facts'>('herald');
   useSeen(worldId);
   return (
     <>
@@ -139,6 +140,9 @@ function WorldTabs({ worldId }: { worldId: string }) {
         <button className={tab === 'captains' ? 'on' : ''} onClick={() => setTab('captains')}>
           Captains
         </button>
+        <button className={tab === 'hall' ? 'on' : ''} onClick={() => setTab('hall')}>
+          Hall of Shame
+        </button>
         <button className={tab === 'facts' ? 'on' : ''} onClick={() => setTab('facts')}>
           What happened
         </button>
@@ -147,6 +151,7 @@ function WorldTabs({ worldId }: { worldId: string }) {
       {tab === 'meddle' && <Meddle worldId={worldId} />}
       {tab === 'stable' && <Stable worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}
+      {tab === 'hall' && <Hall worldId={worldId} />}
       {tab === 'facts' && <FactLines worldId={worldId} />}
     </>
   );

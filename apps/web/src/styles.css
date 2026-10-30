@@ -591,3 +591,53 @@ button.link {
 .intro-card .intro-name .title.legendary {
   color: #c084fc;
 }
+
+/* The Hall of Shame (#40) */
+.hall-list {
+  list-style: none;
+  padding: 0;
+}
+.hall-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #44403c;
+}
+.hall-list time,
+.trace time {
+  display: block;
+  color: #a8a29e;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.hall-list .story-line {
+  display: block;
+  font-size: 0.9rem;
+}
+.hall-actions {
+  display: flex;
+  gap: 1rem;
+}
+.shelf-tag {
+  margin-right: 0.5rem;
+  padding: 0 0.35rem;
+  border: 1px solid #44403c;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.shelf-tag.legend,
+.legend-name {
+  color: #c084fc;
+}
+.hall-pick {
+  display: block;
+  margin: 0.5rem 0;
+}
+.trace {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #fcd34d;
+  background: #292524;
+}
+.trace ol {
+  padding-left: 1.25rem;
+}
