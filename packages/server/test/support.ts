@@ -58,6 +58,15 @@ export async function asUser<T>(userId: string, fn: (tx: Sql) => Promise<T>, sql
 }
 class Rollback extends Error {}
 
+/** Like `asUser`, but commits: for multi-step flows (invites, joins) whose effects later steps read. */
+export async function asUserCommitted<T>(userId: string, fn: (tx: Sql) => Promise<T>, sql: Sql = db()): Promise<T> {
+  return (await sql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: userId, role: 'authenticated' })}, true)`;
+    await tx`set local role authenticated`;
+    return fn(tx as unknown as Sql);
+  })) as T;
+}
+
 /** The tick_seq a fresh world is at: day zero already ran this many ticks. */
 export const AFTER_DAY_ZERO = DAY_ZERO.steps;
 
