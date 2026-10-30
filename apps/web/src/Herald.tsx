@@ -102,8 +102,11 @@ const EDITION_COLUMNS =
 const PICKUP = { everyMs: 3_000, tries: 12 } as const;
 /** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
 const playedKey = (editionId: string) => `orc:lead-played:${editionId}`;
-/** A Legendary deed leading the edition gets its fanfare (D52), once per edition on this device. */
-const fanfareKey = (editionId: string) => `orc:fanfare:${editionId}`;
+/**
+ * The lead story gets the announcer (D52), once per edition on this device: the fanfare when a
+ * Legendary deed leads, else the lead stinger.
+ */
+const announcedKey = (editionId: string) => `orc:fanfare:${editionId}`;
 
 /**
  * The Accusations of editions read under RLS (#39): their `accusation_fact`s, shown by the same rule the
@@ -205,10 +208,11 @@ export function Herald({ worldId }: { worldId: string }) {
       if (cancelled) return;
       learn(heads);
       learnDeeds(found);
-      // A Legendary deed always leads, with a fanfare (D52), before its set piece if it has one.
-      if (found.has(lead.storyNo) && !localStorage.getItem(fanfareKey(edition.id))) {
-        localStorage.setItem(fanfareKey(edition.id), '1');
-        void sting('fanfare');
+      // The announcer introduces the lead (D52), before its set piece if it has one. A Legendary
+      // deed always leads, with a fanfare.
+      if (!localStorage.getItem(announcedKey(edition.id))) {
+        localStorage.setItem(announcedKey(edition.id), '1');
+        void sting(found.has(lead.storyNo) ? 'fanfare' : 'lead');
       }
       const kind = heads.get(lead.storyNo);
       if (!kind || localStorage.getItem(playedKey(edition.id))) return;
