@@ -29,6 +29,7 @@ import {
   upsertHumiliations,
   upsertTrophies,
 } from './commit.ts';
+import { commitBacking } from './backing.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 import { broadcast } from './realtime.ts';
 
@@ -258,6 +259,12 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     where p.world_id = ${world.id} and p.removed_at is null
     order by p.id
     for update of pp`;
+  // Stakes of Players still in the world, in (Player, Captain) order as applyDiff keeps them.
+  const stakeRows = await tx<{ playerId: string; captainId: string; amount: number }[]>`
+    select s.player_id as "playerId", s.captain_id as "captainId", s.amount
+    from stakes s join players p on p.id = s.player_id
+    where s.world_id = ${world.id} and p.removed_at is null
+    order by s.player_id::text collate "C", s.captain_id collate "C"`;
   // Name renders (D59): an accuser can only name a Player he has a clip for. In accuser order, as memory has them.
   const renderRows = await tx<{ player_id: string; accuser_id: string; clip_key: string; says: string }[]>`
     select r.player_id, r.accuser_id, r.clip_key, r.says
@@ -366,7 +373,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
         ended: false,
       }),
     ),
-    stakes: [],
+    stakes: stakeRows.map((s) => ({ playerId: s.playerId, captainId: s.captainId, amount: s.amount })),
     players: Object.fromEntries(
       playerRows.map((p) => [
         p.id,
@@ -426,16 +433,6 @@ async function commitDiff(
   diff: StateDiff,
   at: { tickSeq: number; now: string; facts: Fact[] },
 ): Promise<void> {
-  const unsupported = (
-    [
-      ['stakes', diff.stakes],
-      ['ledger', diff.ledger],
-    ] as [string, unknown[]][]
-  ).filter(([, list]) => list.length > 0);
-  if (unsupported.length > 0) {
-    throw new Error(`commitDiff: unsupported diff sections: ${unsupported.map(([n]) => n).join(', ')}`);
-  }
-
   const w = diff.world;
   if (Object.keys(w).length > 0) {
     await tx`
@@ -517,6 +514,7 @@ async function commitDiff(
       from jsonb_array_elements(${jsonb(tx, diff.playerDeltas)}) as d
       where pp.player_id = (d->>'playerId')::uuid`;
   }
+  await commitBacking(tx, worldId, diff, at.now);
 }
 
 /** Queued Intents, oldest first. SKIP LOCKED: an Intent still being written is left for the next tick. */
