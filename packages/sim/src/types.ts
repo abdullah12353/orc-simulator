@@ -1,7 +1,7 @@
 // The simulate() contract, as locked in data-model.md §2. Later tickets fill in behaviour, not shapes.
-import type { BankKey, CaptainId, Content, TemplateId } from '@orc/content';
+import type { BankKey, CaptainId, Claim, Content, TemplateId } from '@orc/content';
 
-export type { BankKey, CaptainId, Content, TemplateId };
+export type { BankKey, CaptainId, Claim, Content, TemplateId };
 export type PlayerId = string; // uuid
 export type MeddleId = string; // uuid
 export type FactNo = number; // per-world bigint, allocated from state.world.nextNo
@@ -109,7 +109,6 @@ export interface Fuse {
 
 // ---- intents ----
 export type IntentEnvelope = { id: string; playerId: PlayerId; at: Iso };
-export type Claim = 'insult' | 'fear' | 'theft' | 'mum' | 'coup';
 export type Subject = { from: 'trait' | 'fear' | 'trophy'; key: string };
 export type RumourIntent = {
   kind: 'rumour';

@@ -1,5 +1,8 @@
 export * from './types.ts';
 export { simulate, emptyDiff, AMBIENT_CHANCE } from './simulate.ts';
+export { RUMOUR, type RumourOutcome } from './rumours.ts';
+
+export { MEDDLE_CAP, AFFINITY_LIMIT } from './context.ts';
 export { applyDiff, stateHash } from './state.ts';
 export { castWorld, STARTING } from './cast.ts';
 export { tickSeed } from './rng.ts';
