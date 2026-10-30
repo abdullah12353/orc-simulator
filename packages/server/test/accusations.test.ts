@@ -25,8 +25,11 @@ async function joinAs(world: World, displayName: string) {
 
 const clipKey = (playerId: string, accuser: string) => `names/${playerId}/${accuser}.mp3`;
 
+/** The operator's clock (a render's `rendered_at` comes from it, never the real clock). */
+const operator = fakeClock('2026-10-30T09:00:00.000Z');
+
 async function renderFor(playerId: string, accuser: string, says: string): Promise<NameRender> {
-  await registerNameRender({ sql: db() }, { playerId, accuserId: accuser, clipKey: clipKey(playerId, accuser), says });
+  await registerNameRender({ sql: db(), now: operator.now }, { playerId, accuserId: accuser, clipKey: clipKey(playerId, accuser), says });
   return { accuser, clipKey: clipKey(playerId, accuser), says };
 }
 
@@ -36,7 +39,8 @@ test('the operator registers a name render per accuser; its mangled name joins t
   await renderFor(world.playerId, 'krug', 'Mohhh');
   await renderFor(world.playerId, ACCUSERS.find((a) => a !== 'krug')!, 'Mo-Mo');
   // Re-rendering replaces the clip; a name already on the list isn't added twice.
-  await registerNameRender({ sql: db() }, { playerId: world.playerId, accuserId: 'krug', clipKey: 'names/v2.mp3', says: 'Mohhh' });
+  const rerendered = fakeClock('2026-10-30T10:30:00.000Z');
+  await registerNameRender({ sql: db(), now: rerendered.now }, { playerId: world.playerId, accuserId: 'krug', clipKey: 'names/v2.mp3', says: 'Mohhh' });
 
   const [p] = await db()`select mangled_names from players where id = ${world.playerId}`;
   assert.deepEqual(p!.mangled_names, ['Mohhh', 'Mo-Mo']);
@@ -44,6 +48,11 @@ test('the operator registers a name render per accuser; its mangled name joins t
     select accuser_id, clip_key, says from name_renders where player_id = ${world.playerId} order by accuser_id`);
   assert.equal(rows.length, 2);
   assert.deepEqual(rows.find((r) => r.accuser_id === 'krug'), { accuser_id: 'krug', clip_key: 'names/v2.mp3', says: 'Mohhh' });
+  // rendered_at is the injected clock's time, not the real clock's.
+  const stamps = await db()`select accuser_id, rendered_at from name_renders where player_id = ${world.playerId}`;
+  for (const r of stamps) {
+    assert.equal((r.rendered_at as Date).toISOString(), r.accuser_id === 'krug' ? rerendered.iso() : operator.iso());
+  }
 
   const outsider = await newUser();
   assert.equal((await asUser(outsider, (tx) => tx`select 1 from name_renders where player_id = ${world.playerId}`)).length, 0);
@@ -54,11 +63,11 @@ test('the operator registers a name render per accuser; its mangled name joins t
 
   const notAnAccuser = content.cast.find((c) => !c.accuser)!.id;
   await assert.rejects(
-    registerNameRender({ sql: db() }, { playerId: world.playerId, accuserId: notAnAccuser, clipKey: 'k', says: 'Mo' }),
+    registerNameRender({ sql: db(), now: operator.now }, { playerId: world.playerId, accuserId: notAnAccuser, clipKey: 'k', says: 'Mo' }),
     (e) => e instanceof NameRenderError && e.message === 'not_an_accuser',
   );
   await assert.rejects(
-    registerNameRender({ sql: db() }, { playerId: randomUUID(), accuserId: 'krug', clipKey: 'k', says: 'Mo' }),
+    registerNameRender({ sql: db(), now: operator.now }, { playerId: randomUUID(), accuserId: 'krug', clipKey: 'k', says: 'Mo' }),
     (e) => e instanceof NameRenderError && e.message === 'no_such_player',
   );
 });

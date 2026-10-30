@@ -22,7 +22,7 @@ export class NameRenderError extends Error {}
  * the Player's `mangled_names` if it isn't there yet.
  */
 export async function registerNameRender(
-  deps: { sql: Sql; content?: Content; now?: () => Date },
+  deps: { sql: Sql; content?: Content; now: () => Date },
   input: NameRenderInput,
 ): Promise<void> {
   const content = deps.content ?? shippedContent;
@@ -30,7 +30,7 @@ export async function registerNameRender(
   const clipKey = input.clipKey.trim();
   const says = input.says.trim();
   if (!clipKey || !says) throw new NameRenderError('blank');
-  const at = (deps.now?.() ?? new Date()).toISOString();
+  const renderedAt = deps.now().toISOString();
 
   await deps.sql.begin(async (tx) => {
     const [player] = await tx<{ id: string }[]>`
@@ -38,7 +38,7 @@ export async function registerNameRender(
     if (!player) throw new NameRenderError('no_such_player');
     await tx`
       insert into name_renders (player_id, accuser_id, clip_key, says, rendered_at)
-      values (${input.playerId}, ${input.accuserId}, ${clipKey}, ${says}, ${at})
+      values (${input.playerId}, ${input.accuserId}, ${clipKey}, ${says}, ${renderedAt})
       on conflict (player_id, accuser_id) do update set
         clip_key = excluded.clip_key, says = excluded.says, rendered_at = excluded.rendered_at`;
     await tx`
