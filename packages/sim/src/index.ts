@@ -1,6 +1,7 @@
 export * from './types.ts';
 export { simulate, emptyDiff, AMBIENT_CHANCE } from './simulate.ts';
 export { RUMOUR, type RumourOutcome } from './rumours.ts';
+export { DAY_ROLL } from './day.ts';
 
 export { MEDDLE_CAP, AFFINITY_LIMIT } from './context.ts';
 export { applyDiff, stateHash } from './state.ts';
