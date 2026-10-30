@@ -87,6 +87,16 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   stepIn(ctx, victim, death);
 }
 
+/**
+ * A disaster in the story headed by `head` leaves `victim` alive but marked: one Humiliation fitting `tag`
+ * (a botched Dare that didn't kill him, #35). Nothing if he isn't active or has every fitting one already.
+ */
+export function humiliate(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag): void {
+  if (ctx.rosterOf(victim) !== 'active') return;
+  const choice = chooseHumiliation(ctx, victim, tag);
+  if (choice) applyHumiliation(ctx, victim, choice, head.no, [{ fact: head.no, blame: head.blame }]);
+}
+
 /** Bandages that are due heal, then every Captain whose Return is due comes back, in (returnsAt, slug) order. */
 export function processReturns(ctx: TickContext): void {
   const now = isoToMs(ctx.state.world.now);

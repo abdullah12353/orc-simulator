@@ -33,6 +33,8 @@ export function parentRoles(f: Fact): { roles: Record<string, CaptainId>; outcom
         roles: { a: f.a, b: f.b, winner: f.winner, loser: f.loser, ...(f.saviour ? { saviour: f.saviour } : {}) },
         outcome: f.outcome,
       };
+    case 'dare':
+      return { roles: { target: f.target, ...(f.victim !== undefined ? { victim: f.victim } : {}) }, outcome: f.outcome };
     default:
       return null;
   }
