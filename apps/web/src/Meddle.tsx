@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CLAIMS, content, subjectText, type Claim } from '@orc/content';
 import { displayName } from './Captains.tsx';
+import { DarePicker } from './DarePicker.tsx';
 import { reasonText } from './invite-link.ts';
 import { supabase } from './supabase.ts';
 
@@ -68,15 +69,15 @@ export function Meddle({ worldId }: { worldId: string }) {
 
   if (data === null) return <p className="quiet">…</p>;
   if ('error' in data) return <p className="error">{data.error}</p>;
+  const onSubmitted = (left: number) => {
+    setData({ ...data, meddlesLeft: left, pending: data.pending + 1 });
+    void load();
+  };
   return (
-    <RumourComposer
-      worldId={worldId}
-      data={data}
-      onSubmitted={(left) => {
-        setData({ ...data, meddlesLeft: left, pending: data.pending + 1 });
-        void load();
-      }}
-    />
+    <>
+      <RumourComposer worldId={worldId} data={data} onSubmitted={onSubmitted} />
+      <DarePicker worldId={worldId} data={data} onSubmitted={onSubmitted} />
+    </>
   );
 }
 

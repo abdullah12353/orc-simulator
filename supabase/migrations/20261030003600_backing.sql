@@ -105,9 +105,10 @@ end;
 $$;
 revoke all on function submit_backing_intent(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
 
--- submit_intent, as #28 left it, plus one branch: `back` and `withdraw` go to submit_backing_intent
--- (marked "#36" below). Fails with: not_a_player, intent_id_taken, unsupported_kind, bad_rumour,
--- no_meddles_left, bad_stake, not_enough_gold, no_stake.
+-- submit_intent, as #35 left it (dispatching on kind with IF/ELSIF), plus one branch: `back` and
+-- `withdraw` go to submit_backing_intent and debit no Meddle (marked "#36" below). Fails with:
+-- not_a_player, intent_id_taken, unsupported_kind, bad_rumour, bad_dare, no_meddles_left, bad_stake,
+-- not_enough_gold, no_stake.
 create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
@@ -117,7 +118,6 @@ declare
   left_ int;
   prior intents;
   p jsonb := coalesce(submit_intent.payload, '{}'::jsonb);
-  free text;
   clean jsonb;
 begin
   if me is null then
@@ -136,44 +136,25 @@ begin
     return;
   end if;
 
-  -- #36: Backing.
-  if submit_intent.kind in ('back', 'withdraw') then
+  if submit_intent.kind = 'rumour' then
+    clean := clean_rumour_payload(p);
+  elsif submit_intent.kind = 'dare' then
+    clean := clean_dare_payload(p);
+  elsif submit_intent.kind in ('back', 'withdraw') then
+    -- #36: Backing spends gold, not a Meddle.
     perform submit_backing_intent(me, submit_intent.id, submit_intent.world_id, submit_intent.kind, p);
     return query select submit_intent.id, left_;
     return;
-  end if;
-
-  if submit_intent.kind <> 'rumour' then
-    raise exception 'unsupported_kind' using errcode = 'P0001', detail = 'Only Rumours can be planted so far.';
-  end if;
-
-  free := nullif(btrim(coalesce(p->>'freeText', '')), '');
-  if jsonb_typeof(p->'source') is distinct from 'string' or jsonb_typeof(p->'target') is distinct from 'string'
-     or p->>'source' = p->>'target'
-     or coalesce(p->>'claim', '') not in ('insult', 'fear', 'theft', 'mum', 'coup')
-     or jsonb_typeof(p->'subject') is distinct from 'object'
-     or coalesce(p->'subject'->>'from', '') not in ('trait', 'fear', 'trophy')
-     or jsonb_typeof(p->'subject'->'key') is distinct from 'string'
-     or (p ? 'firstMeddle' and jsonb_typeof(p->'firstMeddle') <> 'boolean')
-     or length(free) > 200 then
-    raise exception 'bad_rumour' using errcode = 'P0001', detail = 'A Rumour needs a source, a target, a Claim and a subject.';
+  else
+    raise exception 'unsupported_kind' using errcode = 'P0001', detail = 'That kind of intent is not open yet.';
   end if;
 
   if left_ < 1 then
     raise exception 'no_meddles_left' using errcode = 'P0001', detail = 'No Meddles left today.';
   end if;
 
-  clean := jsonb_build_object(
-    'kind', 'rumour',
-    'source', p->>'source',
-    'target', p->>'target',
-    'claim', p->>'claim',
-    'subject', jsonb_build_object('from', p->'subject'->>'from', 'key', p->'subject'->>'key'),
-    'firstMeddle', coalesce((p->>'firstMeddle')::boolean, false)
-  ) || case when free is null then '{}'::jsonb else jsonb_build_object('freeText', free) end;
-
   insert into intents (id, world_id, player_id, kind, payload, created_at, status)
-  values (submit_intent.id, submit_intent.world_id, me, 'rumour', clean, now(), 'queued');
+  values (submit_intent.id, submit_intent.world_id, me, submit_intent.kind, clean, now(), 'queued');
   update player_private pp set meddles_available = pp.meddles_available - 1
   where pp.player_id = me
   returning pp.meddles_available into left_;

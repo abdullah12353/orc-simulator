@@ -87,13 +87,29 @@ interface MeddleRow {
   claim: Claim;
   subject: { from: 'trait' | 'fear' | 'trophy'; key: string } | null;
   free_text: string | null;
+  dare_key: string | null;
+  victim_id: string | null;
   status: 'pending' | 'held';
   held_on: string | null;
 }
 
 /** A Meddle row as the sim holds it: exactly what the sim stored (`firstMeddle` did its job at fusing). */
 function toMeddle(m: MeddleRow): Meddle {
-  if (m.verb !== 'rumour') throw new Error(`loadState: ${m.verb} Meddles are not loaded yet`);
+  if (m.verb === 'dare') {
+    return {
+      id: m.id,
+      playerId: m.player_id,
+      intent: {
+        kind: 'dare',
+        target: m.target_id,
+        dareKey: m.dare_key!,
+        ...(m.victim_id !== null ? { victim: m.victim_id } : {}),
+        firstMeddle: false,
+      },
+      status: m.status,
+      heldOn: m.held_on,
+    };
+  }
   return {
     id: m.id,
     playerId: m.player_id,
@@ -276,7 +292,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     renders.set(r.player_id, [...(renders.get(r.player_id) ?? []), { accuser: r.accuser_id, clipKey: r.clip_key, says: r.says }]);
   }
   const meddleRows = await tx<MeddleRow[]>`
-    select id, player_id, verb, source_id, target_id, claim, subject, free_text, status, held_on
+    select id, player_id, verb, source_id, target_id, claim, subject, free_text, dare_key, victim_id, status, held_on
     from meddles where world_id = ${world.id} and status in ('pending', 'held') order by id`;
   // Every pending Fuse (only a few dozen at most), so the loaded state is the state the sim left; the sim
   // fires the due ones itself, in (dueAt, no) order.

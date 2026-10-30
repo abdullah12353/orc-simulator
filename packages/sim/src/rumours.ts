@@ -2,11 +2,12 @@
 // which works, reaches the wrong orc or gets Garbled, and leaves a directed Grudge behind.
 import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { consumeDare, fireDare } from './dares.ts';
 import { gainInfamy, INFAMY } from './infamy.ts';
 import { fireReactionFuse, followUp } from './reactions.ts';
 import { maybeUnmask, UNMASK } from './roster.ts';
 import { addMinutes, isoToMs } from './time.ts';
-import type { BlameEntry, CaptainId, Fact, Fuse, Intent, Meddle, RumourIntent, Subject } from './types.ts';
+import type { BlameEntry, CaptainId, DareIntent, Fact, Fuse, Intent, Meddle, RumourIntent, Subject } from './types.ts';
 
 export type RumourOutcome = 'works' | 'wrong_orc' | 'garbled';
 
@@ -36,7 +37,11 @@ const isClaim = (c: unknown): c is Claim => (CLAIMS as readonly unknown[]).inclu
  */
 export function consumeIntents(ctx: TickContext, intents: Intent[]): void {
   for (const intent of intents) {
-    if (intent.kind === 'back' || intent.kind === 'withdraw') continue; // backing.ts consumes these
+    if (intent.kind === 'back' || intent.kind === 'withdraw') continue; // backing.ts consumes these (#36)
+    if (intent.kind === 'dare') {
+      consumeDare(ctx, intent); // dares.ts (#35)
+      continue;
+    }
     if (!ctx.state.players[intent.playerId]) {
       // A Player who has left: nothing to refund.
       ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason: 'unknown_player' });
@@ -45,7 +50,7 @@ export function consumeIntents(ctx: TickContext, intents: Intent[]): void {
     const reason = intent.kind === 'rumour' ? invalidRumour(ctx, intent) : 'unsupported_kind';
     if (reason) {
       ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason });
-      if (intent.kind === 'rumour' || intent.kind === 'dare') ctx.addMeddles(intent.playerId, 1);
+      if (intent.kind === 'rumour') ctx.addMeddles(intent.playerId, 1);
       continue;
     }
     plantRumour(ctx, intent as Intent & RumourIntent);
@@ -116,7 +121,8 @@ function fire(ctx: TickContext, fuse: Fuse): void {
   ctx.diff.fuses.remove.push(fuse.no);
   if (fuse.reaction) return fireReactionFuse(ctx, { ...fuse, reaction: fuse.reaction });
   const meddle = fuse.meddleId ? ctx.state.meddles[fuse.meddleId] : undefined;
-  if (!meddle || meddle.intent.kind !== 'rumour') return; // Dares arrive with #35
+  if (meddle?.intent.kind === 'dare') return fireDare(ctx, meddle as Meddle & { intent: DareIntent });
+  if (!meddle || meddle.intent.kind !== 'rumour') return;
   const r = meddle.intent;
   if (ctx.rosterOf(r.target) === 'dead') {
     // Held until he Returns (and re-fused then). A diff only, never a Fact: it's still secret. A dead
