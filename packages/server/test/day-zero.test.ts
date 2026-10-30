@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
-import { applyDiff, dayZero, simulate, stateHash, tickSeed } from '@orc/sim';
+import { applyDiff, dayZero, simulate, STARTING, stateHash, tickSeed } from '@orc/sim';
 import { tickWorld } from '@orc/server';
 import { asUser, db, fakeClock, freshWorld, newUser } from './support.ts';
 
@@ -97,11 +97,13 @@ test('the first tick after create_world carries on exactly where the in-memory d
   const clock = fakeClock();
   const createdAt = clock.iso();
   const seed = 31337;
-  const { worldId } = await freshWorld({ clock, seed });
+  const { worldId, playerId } = await freshWorld({ clock, seed });
   clock.advance(5);
 
   const { state } = dayZero(content, seed, createdAt, worldId);
-  const input = { ...state, world: { ...state.world, tickSeq: 289, prevTickAt: state.world.now, now: clock.iso() } };
+  // Players join at creation, after day zero: the creator starts with STARTING resources.
+  const players = { [playerId]: { gold: STARTING.gold, meddles: STARTING.meddles, firstMeddleDone: false, renderedFor: [] } };
+  const input = { ...state, players, world: { ...state.world, tickSeq: 289, prevTickAt: state.world.now, now: clock.iso() } };
   const { facts, stateDiff } = simulate(input, [], tickSeed(seed, 289));
 
   const out = await tickWorld({ sql: db(), now: clock.now }, worldId);
