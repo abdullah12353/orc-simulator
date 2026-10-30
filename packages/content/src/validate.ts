@@ -122,6 +122,7 @@ export function validateContent(c: Content): string[] {
   }
 
   errors.push(...validateRumours(c, templateIds));
+  errors.push(...validateDares(c));
   errors.push(...validateBlameLines(c));
   errors.push(...validateClashes(c));
   errors.push(...validateReactions(c));
@@ -235,6 +236,7 @@ function validateRoster(c: Content): string[] {
 export const PARENT_ROLES = {
   rumour: ['source', 'target', 'reached'],
   clash: ['a', 'b', 'winner', 'loser', 'saviour'],
+  dare: ['target', 'victim'],
 } as const;
 
 const CLASH_OUTCOMES: ClashOutcome[] = ['won', 'defeated', 'fled'];
@@ -329,7 +331,7 @@ function validateReactions(c: Content): string[] {
       if (t.roles?.some((r) => r.from)) errors.push(`${where}: only a reaction Template casts roles "from" a parent`);
       continue;
     }
-    if (!t.after || !['incident', 'rumour', 'clash'].includes(t.after.kind)) {
+    if (!t.after || !['incident', 'rumour', 'clash', 'dare'].includes(t.after.kind)) {
       errors.push(`${where}: a reaction Template needs "after" naming the Fact kind it follows`);
       continue;
     }
@@ -341,6 +343,58 @@ function validateReactions(c: Content): string[] {
       }
       if (role.trait !== undefined && !TRAIT_POOL.has(role.trait)) errors.push(`${where}: role "${role.name}" needs unknown Trait "${role.trait}"`);
     }
+  }
+  return errors;
+}
+
+/** One Template per Dare kind and outcome (#35); the sim looks them up by these slugs. */
+export const DARE_TEMPLATES = {
+  stunt: { botched: 'dare.stunt.botched', pulled_off: 'dare.stunt.pulled-off', refused: 'dare.stunt.refused' },
+  prank: { botched: 'dare.prank.botched', pulled_off: 'dare.prank.pulled-off', refused: 'dare.prank.refused' },
+} as const;
+
+/** Any Captain can be offered a Stunt and a Prank: at least this many of each that need no Trait. */
+const DARES_ANYONE_TAKES = 2;
+
+/** The Dare bank and its Templates (#35). */
+function validateDares(c: Content): string[] {
+  const errors: string[] = [];
+  const roles = { stunt: 'target', prank: 'target,victim' } as const;
+  for (const kind of ['stunt', 'prank'] as const) {
+    for (const id of Object.values(DARE_TEMPLATES[kind])) {
+      const t = c.templates.find((x) => x.id === id);
+      if (!t) {
+        errors.push(`templates: the Dare Template "${id}" is missing`);
+        continue;
+      }
+      if (t.kind !== 'dare' || t.trigger !== 'meddle') errors.push(`template ${id}: needs kind dare and trigger meddle`);
+      if ((t.roles ?? []).map((r) => r.name).sort().join(',') !== roles[kind]) errors.push(`template ${id}: casts exactly ${roles[kind]}`);
+      if (!(t.slots ?? []).includes('dare')) errors.push(`template ${id}: needs the {dare} slot`);
+    }
+  }
+  // A Dare can play on any Fear a Captain can have, including those a Humiliation gives him.
+  const tagPool = new Set<string>([...TRAITS, ...FEARS, ...Object.values(c.banks.humiliations ?? {}).flatMap((h) => (h.fear ? [h.fear] : []))]);
+  const dares = c.banks.dares ?? {};
+  for (const [key, d] of Object.entries(dares)) {
+    const where = `banks.dares.${key}`;
+    if (d.kind !== 'stunt' && d.kind !== 'prank') errors.push(`${where}: kind must be stunt or prank`);
+    if (!d.label?.trim() || !d.text?.trim()) errors.push(`${where}: needs a label and text`);
+    const names = placeholders(d.text ?? '');
+    if (d.kind === 'prank' && !names.includes('victim')) errors.push(`${where}: a Prank's text names its {victim}`);
+    for (const name of names) {
+      if (name !== 'victim' || d.kind !== 'prank') errors.push(`${where}: "{${name}}" can't be used (a Prank may name {victim})`);
+    }
+    if (d.kind === 'prank' && !d.grudge?.trim()) errors.push(`${where}: a Prank needs the grudge tag its victim holds`);
+    if (d.kind === 'stunt' && d.grudge !== undefined) errors.push(`${where}: only a Prank leaves a grudge`);
+    for (const tag of d.tags ?? []) if (!tagPool.has(tag)) errors.push(`${where}: tag "${tag}" is not a Trait or Fear`);
+    if (d.needs !== undefined && !TRAIT_POOL.has(d.needs)) errors.push(`${where}: needs unknown Trait "${d.needs}"`);
+  }
+  const fearLines = c.banks.dareFear ?? [];
+  if (fearLines.length === 0) errors.push('banks.dareFear: needs at least 1 sentence');
+  for (const line of fearLines) if (!String(line).includes('{fear}')) errors.push(`banks.dareFear: "${line}" doesn't name his {fear}`);
+  for (const kind of ['stunt', 'prank'] as const) {
+    const n = Object.values(dares).filter((d) => d.kind === kind && d.needs === undefined).length;
+    if (n < DARES_ANYONE_TAKES) errors.push(`banks.dares: needs at least ${DARES_ANYONE_TAKES} ${kind} Dares any Captain can take, has ${n}`);
   }
   return errors;
 }

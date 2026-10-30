@@ -52,9 +52,9 @@ export type Claim = (typeof CLAIMS)[number];
 
 /**
  * Death cause tags (#32): how a Captain died, which picks the Humiliation he Returns with. A Clash
- * defeat is `beaten`; accident outcomes name their own. Dares (#35) add theirs here.
+ * defeat is `beaten`; accident outcomes name their own; a botched Dare (#35) is `botched`.
  */
-export const CAUSE_TAGS = ['beaten', 'drowned', 'fell'] as const;
+export const CAUSE_TAGS = ['beaten', 'drowned', 'fell', 'botched'] as const;
 export type CauseTag = (typeof CAUSE_TAGS)[number];
 
 /** The founding Captain: always in the active 12, never the starting Warlord, never benched. */

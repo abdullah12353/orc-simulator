@@ -327,7 +327,7 @@ export const banks: Banks = {
   // Humiliations (#32, D41): one per Return, fitting how he died. Placeholders until the v1 catalogue (#44).
   // Overlay slots (#18): 2 tusks, 3 lost bits, 4 moustache, 5 face wraps, 6 head bandage, 7 wig, 8 bucket.
   humiliations: {
-    'bandage.head': { cat: 'bandage', label: 'Head bandage', text: 'with his head wrapped in grey bandages', causes: ['beaten', 'fell'], overlay: { slot: 6 } },
+    'bandage.head': { cat: 'bandage', label: 'Head bandage', text: 'with his head wrapped in grey bandages', causes: ['beaten', 'fell', 'botched'], overlay: { slot: 6 } },
     'bandage.mouth': {
       cat: 'bandage', label: 'Mouth bandage (muffled)',
       text: 'with his mouth bandaged shut, which nobody minds',
@@ -335,16 +335,16 @@ export const banks: Banks = {
       overlay: { slot: 5, pinned: true },
       muffled: true,
     },
-    'bandage.eyepatch': { cat: 'bandage', label: 'Eyepatch, wrong eye', text: 'wearing an eyepatch over the wrong eye', causes: ['beaten', 'fell'], overlay: { slot: 5 } },
+    'bandage.eyepatch': { cat: 'bandage', label: 'Eyepatch, wrong eye', text: 'wearing an eyepatch over the wrong eye', causes: ['beaten', 'fell', 'botched'], overlay: { slot: 5 } },
     'bandage.mummy': { cat: 'bandage', label: 'Bandaged head to toe', text: 'wrapped head to toe like a badly posted parcel', causes: ['drowned', 'fell'], overlay: { slot: 6 } },
-    'lost.tusk': { cat: 'lost_bit', label: 'Missing tusk', text: 'missing a tusk', causes: ['beaten', 'fell'], overlay: { slot: 2, outsideLimit: true } },
+    'lost.tusk': { cat: 'lost_bit', label: 'Missing tusk', text: 'missing a tusk', causes: ['beaten', 'fell', 'botched'], overlay: { slot: 2, outsideLimit: true } },
     'lost.ear': { cat: 'lost_bit', label: 'Missing ear', text: 'one ear lighter than when he left', causes: ['beaten'], overlay: { slot: 3 } },
     'lost.peg-leg': { cat: 'lost_bit', label: 'Peg leg', text: 'on a peg leg he insists is the original', causes: ['fell', 'drowned'], overlay: { slot: 3 } },
     'lost.hook': { cat: 'lost_bit', label: 'Hook hand', text: 'with a hook where his hand used to be. He keeps waving', causes: ['beaten', 'drowned'], overlay: { slot: 3 } },
     'disguise.bucket': {
       cat: 'disguise', label: 'Bucket disguise',
       text: 'wearing a bucket and calling himself {alias}',
-      causes: ['beaten', 'drowned', 'fell'],
+      causes: ['beaten', 'drowned', 'fell', 'botched'],
       overlay: { slot: 8, pinned: true },
     },
     'disguise.moustache': {
@@ -357,7 +357,7 @@ export const banks: Banks = {
     'epithet.the-damp': { cat: 'epithet', label: 'Renamed: the Damp', text: 'and is to be known as {name} {epithet}', causes: ['drowned'], epithet: 'the-damp' },
     'epithet.the-soggy': { cat: 'epithet', label: 'Renamed: the Soggy', text: 'and has been renamed {name} {epithet}', causes: ['drowned'], epithet: 'the-soggy' },
     'epithet.the-concussed': { cat: 'epithet', label: 'Renamed: the Concussed', text: 'and is now {name} {epithet}', causes: ['fell'], epithet: 'the-concussed' },
-    'epithet.the-flattened': { cat: 'epithet', label: 'Renamed: the Flattened', text: 'and must be called {name} {epithet}', causes: ['fell', 'beaten'], epithet: 'the-flattened' },
+    'epithet.the-flattened': { cat: 'epithet', label: 'Renamed: the Flattened', text: 'and must be called {name} {epithet}', causes: ['fell', 'beaten', 'botched'], epithet: 'the-flattened' },
     'epithet.the-twice-stabbed': {
       cat: 'epithet', label: 'Renamed: the Twice-Stabbed',
       text: 'and is now, officially, {name} {epithet}',
@@ -368,7 +368,7 @@ export const banks: Banks = {
     'fear.water': { cat: 'fear', label: 'New Fear: water', text: 'with a brand new fear of water', causes: ['drowned'], fear: 'Water' },
     'fear.stairs': { cat: 'fear', label: 'New Fear: stairs', text: 'and now refuses to go near stairs', causes: ['fell'], fear: 'Stairs' },
     'fear.heights': { cat: 'fear', label: 'New Fear: heights', text: 'and now gets dizzy on a doorstep', causes: ['fell'], fear: 'Heights' },
-    'fear.laughed-at': { cat: 'fear', label: 'New Fear: being laughed at', text: 'and now flinches whenever anyone laughs', causes: ['beaten'], fear: 'Being Laughed At' },
+    'fear.laughed-at': { cat: 'fear', label: 'New Fear: being laughed at', text: 'and now flinches whenever anyone laughs', causes: ['beaten', 'botched'], fear: 'Being Laughed At' },
     'fear.doctors': { cat: 'fear', label: 'New Fear: doctors', text: 'with a new fear of doctors, having met several', causes: ['beaten', 'fell'], fear: 'Doctors' },
   },
   death: {
@@ -391,6 +391,66 @@ export const banks: Banks = {
       '{captain} has been moved to the reserve. His chair has already been sat in.',
     ],
   },
+  // The Dare bank (#35): a placeholder subset of the ~35 (the v1 catalogue, #44, drafts the rest). `text`
+  // completes "dared {target} to …"; a Prank's names {victim}, and its `grudge` is what the victim holds
+  // against the target afterwards (third person, like every Grudge tag). Tags are the Traits and Fears it
+  // plays on.
+  dares: {
+    'stunt.moat-swim': { kind: 'stunt', label: 'Swim the moat', text: 'swim the length of the moat in full armour', tags: ['Water', 'Show-off'] },
+    'stunt.battlements': { kind: 'stunt', label: 'Walk the battlements', text: 'walk the battlements on one leg', tags: ['Heights', 'Show-off'] },
+    'stunt.torches': { kind: 'stunt', label: 'Juggle torches', text: 'juggle three lit torches in the hall', tags: ['Show-off'] },
+    'stunt.pie-tower': { kind: 'stunt', label: 'Eat the pie tower', text: 'eat a tower of eleven pies without stopping', tags: ['Glutton'] },
+    'stunt.bath': { kind: 'stunt', label: 'Take a bath', text: 'have a bath, with soap, in the courtyard', tags: ['Soap'] },
+    'stunt.goose': { kind: 'stunt', label: 'Wrestle the goose', text: 'wrestle the gatehouse goose', tags: ['Birds'] },
+    'stunt.cellar': { kind: 'stunt', label: 'A night in the cellar', text: 'spend the night in the cellar without a candle', tags: ['The Dark', 'Superstitious'] },
+    'stunt.surgeon': { kind: 'stunt', label: 'See the surgeon', text: 'let the fortress surgeon "have a quick look"', tags: ['Doctors'] },
+    'stunt.cat': { kind: 'stunt', label: 'Pick up the cat', text: "pick up the quartermaster's cat", tags: ['Cats'] },
+    'stunt.small-dog': { kind: 'stunt', label: 'Walk the small dog', text: "take the cook's small dog for a walk", tags: ['Small Dogs'] },
+    'stunt.letter-home': { kind: 'stunt', label: 'Write to his mum', text: 'write to his mum and tell her what he did last week', tags: ['His Mum', "Mummy's Boy"] },
+    'stunt.jokes': { kind: 'stunt', label: 'Tell jokes in the yard', text: 'stand on a barrel in the yard and tell jokes', tags: ['Being Laughed At', 'Show-off'] },
+    'stunt.stairs-tray': { kind: 'stunt', label: 'Ride a tray downstairs', text: 'ride a tea tray down the tower stairs', tags: ['Stairs', 'Heights'] },
+    'stunt.puddles': { kind: 'stunt', label: 'Jump every puddle', text: 'jump in every puddle between the gate and the keep', tags: ['Puddles', 'Water'] },
+    'stunt.keg': { kind: 'stunt', label: 'Finish the keg', text: 'finish the whole keg before supper', tags: ['Drunkard'], needs: 'Drunkard' },
+    'stunt.mirror': { kind: 'stunt', label: 'Break his mirror', text: 'break his own hand mirror', tags: ['Vain', 'Superstitious'], needs: 'Vain' },
+    'stunt.hoard': { kind: 'stunt', label: 'Give his hoard away', text: 'give away everything under his bed', tags: ['Hoarder'], needs: 'Hoarder' },
+    'prank.frog-helmet': {
+      kind: 'prank', label: 'Frog in the helmet', text: "put a frog in {victim}'s helmet", tags: [],
+      grudge: 'put a frog in his helmet',
+    },
+    'prank.glue-chair': {
+      kind: 'prank', label: 'Glue his chair', text: "glue {victim} to his chair while he naps", tags: ['Lazy'],
+      grudge: 'glued him to his chair',
+    },
+    'prank.porridge-boots': {
+      kind: 'prank', label: 'Porridge in his boots', text: "fill {victim}'s boots with porridge", tags: ['Glutton'],
+      grudge: 'filled his boots with porridge',
+    },
+    'prank.goat-tent': {
+      kind: 'prank', label: 'A goat in his tent', text: "hide a goat in {victim}'s tent", tags: [],
+      grudge: 'hid a goat in his tent',
+    },
+    'prank.moustache': {
+      kind: 'prank', label: 'Draw on his face', text: 'draw a moustache on {victim} while he sleeps', tags: ['Sleepwalker'],
+      grudge: 'drew a moustache on him in his sleep',
+    },
+    'prank.moat-bucket': {
+      kind: 'prank', label: 'A bucket of moat', text: 'tip a bucket of moat water over {victim}', tags: ['Water'],
+      grudge: 'tipped the moat over him',
+    },
+    'prank.mum-letter': {
+      kind: 'prank', label: 'Forge a letter from mum', text: "forge {victim} a letter from his mum", tags: ["Mummy's Boy", 'His Mum'],
+      grudge: 'forged a letter from his mum',
+    },
+    'prank.chair-pull': {
+      kind: 'prank', label: 'Pull his chair away', text: "pull {victim}'s chair away as he sits down", tags: ['Being Laughed At'],
+      grudge: 'pulled his chair away in front of everyone',
+    },
+    'prank.pigeons': {
+      kind: 'prank', label: 'Pigeons in his bed', text: "fill {victim}'s bed with pigeons", tags: ['Birds'],
+      grudge: 'filled his bed with pigeons',
+    },
+  },
+  dareFear: ['It played on his {fear}, which was the point.', 'Whoever set it knew all about his {fear}.', 'It was aimed squarely at his {fear}.'],
   // The throne and Legendary (#34). Sentences appended to the story they happen in; each names {captain}.
   throne: {
     fell: {
