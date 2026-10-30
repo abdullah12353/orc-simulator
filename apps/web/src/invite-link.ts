@@ -46,6 +46,7 @@ const REASON_TEXT: Record<string, string> = {
   // submit_intent (#28)
   no_meddles_left: "You're out of Meddles. Three more arrive at midnight.",
   bad_rumour: 'That Rumour is missing a piece: pick a source, a target, a Claim and a subject.',
+  bad_dare: 'That Dare is missing a piece: pick a Captain, a Dare, and a different victim for a Prank.',
   unsupported_kind: "That kind of Meddle isn't open yet.",
   intent_id_taken: 'Something went wrong. Try again.',
 };
