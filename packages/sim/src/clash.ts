@@ -7,7 +7,7 @@
 // (#32), Infamy and Warlord falls (#34) and payouts (#36) join `consequences`; the Backing edge (#36)
 // fills in `backingEdge`.
 import type { ClashOutcome, TemplateDef } from '@orc/content';
-import type { TickContext } from './context.ts';
+import { pairOf, type TickContext } from './context.ts';
 import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
 import type { CaptainId, Cause, ClashFact, GrudgeTag, Trophy } from './types.ts';
@@ -58,8 +58,6 @@ export interface ClashStart {
   depth: number;
 }
 
-const unordered = (x: CaptainId, y: CaptainId) => (x < y ? `${x}|${y}` : `${y}|${x}`);
-
 /**
  * The Grudge roll: each pair of active Captains with affinity below −50 in either direction, in key order,
  * Clashes with about 5% chance. The one with the deeper Grudge starts it (slug order on a tie).
@@ -72,12 +70,14 @@ export function rollGrudgeClashes(ctx: TickContext): void {
   for (const [holder, toward] of ctx.affinityPairs()) {
     if (!active.has(holder) || !active.has(toward)) continue;
     if (ctx.getAffinity(holder, toward) >= CLASH.threshold) continue;
-    pairs.set(unordered(holder, toward), holder < toward ? [holder, toward] : [toward, holder]);
+    pairs.set(pairOf(holder, toward), holder < toward ? [holder, toward] : [toward, holder]);
   }
   for (const key of [...pairs.keys()].sort()) {
     if (ctx.clashedPairs.has(key)) continue;
     const [x, y] = pairs.get(key)!;
     const [a, b] = ctx.getAffinity(y, x) < ctx.getAffinity(x, y) ? [y, x] : [x, y];
+    // An earlier Clash this tick (or what it set off) may have vented this pair since the list was made.
+    if (ctx.getAffinity(a, b) >= CLASH.threshold) continue;
     const hothead = ctx.state.captains[a]!.traits.includes('Hothead') ? CLASH.hotheadChance : 0;
     if (!ctx.rng.chance(CLASH.chance + hothead)) continue;
     const requires = [
@@ -106,7 +106,7 @@ export function backingEdge(_ctx: TickContext, _captainId: CaptainId): number {
 export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
   const { state, rng } = ctx;
   const { a, b, template } = start;
-  ctx.clashedPairs.add(unordered(a, b));
+  ctx.clashedPairs.add(pairOf(a, b));
 
   const pA = powerOdds(ctx, a, b);
   const edgeA = backingEdge(ctx, a);
