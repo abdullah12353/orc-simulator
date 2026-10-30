@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dayZero, type Fact } from '@orc/sim';
+import { BLAME, dayZero, type Fact } from '@orc/sim';
 import { content } from '@orc/content';
 import { b64url, drainPushes, fromB64url, handleTick, pushText, queuePushes, tickWorld, type VapidKeys } from '@orc/server';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, insertStoryFacts, newUser, type StoryFact } from './support.ts';
@@ -162,6 +162,40 @@ test("my Meddle's story at weight 14 doesn't push; at 15 it does", async () => {
   await queue(w, fifteen);
   assert.deepEqual((await pushesFor(w.playerId)).map((p) => [p.fact_no, p.status]), [[fifteen[0]!.no, 'queued']]);
   assert.equal((await pushesFor(other.playerId)).length, 0, "not to a Player whose Meddle it isn't");
+});
+
+test('a story my Meddle set off further down the chain pushes too: my weight-8 Rumour, then the weight-25 Clash it caused', async () => {
+  const w = await world();
+  const other = await secondPlayer(w);
+  await subscribe(w, w.userId);
+  await subscribe(w, other.userId);
+
+  const [rumour, clash, small, far] = await facts(w, [
+    { minute: 0, kind: 'rumour', weight: 8, line: 'Mo whispered that Krúg cries at sunsets.' },
+    { minute: 0, kind: 'clash', weight: 25, line: 'Krúg and Vrakk clashed over the sunsets.' },
+    { minute: 0, kind: 'incident', weight: 14, line: 'Somebody sulked about it.' },
+    { minute: 0, kind: 'incident', weight: 30, line: 'Long after, the moat overflowed.' },
+  ]);
+  const meddle = randomUUID();
+  const second = randomUUID();
+  const entry = (meddleId: string, playerId: string, hops: number) =>
+    ({ meddleId, playerId, verb: 'rumour' as const, landedFact: rumour!.no, landedAt: rumour!.at, hops });
+  const list: Fact[] = [
+    { ...rumour!, blame: [entry(meddle, w.playerId, 0)] },
+    // My Blame one hop on, twice over (two of my Meddles), and Haris's two hops on: one push each.
+    { ...clash!, blame: [entry(meddle, w.playerId, 1), entry(second, w.playerId, 2), entry(randomUUID(), other.playerId, 2)] },
+    { ...small!, blame: [entry(meddle, w.playerId, 2)] },
+    // Past the hop cap, Blame no longer reaches me (the sim drops such entries; the push step agrees).
+    { ...far!, blame: [entry(meddle, w.playerId, BLAME.hopCap + 1)] },
+  ];
+  await queue(w, list);
+
+  assert.deepEqual(
+    (await pushesFor(w.playerId)).map((p) => [p.fact_no, p.status]),
+    [[clash!.no, 'queued']],
+    'one push, for the Clash only: the Rumour weighs 8, the sulk 14, and the moat is past the cap',
+  );
+  assert.deepEqual((await pushesFor(other.playerId)).map((p) => p.fact_no), [clash!.no], 'Haris is blamed for the Clash too');
 });
 
 test('a Player with no device opted in gets no push rows', async () => {

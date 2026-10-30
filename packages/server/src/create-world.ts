@@ -41,10 +41,12 @@ export async function createWorld(
   return deps.sql.begin(async (tx) => {
     // The world row first (warlord_id stays null until casting), so day zero knows the world's id.
     const [world] = await tx<{ id: string }[]>`
-      insert into worlds (name, seed, tick_seq, last_tick_at, next_no, warlord_id, day, deaths_today, content_version, created_at)
-      values (${name}, ${seed}, 0, ${now}, 1, null, (${now}::timestamptz at time zone 'Europe/London')::date, 0, '', ${now})
+      insert into worlds (name, tick_seq, last_tick_at, next_no, warlord_id, day, deaths_today, content_version, created_at)
+      values (${name}, 0, ${now}, 1, null, (${now}::timestamptz at time zone 'Europe/London')::date, 0, '', ${now})
       returning id`;
     const worldId = world!.id;
+    // Service-only: a member who knew the seed could run the open-source sim ahead of every tick.
+    await tx`insert into world_seeds (world_id, seed) values (${worldId}, ${seed})`;
     const [player] = await tx<{ id: string }[]>`
       insert into players (world_id, user_id, display_name, joined_at)
       values (${worldId}, ${input.userId}, ${displayName}, ${now})

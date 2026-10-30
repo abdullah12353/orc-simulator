@@ -24,7 +24,8 @@ if (!values.player || !values.accuser || !values.key || !values.says) {
 const sql = connect(process.env.ORC_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres');
 try {
   await registerNameRender(
-    { sql },
+    // The operator's script is the one place the real clock is the right clock.
+    { sql, now: () => new Date() },
     { playerId: values.player, accuserId: values.accuser, clipKey: values.key, says: values.says },
   );
   console.log(`registered: ${values.accuser} says "${values.says}" for player ${values.player} (${values.key})`);

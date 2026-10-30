@@ -30,6 +30,12 @@ export const NARRATION = {
   maxJobsPerDrain: 40,
   /** Per failed call: a job's excerpt holds at most two (Gemma's, then Groq's). */
   excerptChars: 240,
+  /**
+   * A job still queued this long after it was claimed (or, for a Herald job, queued and never claimed)
+   * lost its runtime part-way (killed inside waitUntil). It is logged as a fallback, never called again:
+   * well past any Edge Function's wall-clock limit, so the drain that claimed it is surely gone.
+   */
+  claimTimeoutMs: 10 * 60_000,
 } as const;
 
 /** Provider order (D65). */
@@ -50,6 +56,7 @@ export interface DrainReport {
 export async function drainJobs(deps: NarrationDeps, opts: { worldIds: string[] }): Promise<DrainReport> {
   const report: DrainReport = { done: 0, fallback: 0 };
   if (opts.worldIds.length === 0) return report;
+  report.fallback += await expireStaleJobs(deps, opts.worldIds);
   for (let n = 0; n < NARRATION.maxJobsPerDrain; n++) {
     const job = await claim(deps, opts.worldIds);
     if (!job) break;
@@ -63,6 +70,25 @@ export async function drainJobs(deps: NarrationDeps, opts: { worldIds: string[] 
     report[outcome.status] += 1;
   }
   return report;
+}
+
+/**
+ * Logs as fallbacks the jobs of these worlds whose runtime died part-way: claimed over
+ * `NARRATION.claimTimeoutMs` ago and still queued, or a Herald job queued that long and never claimed
+ * (its open-edition was killed before it ran). Their templated words stand. Returns how many.
+ */
+async function expireStaleJobs(deps: Pick<NarrationDeps, 'sql' | 'now'>, worldIds: string[]): Promise<number> {
+  const now = deps.now();
+  const cutoff = new Date(now.getTime() - NARRATION.claimTimeoutMs).toISOString();
+  const expired = await deps.sql`
+    update narration_jobs
+    set status = 'fallback', failure = 'timeout', finished_at = ${now.toISOString()},
+        excerpt = case when claimed_at is null then 'never run: its runtime ended before the call'
+                       else 'claim expired: the drain that claimed it never finished' end
+    where status = 'queued' and world_id = any(${worldIds}::uuid[])
+      and (claimed_at < ${cutoff} or (claimed_at is null and kind = 'herald' and created_at < ${cutoff}))
+    returning id`;
+  return expired.length;
 }
 
 /** Takes the oldest unclaimed queued job, so an overlapping drain can't also call a model for it. */
@@ -93,7 +119,7 @@ export interface Outcome {
 
 async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
   const content = deps.content ?? shippedContent;
-  const story = await loadStory(deps.sql, job);
+  const story = await loadStory(deps.sql, job, content);
   const messages = clashMessages(content, story);
   const promptChars = messages.reduce((n, m) => n + m.content.length, 0);
   const day = usageDay(deps.now());
@@ -164,15 +190,25 @@ async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
   return { ...base, status: 'done', provider: won.provider, failure: gemmaFailed ? 'bad_output' : null };
 }
 
-/** The Clash and its story's Trophy, from the log (Facts only). */
-async function loadStory(sql: Sql, job: Job): Promise<ClashStory> {
+/**
+ * The Clash and its story's Trophy, from the log (Facts only), and each speaker's Epithet as the Clash
+ * began: from his newest Epithet Humiliation gained before it (one replaces the last, and the Epithet
+ * stays when it ends), else his cast card's.
+ */
+async function loadStory(sql: Sql, job: Job, content: Content): Promise<ClashStory> {
   const rows = await sql<{ payload: Fact }[]>`
     select payload from facts where world_id = ${job.world_id} and story_no = ${job.fact_no} order by no`;
   const facts = rows.map((r) => r.payload);
   const clash = facts.find((f): f is ClashFact => f.kind === 'clash' && f.no === job.fact_no);
   if (!clash) throw new Error(`narration: Fact ${job.fact_no} is not a Clash`);
   const trophy = facts.find((f) => f.kind === 'trophy');
-  return { clash, trophy: trophy?.kind === 'trophy' ? { key: trophy.key, from: trophy.from, to: trophy.to } : null };
+  const speakers = [clash.a, clash.b, ...(clash.saviour ? [clash.saviour] : [])];
+  const marks = await sql<{ captain_id: string; kind: string }[]>`
+    select distinct on (captain_id) captain_id, kind from humiliations
+    where world_id = ${job.world_id} and cat = 'epithet' and captain_id = any(${speakers}::text[]) and gained_fact < ${job.fact_no}
+    order by captain_id, gained_fact desc`;
+  const epithets = Object.fromEntries(marks.map((m) => [m.captain_id, content.banks.humiliations[m.kind]?.epithet ?? null]));
+  return { clash, trophy: trophy?.kind === 'trophy' ? { key: trophy.key, from: trophy.from, to: trophy.to } : null, epithets };
 }
 
 export async function finish(deps: Pick<NarrationDeps, 'sql' | 'now'>, job: { id: number }, o: Outcome): Promise<void> {

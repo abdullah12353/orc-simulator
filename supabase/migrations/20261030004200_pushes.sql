@@ -15,7 +15,8 @@ create table push_subscriptions (
 );
 
 -- `failed` (not in data-model §1): no device took it (every endpoint refused or gone), or it went stale
--- in the queue. `title`, `story_no`, `claimed_at`, `sent_at`, `detail` are not in data-model §1 either.
+-- in the queue. `world_id`, `title`, `claimed_at`, `sent_at`, `detail` are not in data-model §1 either
+-- (`fact_no`, the story head, is).
 create type push_status as enum ('queued', 'sent', 'dropped_cap', 'dropped_quiet', 'failed');
 
 create table push_jobs (
