@@ -5,7 +5,8 @@
 //
 // The seam for later tickets: `resolveClash` writes the head, then its consequences in order (the death
 // roll last). The loser's Infamy and a Warlord's fall (#34) go on the head; payouts (#36) join
-// `consequences`; the Backing edge (#36) fills in `backingEdge`.
+// `consequences`; the Backing edge (#36) is `backingEdge`, and payouts happen at the end of the tick
+// (`settleBacking` in backing.ts reads every Clash head's winner and every Fact's Infamy).
 import type { ClashOutcome, TemplateDef } from '@orc/content';
 import { backersOf, edgeFor } from './backing.ts';
 import { pairOf, type TickContext } from './context.ts';
