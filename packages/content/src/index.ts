@@ -3,6 +3,7 @@ import type { Content } from './types.ts';
 
 export * from './types.ts';
 export { content } from './bundle.ts';
+export { ACCENTS, ACCENT_LABELS, CASTING, FEARS, KRUG, TRAITS } from './pools.ts';
 export { validateContent } from './validate.ts';
 export { hashString, hashValue, stableStringify } from './hash.ts';
 

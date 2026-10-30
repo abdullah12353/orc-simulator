@@ -1,8 +1,11 @@
 // create_world: the signed-in caller founds a world and becomes its first Player. Casting is TS (the
-// sim's castWorld), so this is an Edge Function rather than a plpgsql RPC. #26 adds the day-zero pre-roll.
+// sim's castWorld), so this is an Edge Function rather than a plpgsql RPC. Day zero (D57) runs inside
+// the same transaction: cast at created_at − 24 h, step the world in memory through about 288 unwatched
+// ticks, then commit the cast, the day's Facts and its ticks rows once.
 import { content as shippedContent, type Content } from '@orc/content';
-import { castWorld } from '@orc/sim';
-import { jsonb, type Sql } from './db.ts';
+import { dayZero } from '@orc/sim';
+import { insertFacts, insertTicks, insertWorldState } from './commit.ts';
+import type { Sql } from './db.ts';
 
 export interface CreateWorldDeps {
   sql: Sql;
@@ -34,13 +37,12 @@ export async function createWorld(
   const content = deps.content ?? shippedContent;
   const now = deps.now().toISOString();
   const seed = deps.randomSeed() >>> 0;
-  const state = castWorld(content, seed, now, []);
 
   return deps.sql.begin(async (tx) => {
+    // The world row first (warlord_id stays null until casting), so day zero knows the world's id.
     const [world] = await tx<{ id: string }[]>`
       insert into worlds (name, seed, tick_seq, last_tick_at, next_no, warlord_id, day, deaths_today, content_version, created_at)
-      values (${name}, ${seed}, ${state.world.tickSeq}, ${now}, ${state.world.nextNo}, ${state.world.warlordId},
-              ${state.world.day}, ${state.world.deathsToday}, ${state.world.contentVersion}, ${now})
+      values (${name}, ${seed}, 0, ${now}, 1, null, (${now}::timestamptz at time zone 'Europe/London')::date, 0, '', ${now})
       returning id`;
     const worldId = world!.id;
     const [player] = await tx<{ id: string }[]>`
@@ -48,20 +50,37 @@ export async function createWorld(
       values (${worldId}, ${input.userId}, ${displayName}, ${now})
       returning id`;
     const playerId = player!.id;
-    await tx`update worlds set created_by = ${playerId} where id = ${worldId}`;
 
-    const captains = Object.values(state.captains).map((c) => ({
-      id: c.id,
-      roster: c.roster,
-      power: c.power,
-      infamy: c.infamy,
-      traits: c.traits,
-    }));
+    const started = performance.now();
+    const { state, steps } = dayZero(content, seed, now, worldId);
+    const cpuMs = Math.round((performance.now() - started) / steps.length);
+
+    await insertWorldState(tx, worldId, state);
+    await insertFacts(
+      tx,
+      worldId,
+      steps.flatMap((s) => s.facts.map((fact) => ({ tickSeq: s.tickSeq, fact }))),
+    );
+    await insertTicks(
+      tx,
+      worldId,
+      steps.map((s) => ({
+        seq: s.tickSeq,
+        at: s.at,
+        seed: s.seed,
+        watched: false,
+        contentVersion: state.world.contentVersion,
+        factCount: s.facts.length,
+        cpuMs,
+        stateHash: s.stateHash,
+      })),
+    );
     await tx`
-      insert into captains (world_id, id, roster, power, infamy, traits)
-      select ${worldId}, c->>'id', (c->>'roster')::roster, (c->>'power')::smallint, (c->>'infamy')::int,
-             array(select jsonb_array_elements_text(c->'traits'))
-      from jsonb_array_elements(${jsonb(tx, captains)}) as c`;
+      update worlds set
+        created_by = ${playerId}, tick_seq = ${state.world.tickSeq}, last_tick_at = ${state.world.now},
+        next_no = ${state.world.nextNo}, warlord_id = ${state.world.warlordId}, day = ${state.world.day},
+        deaths_today = ${state.world.deathsToday}, content_version = ${state.world.contentVersion}
+      where id = ${worldId}`;
 
     return { worldId, playerId };
   });

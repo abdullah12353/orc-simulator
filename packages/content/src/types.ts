@@ -1,5 +1,8 @@
 // The content bundle's shapes (D46, data-model decision 6). Content ships as TS modules in the repo,
 // is bundled into the Edge Functions and the PWA, and is referenced from the DB only by text slugs.
+import type { Accent } from './pools.ts';
+
+export type { Accent };
 
 export type CaptainId = string;
 export type TemplateId = string;
@@ -11,18 +14,22 @@ export interface CastCard {
   name: string;
   /** Respelling for the voice actor / announcer. */
   sayAs: string;
-  accent: string;
+  accent: Accent;
   /** Starting Power, 1–10. */
   power: number;
+  /** Exactly 2, distinct, from TRAITS. */
   traits: [string, string];
-  /** Starting Fears (never replaced). */
+  /** The one starting Fear, from FEARS (never replaced). */
   fears: string[];
   catchphrase: string;
   /** Two disguise aliases ("Krúg Bootleg"). */
   aliases: [string, string];
+  /** Key into the portrait art; placeholder art until the portrait pipeline ships (#33). */
   portraitKey: string;
   /** One of the 6 Captains who can make Accusations. */
   accuser: boolean;
+  /** Starting Epithet (a key into `banks.epithets`); about a third of the cast starts with one. */
+  epithet?: BankKey;
 }
 
 export interface RoleDef {
@@ -49,8 +56,18 @@ export interface TemplateDef {
   baseWeight: number;
 }
 
+/** An Epithet from the prerecorded announcer bank ("the Damp"). */
+export interface EpithetDef {
+  text: string;
+  sayAs: string;
+}
+
 // Banks grow with later tickets (Dares, Trophies, Garble ladder, fallback Clash scripts, ...).
-export type Banks = Record<string, never>;
+export interface Banks {
+  /** Grudge tags for the Grudges seeded at casting ("still owes him a pie"). */
+  oldHistory: string[];
+  epithets: Record<BankKey, EpithetDef>;
+}
 
 export interface Content {
   cast: CastCard[];

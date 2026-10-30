@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import { Captains } from './Captains.tsx';
 import { supabase } from './supabase.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
@@ -109,8 +110,25 @@ function Worlds({ initial }: { initial?: string }) {
         </select>
       )}
       {selected && <InvitePanel key={selected} worldId={selected} />}
-      {selected ? <FactLines worldId={selected} /> :<CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
+      {selected ? <WorldTabs worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
     </main>
+  );
+}
+
+function WorldTabs({ worldId }: { worldId: string }) {
+  const [tab, setTab] = useState<'captains' | 'facts'>('captains');
+  return (
+    <>
+      <nav className="tabs">
+        <button className={tab === 'captains' ? 'on' : ''} onClick={() => setTab('captains')}>
+          Captains
+        </button>
+        <button className={tab === 'facts' ? 'on' : ''} onClick={() => setTab('facts')}>
+          What happened
+        </button>
+      </nav>
+      {tab === 'captains' ? <Captains worldId={worldId} /> : <FactLines worldId={worldId} />}
+    </>
   );
 }
 

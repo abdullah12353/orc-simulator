@@ -3,7 +3,7 @@
 import { after } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { content, type Content } from '@orc/content';
-import { castWorld, simulate, tickSeed } from '@orc/sim';
+import { DAY_ZERO, dayZero, simulate, tickSeed } from '@orc/sim';
 import { connect, createWorld, type Sql } from '@orc/server';
 
 export const DB_URL = process.env.ORC_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres';
@@ -67,11 +67,19 @@ export async function asUserCommitted<T>(userId: string, fn: (tx: Sql) => Promis
   })) as T;
 }
 
-/** A world seed whose first tick is guaranteed to produce Facts (found by asking the sim). */
-export function seedWithFactsOnFirstTick(c: Content = content, now = '2026-10-30T12:00:00.000Z'): number {
-  for (let seed = 1; seed < 10_000; seed++) {
-    const state = castWorld(c, seed, now, []);
-    const { facts } = simulate({ ...state, world: { ...state.world, tickSeq: 1 } }, [], tickSeed(seed, 1));
+/** The tick_seq a fresh world is at: day zero already ran this many ticks. */
+export const AFTER_DAY_ZERO = DAY_ZERO.steps;
+
+/**
+ * A world seed whose first tick after day zero is guaranteed to produce Facts (found by asking the
+ * sim). `createdAt` is when the world is created; the tick is 5 minutes later.
+ */
+export function seedWithFactsOnFirstTick(c: Content = content, createdAt = '2026-10-30T12:00:00.000Z'): number {
+  for (let seed = 1; seed < 1000; seed++) {
+    const { state } = dayZero(c, seed, createdAt, '');
+    const tickSeq = state.world.tickSeq + 1;
+    const now = new Date(Date.parse(createdAt) + 5 * 60_000).toISOString();
+    const { facts } = simulate({ ...state, world: { ...state.world, tickSeq, now } }, [], tickSeed(seed, tickSeq));
     if (facts.length > 0) return seed;
   }
   throw new Error('no seed found');

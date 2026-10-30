@@ -8,11 +8,12 @@ import {
   stateHash,
   tickSeed,
   type CaptainState,
-  type Fact,
+  type GrudgeTag,
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
-import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
+import { insertFacts, insertTicks } from './commit.ts';
+import { isLockNotAvailable, type Sql, type Tx } from './db.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
 export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
@@ -80,7 +81,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       const cpuMs = Math.round(performance.now() - started);
       const info = { tickSeq, stateHash: hash };
 
-      await insertFacts(tx, worldId, tickSeq, facts);
+      await insertFacts(tx, worldId, facts.map((fact) => ({ tickSeq, fact })));
       await deps.onCommitStep?.('facts', info);
 
       await commitDiff(tx, worldId, stateDiff);
@@ -89,10 +90,18 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
         where id = ${worldId}`;
       await deps.onCommitStep?.('world', info);
 
-      await tx`
-        insert into ticks (world_id, seq, at, seed, watched, content_version, intent_ids, fact_count, cpu_ms, state_hash)
-        values (${worldId}, ${tickSeq}, ${now}, ${tickSeed(world.seed, tickSeq)}, ${state.world.watched},
-                ${state.world.contentVersion}, '{}', ${facts.length}, ${cpuMs}, ${hash})`;
+      await insertTicks(tx, worldId, [
+        {
+          seq: tickSeq,
+          at: now,
+          seed: tickSeed(world.seed, tickSeq),
+          watched: state.world.watched,
+          contentVersion: state.world.contentVersion,
+          factCount: facts.length,
+          cpuMs,
+          stateHash: hash,
+        },
+      ]);
       await deps.onCommitStep?.('tick', info);
 
       return { status: 'stepped', worldId, tickSeq, factCount: facts.length, stateHash: hash } as const;
@@ -123,6 +132,30 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
            to_json(returns_at)#>>'{}' as returns_at, to_json(grace_until)#>>'{}' as grace_until,
            legendary_fact::float8 as legendary_fact
     from captains where world_id = ${world.id} order by id`;
+  const fearRows = await tx<{ captain_id: string; fear: string; added: boolean; since: string }[]>`
+    select captain_id, fear, added, to_json(since)#>>'{}' as since
+    from captain_fears where world_id = ${world.id} order by captain_id, since, fear`;
+  const affinityRows = await tx<{ holder_id: string; toward_id: string; value: number }[]>`
+    select holder_id, toward_id, value from affinity where world_id = ${world.id}`;
+  // The last 3 tags per pair (narration's top tags). The Blame window's extra tags arrive with #29.
+  const tagRows = await tx<
+    { no: number; holder_id: string; toward_id: string; tag: string; created_at: string; cause_fact: number | null }[]
+  >`
+    select no::float8 as no, holder_id, toward_id, tag, to_json(created_at)#>>'{}' as created_at,
+           cause_fact::float8 as cause_fact
+    from (
+      select *, row_number() over (partition by holder_id, toward_id order by no desc) as rank
+      from grudge_tags where world_id = ${world.id}
+    ) t
+    where rank <= 3
+    order by no`;
+
+  const fears = new Map<string, CaptainState['fears']>();
+  for (const f of fearRows) {
+    const list = fears.get(f.captain_id) ?? [];
+    list.push({ fear: f.fear, added: f.added, since: new Date(f.since).toISOString() });
+    fears.set(f.captain_id, list);
+  }
 
   const captains: Record<string, CaptainState> = {};
   for (const c of captainRows) {
@@ -132,7 +165,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
       power: c.power,
       infamy: c.infamy,
       traits: [c.traits[0]!, c.traits[1]!],
-      fears: [], // captain_fears arrives with #26
+      fears: fears.get(c.id) ?? [],
       epithet: c.epithet,
       aliasIdx: c.alias_idx,
       returnsAt: c.returns_at && new Date(c.returns_at).toISOString(),
@@ -157,8 +190,18 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     },
     content,
     captains,
-    affinity: {},
-    grudgeTags: [],
+    affinity: Object.fromEntries(affinityRows.map((a) => [`${a.holder_id}>${a.toward_id}`, a.value])),
+    grudgeTags: tagRows.map(
+      (t): GrudgeTag => ({
+        no: t.no,
+        holder: t.holder_id,
+        toward: t.toward_id,
+        tag: t.tag,
+        at: new Date(t.created_at).toISOString(),
+        // fact_blame arrives with #29; until then a cause carries no Blame.
+        cause: t.cause_fact === null ? null : { fact: t.cause_fact, blame: [] },
+      }),
+    ),
     trophies: [],
     humiliations: [],
     stakes: [],
@@ -168,18 +211,6 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     infamy7d: [],
     recent: { templates: {}, pairs: {} },
   };
-}
-
-/** All Facts in one statement (day zero inserts hundreds), with the full Fact kept as payload. */
-async function insertFacts(tx: Tx, worldId: string, tickSeq: number, facts: Fact[]): Promise<void> {
-  if (facts.length === 0) return;
-  await tx`
-    insert into facts (world_id, no, tick_seq, at, kind, story_no, template_id, variant, line, tier, "cast",
-                       comedy_weight, payload)
-    select ${worldId}, (f->>'no')::bigint, ${tickSeq}, (f->>'at')::timestamptz, f->>'kind',
-           (f->>'storyNo')::bigint, f->>'templateId', (f->>'variant')::smallint, f->>'line', (f->>'tier')::tier,
-           array(select jsonb_array_elements_text(f->'cast')), (f->>'comedyWeight')::smallint, f
-    from jsonb_array_elements(${jsonb(tx, facts)}) as f`;
 }
 
 /**
