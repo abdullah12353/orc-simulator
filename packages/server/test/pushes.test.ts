@@ -201,7 +201,7 @@ test('the tick queues pushes for Stable events in the Facts it commits', async (
   await subscribe(w, w.userId);
 
   // Unwatched, so a tick every 5 minutes, until some Stable event happens (a death is ~5 a day).
-  let pushes: Awaited<ReturnType<typeof pushesFor>> = [];
+  let pushes: { fact_no: number }[] = [];
   for (let n = 0; n < 200 && pushes.length === 0; n++) {
     w.clock.advance(5);
     const out = await tickWorld({ sql: db(), now: w.clock.now }, w.worldId);
