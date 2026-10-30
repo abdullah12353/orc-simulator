@@ -1,4 +1,7 @@
 import { useEffect, useState } from 'react';
+import { BlameLine } from './BlameLine.tsx';
+import { ClashCard } from './ClashCard.tsx';
+import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import { supabase } from './supabase.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
@@ -54,6 +57,8 @@ interface EditionRow {
 }
 
 const SHOWN_EDITIONS = 7;
+/** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
+const playedKey = (editionId: string) => `orc:lead-played:${editionId}`;
 
 function fromRow(r: EditionRow): Edition {
   return {
@@ -81,6 +86,8 @@ export function Herald({ worldId }: { worldId: string }) {
   const [opened, setOpened] = useState<Opened | { error: string } | null>(null);
   const [archive, setArchive] = useState<Edition[]>([]);
   const [showing, setShowing] = useState<string | null>(null);
+  const [clashes, setClashes] = useState<Set<number>>(new Set());
+  const [playing, setPlaying] = useState<ClashCardData | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,14 +97,34 @@ export function Herald({ worldId }: { worldId: string }) {
       if (error || !data) return setOpened({ error: error?.message ?? 'The Herald did not arrive.' });
       setOpened(data);
       setShowing(data.edition.id);
+      void autoPlayLead(data.edition);
       const past = await supabase
         .from('editions')
         .select('id, no, covers_from, covers_to, masthead, status, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)')
         .eq('world_id', worldId)
         .order('no', { ascending: false })
         .limit(SHOWN_EDITIONS);
-      if (!cancelled && past.data) setArchive((past.data as EditionRow[]).map(fromRow));
+      if (!cancelled && past.data) {
+        const editions = (past.data as EditionRow[]).map(fromRow);
+        setArchive(editions);
+        const heads = await clashHeads(worldId, [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))]);
+        if (!cancelled) setClashes((known) => new Set([...known, ...heads]));
+      }
     })();
+
+    /** The lead set piece: a Clash lead plays as its card, full screen, the first time this edition is opened. */
+    async function autoPlayLead(edition: Edition) {
+      const lead = edition.stories.find((st) => st.slot === 'lead');
+      if (!lead) return;
+      const heads = await clashHeads(worldId, edition.stories.map((st) => st.storyNo));
+      if (cancelled) return;
+      setClashes((known) => new Set([...known, ...heads]));
+      if (!heads.has(lead.storyNo) || localStorage.getItem(playedKey(edition.id))) return;
+      const card = await loadClashCard(worldId, lead.storyNo, lead.blameLine);
+      if (cancelled || !card) return;
+      localStorage.setItem(playedKey(edition.id), '1');
+      setPlaying(card);
+    }
     return () => {
       cancelled = true;
     };
@@ -109,9 +136,14 @@ export function Herald({ worldId }: { worldId: string }) {
   const latest = opened.edition;
   const edition = archive.find((e) => e.id === showing) ?? latest;
   const isLatest = edition.id === latest.id;
+  const watch = async (story: Story) => {
+    const card = await loadClashCard(worldId, story.storyNo, story.blameLine);
+    if (card) setPlaying(card);
+  };
 
   return (
     <section className="herald">
+      {playing && <ClashCard key={playing.clash.no} data={playing} reader={opened.reader} onDone={() => setPlaying(null)} />}
       {isLatest && opened.stopPress.length > 0 && (
         <aside className="stop-press">
           <h3>Stop press</h3>
@@ -122,7 +154,7 @@ export function Herald({ worldId }: { worldId: string }) {
           </ul>
         </aside>
       )}
-      <EditionView edition={edition} reader={opened.reader} />
+      <EditionView edition={edition} reader={opened.reader} clashes={clashes} onWatch={watch} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>
@@ -140,24 +172,23 @@ export function Herald({ worldId }: { worldId: string }) {
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-/**
- * A story's Blame line (templated, #29) with the reader's own name highlighted. Names are unique per
- * world, so a whole-word match on mine is enough ("Mo" never lights up inside "Moira").
- */
-function BlameLine({ line, reader }: { line: string; reader: string }) {
-  if (!reader) return <p className="blame">{line}</p>;
-  const mine = new RegExp(`(?<![\\p{L}\\p{N}])(${escapeRegExp(reader)})(?![\\p{L}\\p{N}])`, 'giu');
-  const parts = line.split(mine);
-  return (
-    <p className="blame">
-      {parts.map((part, i) => (i % 2 === 1 ? <mark key={i} className="me">{part}</mark> : part))}
-    </p>
-  );
-}
-
-function EditionView({ edition, reader }: { edition: Edition; reader: string }) {
+function EditionView({
+  edition,
+  reader,
+  clashes,
+  onWatch,
+}: {
+  edition: Edition;
+  reader: string;
+  clashes: Set<number>;
+  onWatch: (story: Story) => void;
+}) {
+  const watch = (s: Story) =>
+    clashes.has(s.storyNo) && (
+      <button className="watch" onClick={() => onWatch(s)}>
+        Watch the Clash
+      </button>
+    );
   const lead = edition.stories.find((s) => s.slot === 'lead');
   const headlines = edition.stories.filter((s) => s.slot === 'headline');
   const gutter = edition.stories.filter((s) => s.slot === 'gutter');
@@ -182,6 +213,7 @@ function EditionView({ edition, reader }: { edition: Edition; reader: string }) 
           {lead.standfirst && <p className="standfirst">{lead.standfirst}</p>}
           {lead.body && <p>{lead.body}</p>}
           {lead.blameLine && <BlameLine line={lead.blameLine} reader={reader} />}
+          {watch(lead)}
         </div>
       )}
       {headlines.length > 0 && (
@@ -191,6 +223,7 @@ function EditionView({ edition, reader }: { edition: Edition; reader: string }) 
               <h4>{s.headline}</h4>
               {s.body && <p>{s.body}</p>}
               {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
+              {watch(s)}
             </li>
           ))}
         </ol>

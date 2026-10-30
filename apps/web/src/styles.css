@@ -266,3 +266,182 @@ button.link {
 .composer .preview {
   font-style: italic;
 }
+
+/* ---- Trophies on Captain cards (#30). */
+.trophies {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.trophies li {
+  display: inline-block;
+  margin: 0 0.4rem 0.2rem 0;
+  padding: 0 0.4rem;
+  border: 1px solid #c9a94a;
+  color: #f1e3b5;
+}
+
+/* ---- The Clash card (#30): the prototype's "Fight Night" stage (#10). */
+.watch {
+  margin-top: 0.4rem;
+  background: #7f1d1d;
+  color: #f5f5f4;
+  border: 1px solid #a3171b;
+  cursor: pointer;
+}
+.clash-card {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #3a0d0d 0%, #0d0b0a 70%);
+  color: #e9e2d4;
+  cursor: pointer;
+  user-select: none;
+}
+.clash-card.judder {
+  animation: judder 0.08s linear 8;
+}
+@keyframes judder {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-8px, 4px); }
+  50% { transform: translate(6px, -6px); }
+  75% { transform: translate(-4px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+.clash-card .controls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 5;
+}
+.clash-card .controls button {
+  background: #000a;
+  color: #e9e2d4;
+  border: 1px solid #555;
+  cursor: pointer;
+}
+.clash-card .nameplate {
+  position: absolute;
+  top: 9vh;
+  max-width: 46vw;
+  font: 900 clamp(1.6rem, 7vw, 4rem) / 1 Impact, 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  color: #d8cfb8;
+  text-shadow: 0 0 30px #f00a, 4px 4px 0 #000;
+}
+.clash-card .np-left { left: 4vw; }
+.clash-card .np-right { right: 4vw; text-align: right; }
+.clash-card .side {
+  position: absolute;
+  bottom: 30vh;
+  transition: transform 0.35s cubic-bezier(0.2, 1.6, 0.4, 1), filter 0.3s;
+}
+.clash-card .side .portrait { width: min(40vw, 260px); height: auto; }
+.clash-card .left { left: 4vw; transform: translateX(-140%); }
+.clash-card .right { right: 4vw; transform: translateX(140%) scaleX(-1); }
+.clash-card .left.in { transform: translateX(0); }
+.clash-card .right.in { transform: translateX(0) scaleX(-1); }
+.clash-card .side.dim { filter: brightness(0.35) grayscale(0.6); }
+.clash-card .left.loser { filter: grayscale(1) brightness(0.5); transform: translateY(40px) rotate(-8deg); }
+.clash-card .right.loser { filter: grayscale(1) brightness(0.5); transform: translateY(40px) rotate(8deg) scaleX(-1); }
+.clash-card .kept {
+  position: absolute;
+  top: -1.5rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 700 0.9rem system-ui, sans-serif;
+  color: #fde68a;
+}
+.clash-card .right .kept { transform: scaleX(-1); }
+.clash-card .vs {
+  position: absolute;
+  top: 40vh;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  font: 900 clamp(3rem, 12vw, 8rem) Impact, sans-serif;
+  color: #a3171b;
+  text-shadow: 0 0 40px #f00;
+  transition: transform 0.25s cubic-bezier(0.2, 2, 0.4, 1);
+}
+.clash-card .vs.on { transform: translate(-50%, -50%) scale(1); }
+.clash-card .crash {
+  position: absolute;
+  top: 14vh;
+  left: 50%;
+  transform: translate(-50%, -160%) rotate(8deg);
+  transition: transform 0.3s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.clash-card .crash.on { transform: translate(-50%, 0) rotate(8deg); }
+.clash-card .crash .burst {
+  position: absolute;
+  top: -1.8rem;
+  left: -2.5rem;
+  font: 900 2.75rem Impact, sans-serif;
+  color: #ffd400;
+  -webkit-text-stroke: 2px #000;
+  transform: rotate(-14deg);
+}
+.clash-card .stamp {
+  position: absolute;
+  top: 30vh;
+  left: 50%;
+  opacity: 0;
+  white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(-12deg) scale(3);
+  font: 900 clamp(2.5rem, 9vw, 6rem) Impact, sans-serif;
+  color: transparent;
+  -webkit-text-stroke: 3px #a3171b;
+  transition: all 0.3s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.clash-card .stamp.on { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(1); }
+.clash-card .trophy {
+  position: absolute;
+  top: 50vh;
+  opacity: 0;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid #c9a94a;
+  background: #120d09;
+  color: #f1e3b5;
+  font: 700 1rem system-ui, sans-serif;
+  transition: left 1.2s ease-in-out, opacity 0.2s;
+}
+.clash-card .trophy.from-left { left: 12vw; }
+.clash-card .trophy.from-right { left: 68vw; }
+.clash-card .trophy.fly { opacity: 1; }
+.clash-card .trophy.from-left.fly { left: 68vw; }
+.clash-card .trophy.from-right.fly { left: 12vw; }
+.clash-card .sub {
+  position: absolute;
+  bottom: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(900px, 92vw);
+  min-height: 4rem;
+  text-align: center;
+  background: #000c;
+  padding: 0.9rem 1.1rem;
+  border-top: 3px solid #a3171b;
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+}
+.clash-card .sub .who {
+  display: block;
+  margin-bottom: 0.25rem;
+  font: 700 0.8rem system-ui, sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #cc6666;
+}
+.clash-card .sub .blame { font-size: 1rem; font-style: italic; }
+.clash-card .tap-hint {
+  position: absolute;
+  bottom: 0.5rem;
+  width: 100%;
+  text-align: center;
+  font: 0.8rem system-ui, sans-serif;
+  color: #999;
+}
