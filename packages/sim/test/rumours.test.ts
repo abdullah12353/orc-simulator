@@ -192,7 +192,9 @@ test('a landed Rumour drops the hearer’s affinity toward the source and leaves
     assert.equal(grudge.storyNo, head.no, 'a consequence of the Rumour');
     assert.equal(grudge.holder, head.reached);
     assert.equal(grudge.toward, source);
-    assert.equal(grudge.delta, next.affinity[key]! - before);
+    assert.ok(grudge.delta < 0);
+    // A Clash later in the tick (a Hothead going for the source) moves it again; otherwise it's all the Rumour.
+    if (!facts.some((f) => f.kind === 'clash')) assert.equal(grudge.delta, next.affinity[key]! - before);
     // A Clash in the same tick (a Hothead, or an old Grudge) leaves tags of its own.
     const tags = diff.grudgeTags.filter((t) => t.cause?.fact === head.no);
     assert.equal(tags.length, 1);

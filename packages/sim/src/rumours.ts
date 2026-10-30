@@ -1,6 +1,6 @@
 // Rumours (#28, Meddle verbs #7): Intents become secret Meddles on a Fuse; a due Fuse lands the Rumour,
 // which works, reaches the wrong orc or gets Garbled, and leaves a directed Grudge behind.
-import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
+import { CLAIMS, compareCodeUnits, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { consumeDare, fireDare } from './dares.ts';
 import { holdGrudge } from './grudge.ts';
@@ -138,7 +138,10 @@ function fire(ctx: TickContext, fuse: Fuse): void {
 
 function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   const { state, rng } = ctx;
-  const odds = Object.entries(outcomeOdds(ctx, r)).filter(([, w]) => w > 0);
+  // In key order, so the draw never depends on how the odds object happens to be written.
+  const odds = Object.entries(outcomeOdds(ctx, r))
+    .filter(([, w]) => w > 0)
+    .sort(([a], [b]) => compareCodeUnits(a, b));
   const outcome = rng.weighted(odds, ([, w]) => w)[0] as RumourOutcome;
 
   let reached = r.target;

@@ -3,7 +3,7 @@
 // botches it (about 60%), pulls it off or refuses. A botched Dare can kill him (death cap and grace apply),
 // humiliate him, and topple him if he is the Warlord; a Prank that comes off, or goes wrong, leaves the
 // victim a Grudge against him.
-import { dareFits, DARE_TEMPLATES, daresFor, playsOnFear, SURPRISE, subjectText, type DareDef } from '@orc/content';
+import { compareCodeUnits, dareFits, DARE_TEMPLATES, daresFor, playsOnFear, SURPRISE, subjectText, type DareDef } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { holdGrudge } from './grudge.ts';
 import { gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
@@ -112,7 +112,10 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   const fears = ctx.fears(target).map((f) => f.fear);
   const onFear = playsOnFear(def, fears);
   const fear = onFear ? fears.find((f) => def.tags.includes(f))! : null;
-  const odds = Object.entries(onFear ? DARE.fearOdds : DARE.odds).filter(([, w]) => w > 0);
+  // In key order, so the draw never depends on how the odds object happens to be written.
+  const odds = Object.entries(onFear ? DARE.fearOdds : DARE.odds)
+    .filter(([, w]) => w > 0)
+    .sort(([a], [b]) => compareCodeUnits(a, b));
   const outcome = rng.weighted(odds, ([, w]) => w)[0] as DareOutcome;
 
   const template = state.content.templates.find((t) => t.id === DARE_TEMPLATES[def.kind][outcome]);
