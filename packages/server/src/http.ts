@@ -4,6 +4,7 @@ import { ClippingError, createClipping, type ClippingDeps } from './clippings.ts
 import { createWorld, CreateWorldError, type CreateWorldDeps } from './create-world.ts';
 import { openEdition, OpenEditionError, type OpenEditionDeps } from './herald.ts';
 import { drainJobs, type NarrationDeps } from './narration/index.ts';
+import { drainPushes, type PushDeps } from './pushes.ts';
 import { tickAllWorlds, tickWorld, type TickDeps } from './tick.ts';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -21,6 +22,8 @@ export interface TickHandlerDeps extends TickDeps {
   secret: string;
   /** Narration's providers. Without it, Clash jobs stay queued (a later drain picks them up). */
   narration?: Pick<NarrationDeps, 'fetch' | 'providers' | 'timeoutMs'>;
+  /** Web Push (#42). Without it, or with `vapid: null`, queued pushes are never sent (they go stale). */
+  pushes?: Pick<PushDeps, 'fetch' | 'vapid'>;
   /** Keeps background work alive after the response (`EdgeRuntime.waitUntil`). */
   waitUntil?: (work: Promise<unknown>) => void;
 }
@@ -28,7 +31,7 @@ export interface TickHandlerDeps extends TickDeps {
 /**
  * POST /tick with `Authorization: Bearer <TICK_SECRET>`. Body `{ "worldId": "..." }` ticks one world;
  * no body ticks every world (what the clock Worker sends). After the ticks commit it answers, and
- * drains the stepped worlds' narration jobs in the background (data-model §3 step 7).
+ * sends the stepped worlds' queued pushes and drains their narration jobs in the background (data-model §3 step 7).
  */
 export async function handleTick(req: Request, deps: TickHandlerDeps): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
@@ -46,11 +49,21 @@ export async function handleTick(req: Request, deps: TickHandlerDeps): Promise<R
   }
   const outcomes = worldId ? [await tickWorld(deps, worldId)] : await tickAllWorlds(deps);
   const stepped = outcomes.flatMap((o) => (o.status === 'stepped' ? [o.worldId] : []));
-  if (deps.narration && stepped.length > 0) {
-    const drain = drainJobs({ ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content }, { worldIds: stepped }).catch(
-      (e: unknown) => console.error('drainJobs failed', e),
-    );
-    deps.waitUntil?.(drain);
+  if (stepped.length > 0 && (deps.narration || deps.pushes?.vapid)) {
+    // Pushes first: they're quick, and late ones are worse than late dialogue.
+    const work = (async () => {
+      if (deps.pushes?.vapid) {
+        await drainPushes({ ...deps.pushes, sql: deps.sql, now: deps.now }, { worldIds: stepped }).catch((e: unknown) =>
+          console.error('drainPushes failed', e),
+        );
+      }
+      if (deps.narration) {
+        await drainJobs({ ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content }, { worldIds: stepped }).catch(
+          (e: unknown) => console.error('drainJobs failed', e),
+        );
+      }
+    })();
+    deps.waitUntil?.(work);
   }
   return json({ outcomes });
 }

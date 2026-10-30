@@ -5,7 +5,8 @@
 // ones are logged. Pushes are never about gold.
 import { content as shippedContent, type Content } from '@orc/content';
 import { londonDate, type Fact } from '@orc/sim';
-import { jsonb, type Tx } from './db.ts';
+import { jsonb, type Sql, type Tx } from './db.ts';
+import { sendPush, type VapidKeys } from './webpush.ts';
 
 export const PUSH = {
   perDay: 3,
@@ -14,6 +15,11 @@ export const PUSH = {
   /** Quiet hours, Europe/London: from 23:00 up to 08:00. */
   quietFrom: 23,
   quietUntil: 8,
+  /** A push still queued after this long is failed as `stale` rather than sent late. */
+  staleMs: 60 * 60_000,
+  /** How long a push service may hold one for an offline device. */
+  ttlSeconds: 4 * 3600,
+  maxPerDrain: 200,
 } as const;
 
 type Reason = 'death' | 'return' | 'warlord_fell' | 'crowned' | 'legendary' | 'meddle';
@@ -150,4 +156,111 @@ export async function queuePushes(tx: Tx, worldId: string, facts: Fact[], now: s
     update player_private pp set pushes_today = (t->>'count')::smallint, push_day = ${today}::date
     from jsonb_array_elements(${jsonb(tx, touched)}) as t
     where pp.player_id = (t->>'id')::uuid`;
+}
+
+// ---- sending (data-model §3 step 7): after the tick commits, in the background ----
+
+export interface PushDeps {
+  sql: Sql;
+  now: () => Date;
+  fetch: typeof fetch;
+  /** Null when the VAPID secrets aren't set: nothing is sent and pushes stay queued (then go stale). */
+  vapid: VapidKeys | null;
+}
+
+export interface PushReport {
+  sent: number;
+  failed: number;
+}
+
+/** What the service worker gets: tapping it opens `url` (the PWA opens that world on that story). */
+export interface PushPayload {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+export const storyUrl = (worldId: string, storyNo: number) => `/?world=${worldId}&story=${storyNo}`;
+
+/**
+ * Sends the queued pushes of these worlds, oldest first, to every device of their Player. A push is
+ * `sent` if any device's push service took it; devices the service says are gone (404/410) are
+ * forgotten. Pushes queued longer than `PUSH.staleMs` fail as `stale` instead of arriving late. Never
+ * throws for a push.
+ */
+export async function drainPushes(deps: PushDeps, opts: { worldIds: string[] }): Promise<PushReport> {
+  const report: PushReport = { sent: 0, failed: 0 };
+  if (!deps.vapid || opts.worldIds.length === 0) return report;
+  const vapid = deps.vapid;
+  const now = deps.now();
+  await deps.sql`
+    update push_jobs set status = 'failed', detail = 'stale'
+    where status = 'queued' and claimed_at is null and world_id = any(${opts.worldIds}::uuid[])
+      and created_at < ${new Date(now.getTime() - PUSH.staleMs).toISOString()}`;
+  // Claimed in one go, so an overlapping drain can't send them twice.
+  const jobs = await deps.sql<{ id: number; world_id: string; player_id: string; fact_no: number; title: string; text: string }[]>`
+    update push_jobs set claimed_at = ${now.toISOString()}
+    where id in (
+      select id from push_jobs
+      where status = 'queued' and claimed_at is null and world_id = any(${opts.worldIds}::uuid[])
+      order by id limit ${PUSH.maxPerDrain}
+      for update skip locked)
+    returning id::float8 as id, world_id, player_id, fact_no::float8 as fact_no, title, text`;
+  jobs.sort((a, b) => a.id - b.id);
+
+  for (const job of jobs) {
+    let status: 'sent' | 'failed';
+    let detail: string | null;
+    try {
+      ({ status, detail } = await sendJob(deps.sql, deps.fetch, vapid, now, job));
+    } catch (e) {
+      status = 'failed';
+      detail = `error: ${(e as Error)?.message ?? e}`.slice(0, 240);
+    }
+    await deps.sql`
+      update push_jobs set status = ${status}::push_status, detail = ${detail},
+                           sent_at = ${status === 'sent' ? deps.now().toISOString() : null}
+      where id = ${job.id}`;
+    report[status] += 1;
+  }
+  return report;
+}
+
+async function sendJob(
+  sql: Sql,
+  fetchFn: typeof fetch,
+  vapid: VapidKeys,
+  now: Date,
+  job: { id: number; world_id: string; player_id: string; fact_no: number; title: string; text: string },
+): Promise<{ status: 'sent' | 'failed'; detail: string | null }> {
+  const devices = await sql<{ id: string; endpoint: string; p256dh: string; auth: string }[]>`
+    select id, endpoint, p256dh, auth from push_subscriptions where player_id = ${job.player_id} order by created_at, id`;
+  if (devices.length === 0) return { status: 'failed', detail: 'no device' };
+  const payload: PushPayload = {
+    title: job.title,
+    body: job.text,
+    url: storyUrl(job.world_id, job.fact_no),
+    tag: `story-${job.world_id}-${job.fact_no}`,
+  };
+  const statuses: string[] = [];
+  let took = false;
+  for (const d of devices) {
+    let code: number | string;
+    try {
+      code = await sendPush(d.endpoint, d, JSON.stringify(payload), {
+        fetch: fetchFn,
+        vapid,
+        nowMs: now.getTime(),
+        ttl: PUSH.ttlSeconds,
+        topic: `s${job.fact_no}`,
+      });
+    } catch (e) {
+      code = `error ${(e as Error)?.message ?? e}`;
+    }
+    if (typeof code === 'number' && code >= 200 && code < 300) took = true;
+    else if (code === 404 || code === 410) await sql`delete from push_subscriptions where id = ${d.id}`;
+    statuses.push(String(code));
+  }
+  return { status: took ? 'sent' : 'failed', detail: took ? null : statuses.join(', ').slice(0, 240) };
 }
