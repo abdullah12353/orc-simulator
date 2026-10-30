@@ -37,6 +37,7 @@ const isClaim = (c: unknown): c is Claim => (CLAIMS as readonly unknown[]).inclu
  */
 export function consumeIntents(ctx: TickContext, intents: Intent[]): void {
   for (const intent of intents) {
+    if (intent.kind === 'back' || intent.kind === 'withdraw') continue; // backing.ts consumes these (#36)
     if (intent.kind === 'dare') {
       consumeDare(ctx, intent); // dares.ts (#35)
       continue;

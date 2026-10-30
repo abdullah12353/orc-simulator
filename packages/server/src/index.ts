@@ -17,8 +17,18 @@ export {
   type Slot,
   type StopPressLine,
 } from './herald.ts';
+export { buildStable, type YourStable } from './backing.ts';
 export { registerNameRender, NameRenderError, type NameRenderInput } from './name-renders.ts';
-export { handleTick, handleCreateWorld, handleOpenEdition, supabaseUserResolver, type TickHandlerDeps } from './http.ts';
+export { createClipping, ClippingError, type ClippingDeps, type ClippingInput } from './clippings.ts';
+export type { ClippingSnapshot } from '@orc/sim';
+export {
+  handleTick,
+  handleCreateWorld,
+  handleOpenEdition,
+  handleCreateClipping,
+  supabaseUserResolver,
+  type TickHandlerDeps,
+} from './http.ts';
 export {
   drainJobs,
   NARRATION,
