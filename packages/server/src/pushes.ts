@@ -1,16 +1,16 @@
 // Pushes (data-model §3 step 6, D54): the commit layer, not the sim, picks who hears about what. A Player
 // hears about deaths, Returns, Warlord changes and Legendary deeds touching their Stable (Captains they
-// hold a Stake on, held Stakes on dead Captains included), and about their own Meddles' heads with comedy
-// weight >= 15. At most one push per Player per story, 3 per London day, none in quiet hours; the dropped
+// hold a Stake on, held Stakes on dead Captains included), and about every story head with comedy weight
+// >= 15 that their Meddles are to blame for (anywhere in its Blame, within the hop cap). At most one push per Player per story, 3 per London day, none in quiet hours; the dropped
 // ones are logged. Pushes are never about gold.
 import { content as shippedContent, type Content } from '@orc/content';
-import { londonDate, type Fact } from '@orc/sim';
+import { BLAME, londonDate, type Fact } from '@orc/sim';
 import { jsonb, type Sql, type Tx } from './db.ts';
 import { sendPush, type VapidKeys } from './webpush.ts';
 
 export const PUSH = {
   perDay: 3,
-  /** A Meddle's head pushes to its Player at this comedy weight or more. */
+  /** A story head pushes to the Players whose Meddles are in its Blame at this comedy weight or more. */
   meddleWeight: 15,
   /** Quiet hours, Europe/London: from 23:00 up to 08:00. */
   quietFrom: 23,
@@ -45,7 +45,7 @@ const TITLES: Record<Reason, (name: string) => string> = {
   warlord_fell: (n) => `${n} fell off the throne`,
   crowned: (n) => `${n} is Warlord now`,
   legendary: (n) => `${n} did something Legendary`,
-  meddle: () => 'Your meddling landed',
+  meddle: () => 'Your meddling did this',
 };
 
 /** Pushes are never about gold: a line that so much as says the word is swapped for a plain one. */
@@ -69,6 +69,9 @@ export const inQuietHours = (iso: string) => {
   return h >= PUSH.quietFrom || h < PUSH.quietUntil;
 };
 
+/** A story head heavy enough that the Players to blame for it hear about it. */
+const isMeddleStory = (f: Fact) => f.no === f.storyNo && (f.comedyWeight ?? 0) >= PUSH.meddleWeight && f.blame.length > 0;
+
 interface Candidate {
   playerId: string;
   storyNo: number;
@@ -87,8 +90,8 @@ export async function queuePushes(tx: Tx, worldId: string, facts: Fact[], now: s
     const s = stableCaptain(f);
     if (s) stableIds.add(s.captainId);
   }
-  const owners = facts.some((f) => f.no === f.storyNo && (f.comedyWeight ?? 0) >= PUSH.meddleWeight);
-  if (stableIds.size === 0 && !owners) return;
+  const meddleHeads = facts.some(isMeddleStory);
+  if (stableIds.size === 0 && !meddleHeads) return;
 
   // Players who can hear a push at all: in the world, with a device.
   const listening = await tx<{ id: string; pushes_today: number; push_day: string | null }[]>`
@@ -121,9 +124,9 @@ export async function queuePushes(tx: Tx, worldId: string, facts: Fact[], now: s
   for (const f of facts) {
     const s = stableCaptain(f);
     if (s) for (const playerId of backers.get(s.captainId) ?? []) add({ playerId, storyNo: f.storyNo, ...s });
-    if (f.no === f.storyNo && (f.comedyWeight ?? 0) >= PUSH.meddleWeight) {
-      // The head a Meddle landed as: its own Blame entry (hop 0) names the Player.
-      for (const b of f.blame) if (b.landedFact === f.no) add({ playerId: b.playerId, storyNo: f.no, reason: 'meddle', captainId: null });
+    if (isMeddleStory(f)) {
+      // Every Player whose Meddle is to blame, at any hop: the head it landed as, or a story it set off.
+      for (const b of f.blame) if (b.hops <= BLAME.hopCap) add({ playerId: b.playerId, storyNo: f.no, reason: 'meddle', captainId: null });
     }
   }
   if (candidates.length === 0) return;
