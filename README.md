@@ -37,7 +37,7 @@ npm run dev:clock -- 5   # tick the local stack every 5 s, like the clock Worker
 The first deploy runs through a guided setup script in Git Bash, with Docker Desktop running:
 
 ```sh
-bash scripts/setup-deploy.sh
+bash scripts/setup-deploy.sh            # or --from N to resume at stage N
 ```
 
 It walks you through every account step in order:

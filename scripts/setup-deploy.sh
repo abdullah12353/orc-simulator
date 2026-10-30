@@ -231,9 +231,25 @@ keep_or() {
   else write_env "$key" "$("$@")"; fi
 }
 
+# Resume: `--from N` starts at stage N, with the earlier stages' values read back from .env.deploy.
+FROM=1
+if [[ "${1:-}" == "--from" ]]; then FROM="${2:?--from needs a stage number}"; fi
+[[ "$FROM" =~ ^[0-9]+$ ]] && (( FROM >= 1 && FROM <= TOTAL_STAGES )) \
+  || { warn "--from takes a stage number from 1 to $TOTAL_STAGES"; exit 1; }
+if (( FROM > 1 )); then
+  [[ -f "$ENV_FILE" ]] || { warn "No $ENV_FILE yet, so start from stage 1."; exit 1; }
+  while IFS= read -r line; do
+    key="${line%%=*}"
+    [[ "$key" =~ ^[A-Z_][A-Z0-9_]*$ ]] && printf -v "$key" '%s' "$(_existing "$key" || true)"
+  done < "$ENV_FILE"
+fi
+# at N: true if stage N should run; lines the progress counter up with it.
+at() { (( $1 >= FROM )) || return 1; _STAGE_INDEX=$(( $1 - 1 )); }
+
 banner "ORC NONSENSE: first deploy (Supabase, Cloudflare, Groq, Resend)"
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
+if at 1; then
 stage "Supabase: create the project"
 say "The database, sign-in and the four Edge Functions live in one free Supabase project."
 open_url "https://supabase.com/dashboard/new"
@@ -248,7 +264,10 @@ ask SUPABASE_PROJECT_REF "Paste the project ref (about 20 lowercase letters):"
 write_env SUPABASE_PROJECT_REF "$SUPABASE_PROJECT_REF"
 pause
 
+fi
+
 # ── 2 ─────────────────────────────────────────────────────────────────────
+if at 2; then
 stage "Supabase: project URL and anon key"
 say "The PWA talks to Supabase with these two public values."
 open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/settings/api-keys"
@@ -259,7 +278,10 @@ ask SUPABASE_ANON_KEY "Paste the anon (or publishable) key:"
 write_env SUPABASE_ANON_KEY "$SUPABASE_ANON_KEY"
 pause
 
+fi
+
 # ── 3 ─────────────────────────────────────────────────────────────────────
+if at 3; then
 stage "Supabase: the pooler connection string"
 say "The Edge Functions connect through Supavisor in transaction mode (port 6543)."
 open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF?showConnect=true"
@@ -274,7 +296,10 @@ ORC_DB_URL="${POOLER_URI//\[YOUR-PASSWORD\]/$encoded}"
 write_env ORC_DB_URL "$ORC_DB_URL"
 pause
 
+fi
+
 # ── 4 ─────────────────────────────────────────────────────────────────────
+if at 4; then
 stage "Supabase CLI: link and push the migrations"
 say "This logs the CLI in, links this repo to the project and applies the 21 migrations."
 step "A browser opens for the CLI login; approve it, then come back here."
@@ -290,7 +315,10 @@ else
 fi
 pause
 
+fi
+
 # ── 5 ─────────────────────────────────────────────────────────────────────
+if at 5; then
 stage "Cloudflare: account and Account ID"
 say "Cloudflare hosts the PWA (Pages), the clock (a cron Worker) and Gemma (Workers AI), all on the free plan."
 open_url "https://dash.cloudflare.com/sign-up"
@@ -301,7 +329,10 @@ ask CF_ACCOUNT_ID "Paste the Account ID (32 hex characters):"
 write_env CF_ACCOUNT_ID "$CF_ACCOUNT_ID"
 pause
 
+fi
+
 # ── 6 ─────────────────────────────────────────────────────────────────────
+if at 6; then
 stage "Cloudflare: a Workers AI API token"
 say "The tick and the Herald call Gemma with this token."
 open_url "https://dash.cloudflare.com/profile/api-tokens"
@@ -312,7 +343,10 @@ ask_secret CF_AI_TOKEN "Paste the Workers AI token:"
 write_env CF_AI_TOKEN "$CF_AI_TOKEN"
 pause
 
+fi
+
 # ── 7 ─────────────────────────────────────────────────────────────────────
+if at 7; then
 stage "Groq: API key and Zero Data Retention"
 say "Groq's free gpt-oss-120b is the fallback when Gemma is down or out of Neurons."
 open_url "https://console.groq.com/keys"
@@ -324,7 +358,10 @@ step "In Settings -> Data Controls, turn on Zero Data Retention. Players' Clashe
 note "If that page has moved, it's under Settings in the console's left sidebar."
 pause "Press Enter once ZDR is on"
 
+fi
+
 # ── 8 ─────────────────────────────────────────────────────────────────────
+if at 8; then
 stage "Local secrets: TICK_SECRET and VAPID keys"
 say "No account needed. These are made on this machine and saved; re-runs keep them."
 keep_or TICK_SECRET node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))'
@@ -346,7 +383,10 @@ ask VAPID_CONTACT "Your contact email for push services:"
 write_env VAPID_SUBJECT "mailto:${VAPID_CONTACT#mailto:}"
 pause
 
+fi
+
 # ── 9 ─────────────────────────────────────────────────────────────────────
+if at 9; then
 stage "Supabase: function secrets and the four Edge Functions"
 say "This sets the server's secrets, then deploys tick, open-edition, create-world and create-clipping."
 fn_env=$(mktemp)
@@ -363,7 +403,10 @@ npx supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
 write_env TICK_URL "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/tick"
 pause
 
+fi
+
 # ── 10 ────────────────────────────────────────────────────────────────────
+if at 10; then
 stage "Cloudflare Pages: build and deploy the PWA"
 say "This logs Wrangler in, builds apps/web with the public values, and uploads it."
 step "A browser opens for the Wrangler login; allow it, then come back here."
@@ -382,7 +425,10 @@ ask PAGES_URL "Paste the site address:"
 write_env PAGES_URL "${PAGES_URL%/}"
 pause
 
+fi
+
 # ── 11 ────────────────────────────────────────────────────────────────────
+if at 11; then
 stage "Supabase Auth: where magic links land"
 say "Magic links and invite links (/join/...) must be allowed to come back to the site."
 open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/auth/url-configuration"
@@ -393,7 +439,10 @@ note "$PAGES_URL/join/*"
 step "Save."
 pause
 
+fi
+
 # ── 12 ────────────────────────────────────────────────────────────────────
+if at 12; then
 stage "Resend: email that reaches your friends"
 say "Supabase's built-in email only reaches your own team, a few an hour. Resend's free tier fixes that."
 open_url "https://resend.com/domains"
@@ -414,7 +463,10 @@ note "Password: your Resend key (it's in $ENV_FILE as RESEND_API_KEY)"
 step "Save."
 pause
 
+fi
+
 # ── 13 ────────────────────────────────────────────────────────────────────
+if at 13; then
 stage "Cloudflare: the clock Worker"
 say "Every minute, the Worker POSTs the tick. Once it's deployed, the worlds start living."
 if confirm "Deploy the clock now?"; then
@@ -426,7 +478,10 @@ else
 fi
 pause
 
+fi
+
 # ── 14 ────────────────────────────────────────────────────────────────────
+if at 14; then
 stage "First run, and the real Gemma Neuron rate"
 open_url "$PAGES_URL"
 step "Sign in with your email, create a world, and invite one friend."
@@ -448,6 +503,8 @@ else
   SKIPPED+=("Gemma Neuron rate: compare the dashboard's Neurons with llm_usage, fix NEURON_RATES in quota.ts")
 fi
 pause
+
+fi
 
 finish
 }
