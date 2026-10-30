@@ -37,6 +37,35 @@ export function isoToMinutes(iso: string): number {
   return daysFromCivil(y, mo, d) * 1440 + h * 60 + mi;
 }
 
+const pad = (n: number, w = 2) => String(n).padStart(w, '0');
+
+/** Milliseconds since epoch for a UTC ISO timestamp (`…Z`, seconds and fraction optional), parsed by hand. */
+export function isoToMs(iso: string): number {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3})\d*)?)?(?:Z|\+00:00)$/.exec(iso);
+  if (!m) throw new Error(`not a UTC ISO timestamp: ${iso}`);
+  const [y, mo, d, h, mi] = m.slice(1, 6).map(Number) as [number, number, number, number, number];
+  const s = Number(m[6] ?? 0);
+  const frac = Number((m[7] ?? '0').padEnd(3, '0'));
+  return ((daysFromCivil(y, mo, d) * 24 + h) * 60 + mi) * 60_000 + s * 1000 + frac;
+}
+
+/** The inverse of isoToMs, in `Date.prototype.toISOString` format (`YYYY-MM-DDTHH:MM:SS.sssZ`). */
+export function msToIso(ms: number): string {
+  const days = Math.floor(ms / 86_400_000);
+  let rest = ms - days * 86_400_000;
+  const [y, mo, d] = civilFromDays(days);
+  const h = Math.floor(rest / 3_600_000);
+  rest -= h * 3_600_000;
+  const mi = Math.floor(rest / 60_000);
+  rest -= mi * 60_000;
+  const s = Math.floor(rest / 1000);
+  return `${pad(y, 4)}-${pad(mo)}-${pad(d)}T${pad(h)}:${pad(mi)}:${pad(s)}.${pad(rest - s * 1000, 3)}Z`;
+}
+
+export function addMinutes(iso: string, minutes: number): string {
+  return msToIso(isoToMs(iso) + minutes * 60_000);
+}
+
 /**
  * The Europe/London calendar date (YYYY-MM-DD) of a UTC instant. BST runs from 01:00 UTC on the
  * last Sunday of March to 01:00 UTC on the last Sunday of October (data-model decision 12).

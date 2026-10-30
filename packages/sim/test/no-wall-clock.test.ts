@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { simulate, tickSeed, type WorldState } from '@orc/sim';
+import { content } from '@orc/content';
+import { dayZero, simulate, tickSeed, type WorldState } from '@orc/sim';
 import { freshWorld, SEEDS, WORLD_SEED } from './support.ts';
 
 /** Runs fn with Date, Math.random and crypto booby-trapped, so any use inside the sim throws. */
@@ -42,4 +43,14 @@ test('the sim never reads the wall clock: Facts are stamped with state.world.now
     }
   }
   assert.ok(facts > 0, 'expected some Facts to check');
+});
+
+test('casting and the day-zero pre-roll never read the wall clock either', () => {
+  const now = '2031-02-03T04:05:06.789Z';
+  const { state, steps } = withoutClockOrEntropy(() => dayZero(content, WORLD_SEED, now, 'w'));
+  assert.equal(state.world.now, now);
+  assert.equal(steps[0]!.at, '2031-02-02T04:10:06.789Z');
+  const facts = steps.flatMap((s) => s.facts);
+  assert.ok(facts.length > 0);
+  for (const f of facts) assert.ok(f.at > '2031-02-02T04:05:06.789Z' && f.at <= now, f.at);
 });
