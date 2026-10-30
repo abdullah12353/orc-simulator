@@ -32,6 +32,7 @@ import {
 import { commitBacking } from './backing.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 import { broadcast } from './realtime.ts';
+import { queuePushes } from './pushes.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
 export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
@@ -166,6 +167,8 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       await deps.onCommitStep?.('facts', info);
 
       await commitDiff(tx, worldId, stateDiff, { tickSeq, now, facts });
+      // The push outbox (data-model §3 step 6): picked here, after the diff, so Stakes are as this tick left them.
+      await queuePushes(tx, worldId, facts, now, content);
       await tx`
         update worlds set tick_seq = ${tickSeq}, last_tick_at = ${now}, content_version = ${state.world.contentVersion}
         where id = ${worldId}`;

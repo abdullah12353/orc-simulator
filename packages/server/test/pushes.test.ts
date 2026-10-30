@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { Fact } from '@orc/sim';
 import { content } from '@orc/content';
-import { pushText, queuePushes } from '@orc/server';
+import { pushText, queuePushes, tickWorld } from '@orc/server';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, insertStoryFacts, newUser, type StoryFact } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
@@ -193,4 +193,26 @@ test('push text never mentions gold', async () => {
       assert.doesNotMatch(`${t.title} ${t.text}`, /gold/i, `${reason} / ${c.id}`);
     }
   }
+});
+
+test('the tick queues pushes for Stable events in the Facts it commits', async () => {
+  const w = await world('2026-10-30T08:00:00.000Z');
+  for (const id of await captainIds(w.worldId)) await back(w, w.playerId, id);
+  await subscribe(w, w.userId);
+
+  // Unwatched, so a tick every 5 minutes, until some Stable event happens (a death is ~5 a day).
+  let pushes: Awaited<ReturnType<typeof pushesFor>> = [];
+  for (let n = 0; n < 200 && pushes.length === 0; n++) {
+    w.clock.advance(5);
+    const out = await tickWorld({ sql: db(), now: w.clock.now }, w.worldId);
+    assert.equal(out.status, 'stepped');
+    pushes = await pushesFor(w.playerId);
+  }
+  assert.ok(pushes.length > 0, 'some Stable event pushed within 200 ticks');
+  const [story] = await db()<{ kinds: string[] }[]>`
+    select array_agg(kind order by no) as kinds from facts where world_id = ${w.worldId} and story_no = ${pushes[0]!.fact_no}`;
+  assert.ok(
+    story!.kinds.some((k) => ['death', 'return', 'warlord_fell', 'crowned', 'legendary'].includes(k)),
+    `the pushed story has a Stable event: ${story!.kinds.join(', ')}`,
+  );
 });
