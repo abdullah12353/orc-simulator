@@ -1,5 +1,6 @@
 import { LEGENDARY_LAYER } from './portrait.ts';
 import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
+import { allText, forbiddenNameIn, heraldText, swearIn } from './tone.ts';
 import type { CastCard, ClashOutcome, Content } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
@@ -128,6 +129,21 @@ export function validateContent(c: Content): string[] {
   errors.push(...validateReactions(c));
   errors.push(...validateRoster(c));
   errors.push(...validateAccusations(c));
+  errors.push(...validateTone(c));
+  return errors;
+}
+
+/** The tone bible's checkable boundaries (§4): a clean Herald, and no real or borrowed names anywhere. */
+function validateTone(c: Content): string[] {
+  const errors: string[] = [];
+  for (const [where, text] of heraldText(c)) {
+    const word = swearIn(text);
+    if (word) errors.push(`${where}: the Herald never swears ("${word}" in "${text}")`);
+  }
+  for (const [where, text] of allText(c)) {
+    const name = forbiddenNameIn(text);
+    if (name) errors.push(`${where}: names a real person, party or borrowed setting ("${name}")`);
+  }
   return errors;
 }
 

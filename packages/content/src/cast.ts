@@ -252,15 +252,15 @@ export const cast: CastCard[] = [
 
   // ---- Glaswegian
   card({
-    id: 'grishnack',
-    name: 'Grishnack',
-    sayAs: 'GRISH-nack',
+    id: 'grizzock',
+    name: 'Grizzock',
+    sayAs: 'GRIZ-ock',
     accent: 'glaswegian',
     power: 5,
     traits: ['Hothead', 'Little Fortresser'],
     fears: ['Doctors'],
     catchphrase: "I'll take yous all on. One at a time. Starting with that wall.",
-    aliases: ['Grishnack Bootleg', 'Not-Grishnack'],
+    aliases: ['Grizzock Bootleg', 'Not-Grizzock'],
     accuser: true,
   }),
   card({
