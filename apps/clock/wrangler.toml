@@ -1,0 +1,12 @@
+name = "orc-clock"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+# Set per environment, e.g. https://<project>.supabase.co/functions/v1/tick
+TICK_URL = ""
+
+# TICK_SECRET is a secret: `npx wrangler secret put TICK_SECRET`
