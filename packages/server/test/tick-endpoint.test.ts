@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { handleTick } from '@orc/server';
-import { db, fakeClock, freshWorld } from './support.ts';
+import { AFTER_DAY_ZERO, db, fakeClock, freshWorld } from './support.ts';
 
 const SECRET = 'test-secret';
 const call = (clock: ReturnType<typeof fakeClock>, init: RequestInit) =>
@@ -15,7 +15,7 @@ test('the tick endpoint refuses calls without the shared secret', async () => {
   assert.equal((await call(clock, { method: 'POST', body, headers: { authorization: 'Bearer wrong' } })).status, 401);
   assert.equal((await call(clock, { method: 'GET', headers: { authorization: `Bearer ${SECRET}` } })).status, 405);
   const [w] = await db()`select tick_seq::int from worlds where id = ${worldId}`;
-  assert.equal(w!.tick_seq, 0);
+  assert.equal(w!.tick_seq, AFTER_DAY_ZERO, 'not stepped past day zero');
 });
 
 test('a POST with the secret and no body ticks every world (what the clock Worker sends)', async () => {

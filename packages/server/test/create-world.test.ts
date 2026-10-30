@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
 import { handleCreateWorld, tickWorld } from '@orc/server';
-import { asUser, db, fakeClock, freshWorld, newUser, seedWithFactsOnFirstTick } from './support.ts';
+import { AFTER_DAY_ZERO, asUser, db, fakeClock, freshWorld, newUser, seedWithFactsOnFirstTick } from './support.ts';
 
 test('create_world makes the caller the first Player and casts the content bundle', async () => {
   const clock = fakeClock();
@@ -11,7 +11,7 @@ test('create_world makes the caller the first Player and casts the content bundl
   await asUser(userId, async (tx) => {
     const [w] = await tx`select name, tick_seq::int, created_by, warlord_id from worlds where id = ${worldId}`;
     assert.equal(w!.name, 'Test Fortress');
-    assert.equal(w!.tick_seq, 0);
+    assert.equal(w!.tick_seq, AFTER_DAY_ZERO, 'day zero already ran');
     assert.equal(w!.created_by, playerId);
     assert.notEqual(w!.warlord_id, 'krug', 'Krúg is never the starting Warlord');
 
