@@ -8,6 +8,7 @@ import { content } from '@orc/content';
 import { drainJobs, insertFacts } from '@orc/server';
 import { BLAME, chain, type Cause, type Fact } from '@orc/sim';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
+import { importWeb, signInAs } from './web/supabase-stub.ts';
 
 type World = Awaited<ReturnType<typeof freshWorld>>;
 
@@ -227,6 +228,7 @@ test('every Hall view is ordered by time, never by weight', async () => {
   assert.deepEqual(since(story).map((r) => r.kind), ['legendary', 'trophy', 'humiliation', 'return', 'death']);
   assert.deepEqual(since(await read('captain_story', 'vrakk')).map((r) => r.kind), ['trophy'], 'a Trophy is in both Captains’ stories');
 
+  // A Legendary deed heavy enough to be a moment too is on the timeline once, as the legend.
   const timeline = await read('hall_timeline');
   assertByTime(timeline, 'hall_timeline');
   assert.deepEqual(since(timeline).map((r) => [r.shelf, r.no]), [
@@ -234,11 +236,11 @@ test('every Hall view is ordered by time, never by weight', async () => {
     ['moment', twenty.no],
     ['legend', nineteen.no],
     ['legend', sixty.no],
-    ['moment', sixty.no],
     ['legend', twentyFive.no],
-    ['moment', twentyFive.no],
     ['moment', ninety.no],
   ]);
+  const all = await read('hall_timeline');
+  assert.equal(new Set(all.filter((r) => r.shelf !== 'clipping').map((r) => r.no)).size, all.filter((r) => r.shelf !== 'clipping').length, 'no story twice');
 
   // Members only.
   const outsider = await newUser();
@@ -302,6 +304,22 @@ test('trace it back from a coup gives the chain in causal order and stops at the
   assert.equal((await traceBack(outsider, world.worldId, crowned!.no)).length, 0);
 });
 
+// trace_back's SQL carries its own copy of the hop cap; this pins it to BLAME.hopCap, so changing one
+// without the other fails here.
+test("trace_back walks exactly BLAME.hopCap hops, the same cap as Blame's", async () => {
+  const clock = fakeClock();
+  const world = await freshWorld({ clock });
+  const t0 = clock.iso();
+  const line: Fact[] = [];
+  for (let i = 0; i < BLAME.hopCap + 3; i++) {
+    const [f] = await write(world, t0, [{ minute: i, requires: line.slice(-1), line: `Link ${i}.` }]);
+    line.push(f!);
+  }
+  const steps = await traceBack(world.userId, world.worldId, line.at(-1)!.no);
+  assert.equal(Math.max(...steps.map((s) => s.hops)), BLAME.hopCap);
+  assert.deepEqual(steps.map((s) => s.fact_no), line.slice(-(BLAME.hopCap + 1)).map((f) => f.no));
+});
+
 /** A fake Workers AI that writes good Clash lines and counts its calls. */
 function countingProvider() {
   let calls = 0;
@@ -321,15 +339,23 @@ function countingProvider() {
   return { fetch, calls: () => calls };
 }
 
-/** A Hall replay, read the way the PWA's Clash card reads it: the story's Facts and the stored dialogue. */
-const replay = (userId: string, worldId: string, factNo: number) =>
-  asUser(userId, async (tx) => {
-    const story = await tx`select no::int, kind from facts where world_id = ${worldId} and story_no = ${factNo}`;
-    const [dialogue] = await tx<{ lines: { speaker: string; text: string }[]; source: string }[]>`
-      select lines, source from clash_dialogue where world_id = ${worldId} and fact_no = ${factNo}`;
-    assert.ok(story.some((f) => f.no === factNo && f.kind === 'clash'));
-    return dialogue!;
-  });
+type ClashCardData = { clash: { no: number; kind: string }; lines: { speaker: string; text: string }[]; source: string };
+
+/**
+ * A Hall replay, through the PWA's own code: `Hall.tsx` replays a Clash with `loadClashCard`
+ * (apps/web/src/clash-card-data.ts), run here against the local stack's PostgREST as the signed-in user.
+ */
+async function replay(userId: string, worldId: string, factNo: number) {
+  const { loadClashCard } = await importWeb<{ loadClashCard: (w: string, n: number) => Promise<ClashCardData | null> }>(
+    'clash-card-data.ts',
+  );
+  signInAs(userId);
+  const card = await loadClashCard(worldId, factNo);
+  assert.ok(card, 'the replay loads');
+  assert.equal(card.clash.no, factNo);
+  assert.equal(card.clash.kind, 'clash');
+  return card;
+}
 
 test('a Clash replay reads its stored dialogue and makes no provider call', async () => {
   const day = '2031-05-01';
