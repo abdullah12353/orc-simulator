@@ -46,6 +46,8 @@ export function IntroductionCard({ data, onDone }: { data: IntroductionCardData;
         {reached('shout') && <span className="shout">{textOf('shout')}</span>}
         {reached('epithet') && <span className="epithet">{textOf('epithet')}</span>}
         {script.really && reached('shout') && <span className="really">(really {script.really})</span>}
+        {data.crowned && reached('slam') && <span className="title">The new Warlord</span>}
+        {script.legendary && reached('slam') && <span className="title legendary">Legendary</span>}
       </div>
       {beat?.kind === 'signature' && !beat.step.muffled && <p className="intro-line">“{beat.step.text}”</p>}
       {subtitle && (

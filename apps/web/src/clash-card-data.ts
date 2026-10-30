@@ -15,6 +15,8 @@ export interface ClashCardData {
   blameLine: string | null;
   /** Each Captain's face as the Clash began (#33): his overlays then, and whether he was muffled. */
   faces: Record<string, ComposedPortrait>;
+  /** Who was Warlord going into it (#34): the one who fell in it, or else the Warlord now. */
+  warlord: string | null;
 }
 
 /** Which of these story heads are Clashes. */
@@ -38,9 +40,14 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
   if (!clash || !dialogue.data) return null;
   const trophy = facts.find((f) => f.kind === 'trophy');
   const ids = [clash.a, clash.b, ...(clash.saviour ? [clash.saviour] : [])];
-  const history = await loadFaces(worldId, ids);
+  const fell = facts.find((f) => f.kind === 'warlord_fell');
+  const [history, world] = await Promise.all([
+    loadFaces(worldId, ids),
+    fell ? null : supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
+  ]);
 
   return {
+    warlord: fell?.kind === 'warlord_fell' ? fell.captainId : ((world?.data?.warlord_id as string | null | undefined) ?? null),
     faces: Object.fromEntries(ids.map((id) => [id, faceAt(id, history.get(id), clash.no)])),
     clash,
     lines: dialogue.data.lines as ClashLine[],

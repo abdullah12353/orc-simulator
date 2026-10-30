@@ -11,6 +11,8 @@ export interface IntroductionCardData {
   no: number;
   script: IntroductionScript;
   face: ComposedPortrait;
+  /** A `crowned` head (#34): he is introduced as the new Warlord. */
+  crowned: boolean;
 }
 
 type IntroFact = Extract<Fact, { intro: unknown }>;
@@ -36,5 +38,5 @@ export async function loadIntroduction(worldId: string, headNo: number): Promise
   const lastNo = Math.max(...story.map((r) => Number(r.no)));
   const history = await loadFaces(worldId, [id]);
   const face = faceAt(id, history.get(id), lastNo);
-  return { no: headNo, face, script: introductionScript(content, head.intro, { muffled: face.muffled }) };
+  return { no: headNo, face, crowned: head.kind === 'crowned', script: introductionScript(content, head.intro, { muffled: face.muffled }) };
 }

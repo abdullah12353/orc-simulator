@@ -30,6 +30,8 @@ interface Loaded {
   captains: CaptainRow[];
   fears: Map<string, string[]>;
   pending: number;
+  /** The Warlord, marked wherever Captains are picked (#34). */
+  warlordId: string | null;
 }
 
 export function Meddle({ worldId }: { worldId: string }) {
@@ -37,12 +39,13 @@ export function Meddle({ worldId }: { worldId: string }) {
 
   async function load() {
     const { data: me } = await supabase.rpc('my_player', { w: worldId });
-    const [priv, captains, fears, meddles, queued] = await Promise.all([
+    const [priv, captains, fears, meddles, queued, world] = await Promise.all([
       supabase.from('player_private').select('meddles_available').eq('player_id', me).single(),
       supabase.from('captains').select('id, roster, traits, epithet').eq('world_id', worldId),
       supabase.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
       supabase.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
       supabase.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued'),
+      supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
     ]);
     const error = priv.error ?? captains.error ?? fears.error ?? meddles.error ?? queued.error;
     if (error) return setData({ error: error.message });
@@ -53,6 +56,7 @@ export function Meddle({ worldId }: { worldId: string }) {
       captains: (captains.data ?? []).sort((a, b) => (names.get(a.id) ?? a.id).localeCompare(names.get(b.id) ?? b.id)),
       fears: byCaptain,
       pending: (meddles.count ?? 0) + (queued.count ?? 0),
+      warlordId: world.data?.warlord_id ?? null,
     });
   }
 
@@ -109,7 +113,7 @@ function RumourComposer({
   const subject = subjects.find((s) => `${s.from}:${s.key}` === subjectKey) ?? subjects[0];
   const label = (id: string) => {
     const row = active.find((c) => c.id === id);
-    return displayName(names.get(id) ?? id, row?.epithet ?? null) + (row?.roster === 'dead' ? ' (dead)' : '');
+    return displayName(names.get(id) ?? id, row?.epithet ?? null) + (id === data.warlordId ? ' (Warlord)' : '') + (row?.roster === 'dead' ? ' (dead)' : '');
   };
   const preview =
     source && target && subject

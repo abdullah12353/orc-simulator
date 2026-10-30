@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { nameClip } from './audio.ts';
+import { nameClip, sting } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { ClashCard } from './ClashCard.tsx';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
+import { legendaryDeeds } from './legendary.ts';
 import { supabase } from './supabase.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
@@ -91,6 +92,8 @@ interface EditionRow {
 const SHOWN_EDITIONS = 7;
 /** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
 const playedKey = (editionId: string) => `orc:lead-played:${editionId}`;
+/** A Legendary deed leading the edition gets its fanfare (D52), once per edition on this device. */
+const fanfareKey = (editionId: string) => `orc:fanfare:${editionId}`;
 
 function fromRow(r: EditionRow): Edition {
   return {
@@ -120,7 +123,9 @@ export function Herald({ worldId }: { worldId: string }) {
   const [showing, setShowing] = useState<string | null>(null);
   const [pieces, setPieces] = useState<Map<number, SetPiece>>(new Map());
   const [playing, setPlaying] = useState<Playing | null>(null);
+  const [deeds, setDeeds] = useState<Set<number>>(new Set());
   const learn = (heads: Map<number, SetPiece>) => setPieces((known) => new Map([...known, ...heads]));
+  const learnDeeds = (found: Set<number>) => setDeeds((known) => new Set([...known, ...found]));
 
   useEffect(() => {
     let cancelled = false;
@@ -140,8 +145,12 @@ export function Herald({ worldId }: { worldId: string }) {
       if (!cancelled && past.data) {
         const editions = (past.data as EditionRow[]).map(fromRow);
         setArchive(editions);
-        const heads = await setPieceHeads(worldId, [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))]);
-        if (!cancelled) learn(heads);
+        const nos = [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))];
+        const [heads, found] = await Promise.all([setPieceHeads(worldId, nos), legendaryDeeds(worldId, nos)]);
+        if (!cancelled) {
+          learn(heads);
+          learnDeeds(found);
+        }
       }
     })();
 
@@ -152,9 +161,16 @@ export function Herald({ worldId }: { worldId: string }) {
     async function autoPlayLead(edition: Edition) {
       const lead = edition.stories.find((st) => st.slot === 'lead');
       if (!lead) return;
-      const heads = await setPieceHeads(worldId, edition.stories.map((st) => st.storyNo));
+      const nos = edition.stories.map((st) => st.storyNo);
+      const [heads, found] = await Promise.all([setPieceHeads(worldId, nos), legendaryDeeds(worldId, nos)]);
       if (cancelled) return;
       learn(heads);
+      learnDeeds(found);
+      // A Legendary deed always leads, with a fanfare (D52), before its set piece if it has one.
+      if (found.has(lead.storyNo) && !localStorage.getItem(fanfareKey(edition.id))) {
+        localStorage.setItem(fanfareKey(edition.id), '1');
+        void sting('fanfare');
+      }
       const kind = heads.get(lead.storyNo);
       if (!kind || localStorage.getItem(playedKey(edition.id))) return;
       const piece = await loadSetPiece(worldId, kind, lead);
@@ -196,7 +212,7 @@ export function Herald({ worldId }: { worldId: string }) {
           </ul>
         </aside>
       )}
-      <EditionView edition={edition} reader={opened.reader} pieces={pieces} onWatch={watch} />
+      <EditionView edition={edition} reader={opened.reader} pieces={pieces} deeds={deeds} onWatch={watch} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>
@@ -218,11 +234,14 @@ function EditionView({
   edition,
   reader,
   pieces,
+  deeds,
   onWatch,
 }: {
   edition: Edition;
   reader: string;
   pieces: Map<number, SetPiece>;
+  /** Stories that are Legendary deeds (#34). */
+  deeds: Set<number>;
   onWatch: (story: Story) => void;
 }) {
   const watch = (s: Story) => {
@@ -257,7 +276,8 @@ function EditionView({
       </header>
       {!lead && <p className="quiet">A quiet spell. Nothing happened that the Herald could print.</p>}
       {lead && (
-        <div className="lead">
+        <div className={`lead${deeds.has(lead.storyNo) ? ' legendary' : ''}`}>
+          {deeds.has(lead.storyNo) && <p className="kicker">A Legendary deed</p>}
           <h3>{lead.headline}</h3>
           {lead.standfirst && <p className="standfirst">{lead.standfirst}</p>}
           {lead.body && <p>{lead.body}</p>}
