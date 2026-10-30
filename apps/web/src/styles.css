@@ -239,3 +239,25 @@ button.link {
 .editions button.on {
   border-color: #f5f5f4;
 }
+
+/* The Rumour composer (#28) */
+.meddles-left {
+  font-size: 1.1rem;
+}
+.composer select,
+.composer input:not([type='radio']) {
+  width: 100%;
+}
+.composer .claims {
+  border: 1px solid #555;
+  padding: 0.5rem;
+}
+.composer .claims label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 1rem;
+}
+.composer .preview {
+  font-style: italic;
+}

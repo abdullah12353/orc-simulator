@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
 import { Herald } from './Herald.tsx';
+import { Meddle } from './Meddle.tsx';
 import { supabase } from './supabase.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
@@ -117,12 +118,15 @@ function Worlds({ initial }: { initial?: string }) {
 }
 
 function WorldTabs({ worldId }: { worldId: string }) {
-  const [tab, setTab] = useState<'herald' | 'captains' | 'facts'>('herald');
+  const [tab, setTab] = useState<'herald' | 'meddle' | 'captains' | 'facts'>('herald');
   return (
     <>
       <nav className="tabs">
         <button className={tab === 'herald' ? 'on' : ''} onClick={() => setTab('herald')}>
           The Herald
+        </button>
+        <button className={tab === 'meddle' ? 'on' : ''} onClick={() => setTab('meddle')}>
+          Meddle
         </button>
         <button className={tab === 'captains' ? 'on' : ''} onClick={() => setTab('captains')}>
           Captains
@@ -132,6 +136,7 @@ function WorldTabs({ worldId }: { worldId: string }) {
         </button>
       </nav>
       {tab === 'herald' && <Herald worldId={worldId} />}
+      {tab === 'meddle' && <Meddle worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}
       {tab === 'facts' && <FactLines worldId={worldId} />}
     </>
