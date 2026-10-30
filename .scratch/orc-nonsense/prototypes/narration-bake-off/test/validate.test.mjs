@@ -64,6 +64,12 @@ test('the loser must speak last', () => {
   assert.equal(r.failure, 'loser_not_last');
 });
 
+test('display names map to speaker ids with a flag', () => {
+  const r = validateClash(asJson([line('Lord Snarlbottom'), line('Krúg'), line('KRUG')]), fact);
+  assert.equal(r.ok, true);
+  assert.ok(r.flags.includes('speaker_by_name'));
+});
+
 test('an unknown speaker is a failure', () => {
   const r = validateClash(asJson([line('snarlbottom'), line('gandalf'), line('krug')]), fact);
   assert.equal(r.failure, 'unknown_speaker');

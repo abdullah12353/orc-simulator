@@ -67,9 +67,15 @@ function parseLines(raw, { speakerIds, expectedLines }) {
   }
   if (lines.length < 2 || lines.length > 4) return { failure: 'line_count', flags };
   if (lines.length !== expectedLines) flags.push('line_count_off');
-  if (!lines.every((l) => speakerIds.includes(l.speaker))) return { failure: 'unknown_speaker', flags };
-  return { flags, lines };
+  // Display names ("Lord Snarlbottom", "Krúg") map to ids in one line of real code, so they're flagged, not failed.
+  const ids = lines.map((l) => (speakerIds.includes(l.speaker) ? l.speaker : speakerIds.find((id) => speakerKey(l.speaker) === id)));
+  if (ids.some((id) => !id)) return { failure: 'unknown_speaker', flags };
+  if (ids.some((id, i) => id !== lines[i].speaker)) flags.push('speaker_by_name');
+  return { flags, lines: lines.map((l, i) => ({ ...l, speaker: ids[i] })) };
 }
+
+const speakerKey = (name) => name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
+  .replace(/^(lord|old|big|sir)\s+/, '').replace(/[^a-z]/g, '');
 
 const normalise = (text) => text.toLowerCase().replace(/\[.*?\]/g, '').replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').trim();
 
