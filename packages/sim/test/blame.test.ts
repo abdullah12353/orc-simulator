@@ -155,7 +155,7 @@ test('ambient incidents carry no causes and no Blame', () => {
   for (let i = 0; i < 30; i++) {
     const r = step(state, 4);
     state = r.state;
-    for (const f of r.facts.filter((x) => x.kind === 'incident')) {
+    for (const f of r.facts.filter((x) => x.kind === 'incident' && x.trigger === 'ambient')) {
       incidents++;
       assert.deepEqual([f.causes, f.blame], [[], []]);
     }

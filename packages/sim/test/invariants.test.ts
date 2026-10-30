@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { CLAIMS } from '@orc/content';
-import { stateHash, type Fact, type Intent, type WorldState } from '@orc/sim';
+import { CLAIMS, content } from '@orc/content';
+import { fallbackDialogue, shapeProblem, stateHash, type Fact, type Intent, type WorldState } from '@orc/sim';
 import { activeIds, freshWorld, rumour, SEEDS, step } from './support.ts';
 
 const PLAYERS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
@@ -45,16 +45,25 @@ function play(worldSeed: number, ticks: number) {
       const text = JSON.stringify(f);
       for (const id of pending) assert.ok(!text.includes(id), `Fact ${f.no} carries pending Meddle ${id}`);
       assert.ok(!/gold|amount|stake/i.test(Object.keys(f).join(',')), `Fact ${f.no} carries gold or a Stake`);
+      if (f.kind === 'clash') {
+        assert.ok(content.banks.clash.scripts[f.fallbackKey], `Clash ${f.no} has fallback key ${f.fallbackKey}`);
+        assert.equal(shapeProblem(f, fallbackDialogue(content, f)), null, `Clash ${f.no}'s fallback fits its shape`);
+      }
+      for (const b of f.blame) assert.ok(b.hops >= 0 && b.hops <= 6, `Fact ${f.no} Blame hop ${b.hops}`);
     }
+    for (const t of state.trophies) assert.ok(state.captains[t.holder] && t.holder !== t.takenFrom, `Trophy ${t.no}`);
+    assert.equal(new Set(state.trophies.map((t) => t.no)).size, state.trophies.length, 'one holder per Trophy');
   }
   return { state, facts, hash: stateHash(state) };
 }
 
 test('invariants hold over long runs with Players Meddling, and the same inputs replay to the same states', () => {
   let landed = 0;
+  let clashes = 0;
   for (let worldSeed = 1; worldSeed <= SEEDS; worldSeed++) {
     const a = play(worldSeed, 300);
     landed += a.facts.filter((f) => f.kind === 'rumour').length;
+    clashes += a.facts.filter((f) => f.kind === 'clash').length;
     if (worldSeed <= 3) {
       const b = play(worldSeed, 300);
       assert.equal(b.hash, a.hash, `world seed ${worldSeed} replays to the same state`);
@@ -62,4 +71,5 @@ test('invariants hold over long runs with Players Meddling, and the same inputs 
     }
   }
   assert.ok(landed > SEEDS * 10, `only ${landed} Rumours landed`);
+  assert.ok(clashes > SEEDS, `only ${clashes} Clashes`);
 });

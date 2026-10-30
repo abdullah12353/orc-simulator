@@ -21,18 +21,24 @@ test('day zero runs about 288 unwatched 5-minute steps, ending at the moment of 
   assert.equal(state.world.id, 'world-1');
 });
 
-test('day zero fills the previous 24 h with about 25 Facts', () => {
-  let total = 0;
+test('day zero fills the previous 24 h with a day of stories: about 25 ambient ones, and the seeded Grudges boil over', () => {
+  let ambient = 0;
+  let heads = 0;
+  let clashes = 0;
   for (let seed = 1; seed <= SEEDS; seed++) {
     const { steps } = dayZero(content, seed, T0, 'w');
     const facts = steps.flatMap((s) => s.facts);
-    total += facts.length;
+    ambient += facts.filter((f) => f.kind === 'incident' && f.trigger === 'ambient').length;
+    heads += facts.filter((f) => f.no === f.storyNo).length;
+    clashes += facts.filter((f) => f.kind === 'clash').length;
     for (const f of facts) {
       assert.ok(ms(f.at) > ms(T0) - DAY_MS && ms(f.at) <= ms(T0), `${f.at} is inside the previous 24 h`);
     }
   }
-  const mean = total / SEEDS;
-  assert.ok(mean > 18 && mean < 40, `mean ${mean} Facts per day zero`);
+  assert.ok(ambient / SEEDS > 18 && ambient / SEEDS < 40, `mean ${ambient / SEEDS} ambient incidents per day zero`);
+  // Seeded Grudges start below −50 (D57), so they Clash; each Clash vents its pair, so they burn out.
+  assert.ok(clashes / SEEDS > 4 && clashes / SEEDS < 20, `mean ${clashes / SEEDS} Clashes per day zero`);
+  assert.ok(heads / SEEDS < 80, `mean ${heads / SEEDS} stories per day zero`);
 });
 
 test('day zero is the same as casting at created_at − 24 h and stepping the world, tick by tick', () => {

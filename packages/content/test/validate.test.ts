@@ -107,3 +107,64 @@ test('a Rumour outcome without its Template is rejected, and {claim} is only all
   assert.ok(errors.some((e) => e.includes('rumour.garbled')), errors.join('\n'));
   assert.ok(errors.some((e) => e.includes(broken.templates[0]!.id) && e.includes('{claim}')), errors.join('\n'));
 });
+
+// ---- Clashes and reactions (#30)
+
+test('a fallback Clash script needs 3 lines, or 4 with a wrong saviour, and the loser speaks last', () => {
+  const broken = clone(content);
+  const scripts = broken.banks.clash.scripts;
+  const plainKey = Object.keys(scripts).find((k) => !scripts[k]!.saviour)!;
+  const saviourKey = Object.keys(scripts).find((k) => scripts[k]!.saviour)!;
+  const plain = scripts[plainKey]!;
+  plain.lines = [plain.lines[0]!, plain.lines[2]!, { speaker: 'winner', text: 'I win.' }];
+  const saviour = scripts[saviourKey]!;
+  saviour.lines = saviour.lines.filter((l) => l.speaker !== 'saviour');
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes(plainKey) && e.includes('loser')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes(saviourKey) && e.includes('4 lines')), errors.join('\n'));
+});
+
+test('every Clash outcome has a fallback script, with and without a wrong saviour', () => {
+  const broken = clone(content);
+  for (const [key, s] of Object.entries(broken.banks.clash.scripts)) {
+    if (s.outcomes.includes('fled') && s.saviour) delete broken.banks.clash.scripts[key];
+  }
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('fled') && e.includes('saviour')), errors.join('\n'));
+});
+
+test('Clash scripts and results may only use the names and the magnet', () => {
+  const broken = clone(content);
+  const key = Object.keys(broken.banks.clash.scripts)[0]!;
+  broken.banks.clash.scripts[key]!.lines[0]!.text = 'You {tag}!';
+  broken.banks.clash.results.won[0] = '{ghost} won.';
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes(key) && e.includes('{tag}')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('results.won') && e.includes('{ghost}')), errors.join('\n'));
+});
+
+test('Clashes need Trophies, exactly one Grudge Clash Template, and Clash Templates cast a and b', () => {
+  const broken = clone(content);
+  broken.banks.trophies = {};
+  const grudge = broken.templates.find((t) => t.kind === 'clash' && t.trigger === 'grudge')!;
+  grudge.roles = [{ name: 'x' }, { name: 'b' }];
+  grudge.lines = grudge.lines.map((l) => l.replace('{a}', '{x}')) as typeof grudge.lines;
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('banks.trophies')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes(grudge.id) && e.includes('roles a and b')), errors.join('\n'));
+
+  const none = clone(content);
+  none.templates = none.templates.filter((t) => !(t.kind === 'clash' && t.trigger === 'grudge'));
+  assert.ok(validateContent(none).some((e) => e.includes('Grudge Clash')), 'the Grudge roll needs its Template');
+});
+
+test("a reaction Template needs `after`, and may only cast roles its parent's kind offers", () => {
+  const broken = clone(content);
+  const sulk = broken.templates.find((t) => t.id === 'reaction.sulk')!;
+  sulk.roles[0]!.from = 'goose';
+  const moat = broken.templates.find((t) => t.id === 'reaction.moat-blame')!;
+  delete moat.after;
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('reaction.sulk') && e.includes('goose')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('reaction.moat-blame') && e.includes('after')), errors.join('\n'));
+});

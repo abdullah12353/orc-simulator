@@ -124,14 +124,16 @@ test('ticks keep stepping the same world, each with its own seq', async () => {
     if (out.status === 'stepped') assert.equal(out.tickSeq, FIRST + i);
   }
   assert.equal(await count('ticks', worldId), AFTER_DAY_ZERO + 5);
-  // Grudge tags and Facts share the sim's per-world counter: every number is used exactly once.
+  // Facts, Grudge tags, Trophies and Fuses share the sim's per-world counter: every number is used once
+  // (fired Fuses are deleted, so there are gaps).
   const nos = await db()`
     select no::int from facts where world_id = ${worldId}
     union all select no::int from grudge_tags where world_id = ${worldId}
+    union all select no::int from trophies where world_id = ${worldId}
+    union all select no::int from fuses where world_id = ${worldId}
     order by no`;
-  assert.deepEqual(
-    nos.map((f) => f.no),
-    nos.map((_, i) => i + 1),
-    'sim-allocated numbers are dense from 1',
-  );
+  const [w] = await db()`select next_no::int from worlds where id = ${worldId}`;
+  assert.equal(new Set(nos.map((f) => f.no)).size, nos.length, 'no number is used twice');
+  assert.equal(nos[0]!.no, 1);
+  assert.ok(nos.at(-1)!.no < w!.next_no, 'next_no is past every number used');
 });

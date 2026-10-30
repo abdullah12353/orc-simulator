@@ -37,6 +37,23 @@ export interface RoleDef {
   name: string;
   /** Pins the role to one Captain; otherwise any eligible Captain may be cast. */
   captain?: CaptainId;
+  /**
+   * Reaction Templates: cast this role from the parent Fact's role of this name (a Clash offers `a`, `b`,
+   * `winner`, `loser` and `saviour`; a Rumour `source`, `target` and `reached`; an incident its roles).
+   */
+  from?: string;
+  /** Cast precondition: the Captain must have this Trait. */
+  trait?: string;
+}
+
+/** What a reaction Template follows (D46 trigger `reaction`), and how likely it is to. */
+export interface AfterDef {
+  /** The parent Fact's kind: `incident`, `rumour` or `clash`. */
+  kind: 'incident' | 'rumour' | 'clash';
+  /** Only after these outcomes (an incident's outcome key, a Rumour's or a Clash's outcome). Omit for any. */
+  outcomes?: string[];
+  /** Chance it follows a matching parent, 0–1. Halved if the Template ran in the last 24 h. */
+  chance: number;
 }
 
 export interface OutcomeDef {
@@ -51,11 +68,19 @@ export interface OutcomeDef {
  */
 export interface TemplateDef {
   id: TemplateId;
-  /** `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). */
-  kind: 'incident' | 'rumour';
-  /** `ambient`: rolled on a tick. `meddle`: a Meddle landing. */
-  trigger: 'ambient' | 'meddle';
+  /**
+   * `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). `clash` Templates start
+   * a Clash and voice its headline: their lines get the `{tag}` and `{result}` slots (see `ClashBanks`).
+   */
+  kind: 'incident' | 'rumour' | 'clash';
+  /**
+   * `ambient`: rolled on a tick. `meddle`: a Meddle landing. `grudge`: the Grudge Clash roll (one Template,
+   * roles `a` and `b`). `reaction`: follows another Fact (see `after`), up to 3 deep in a tick.
+   */
+  trigger: 'ambient' | 'meddle' | 'grudge' | 'reaction';
   roles: RoleDef[];
+  /** Reaction Templates only: what they follow. */
+  after?: AfterDef;
   /** Non-Captain placeholders the sim fills in. */
   slots?: string[];
   outcomes: OutcomeDef[];
@@ -92,6 +117,55 @@ export interface Banks {
   garbleLadder: Claim[];
   /** The Herald's templated Blame line (D53, §4.1). It mocks the Meddle, never the Player. */
   blame: BlameLineBank;
+  /** Trophies a Clash winner takes (D15: a tag, not an inventory). Text reads after "his": "nose ring". */
+  trophies: Record<BankKey, TrophyDef>;
+  /** Everything a Clash needs to be voiced without a model: headline results, fallback scripts, tags. */
+  clash: ClashBanks;
+}
+
+export interface TrophyDef {
+  /** Reads after "his": "nose ring". */
+  text: string;
+  /** What it mocks, for narration ("vanity", "his mum"). */
+  mocks: string;
+}
+
+/** A Clash's outcome, from the side of `a` (the one who started it): won, defeated, or the loser fled. */
+export type ClashOutcome = 'won' | 'defeated' | 'fled';
+export type ClashSpeaker = 'winner' | 'loser' | 'saviour';
+
+/**
+ * A fallback Clash script (D26): 3 lines, or 4 when a wrong saviour crashes in, and the loser speaks last.
+ * Text may use `{winner}`, `{loser}`, `{saviour}` and `{magnet}` (what drew the saviour). Grudge tags are
+ * third-person ("still owes him a pie"), so they go in headlines, not mouths.
+ */
+export interface ClashScript {
+  /** The outcomes it fits. */
+  outcomes: ClashOutcome[];
+  /** A wrong-saviour script (4 lines, one of them his) or a plain one (3 lines, none of them his). */
+  saviour: boolean;
+  lines: { speaker: ClashSpeaker; text: string }[];
+}
+
+export interface ClashBanks {
+  /**
+   * The `{result}` slot of a Clash headline: 3 phrasings per outcome (picked by the line variant), plus
+   * one more sentence appended when a wrong saviour barged in. Uses `{winner}`, `{loser}`, `{saviour}`, `{magnet}`.
+   */
+  results: Record<ClashOutcome | 'saviour', [string, string, string]>;
+  /** The `{tag}` slot when the pair has no Grudge tag to name. */
+  noTag: string;
+  /** About 10 fallback scripts, keyed by slug (the Clash Fact's `fallbackKey`). */
+  scripts: Record<BankKey, ClashScript>;
+  /** What draws a wrong saviour in, per Trait ("Glutton" → "pies"). A Captain with one is likelier to crash in. */
+  magnets: Record<string, string>;
+  /** Used for a saviour with no magnet Trait: he just heard the noise. */
+  anyMagnet: string;
+  /**
+   * Grudge tags a Clash leaves on the loser (towards the winner) and on him towards a wrong saviour.
+   * `trophy` uses `{trophy}`; `saviour` uses `{magnet}`.
+   */
+  tags: { beaten: string[]; fled: string[]; trophy: string; saviour: string };
 }
 
 /**

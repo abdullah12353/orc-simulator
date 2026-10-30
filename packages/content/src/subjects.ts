@@ -6,13 +6,10 @@ export interface SubjectRef {
   key: string;
 }
 
-/**
- * How a Rumour's subject reads in a line, after "his": "appetite", "fear of water", "secret goose".
- * Trophies have no bank yet (#30), so their slug is spelled out.
- */
+/** How a Rumour's subject reads in a line, after "his": "appetite", "fear of water", "nose ring", "secret goose". */
 export function subjectText(content: Content, subject: SubjectRef): string {
-  const { subjects, absurdSubjects } = content.banks;
+  const { subjects, absurdSubjects, trophies } = content.banks;
   if (subject.from === 'absurd') return absurdSubjects[subject.key] ?? subject.key;
-  if (subject.from === 'trophy') return subject.key.replace(/-/g, ' ');
+  if (subject.from === 'trophy') return trophies[subject.key]?.text ?? subject.key.replace(/-/g, ' ');
   return subjects[subject.key] ?? subject.key.toLowerCase();
 }

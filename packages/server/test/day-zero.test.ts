@@ -38,20 +38,21 @@ test('create_world casts the world: 12 active with Krúg, the rest in reserve, t
       { captain_id: 'krug', fear: 'Water', added: false },
     );
 
+    // The seeded Grudges are old history (no cause); day zero's Clashes add tags of their own.
     const tags = await tx`
-      select no::int, holder_id, toward_id, tag, cause_fact from grudge_tags where world_id = ${worldId} order by no`;
-    assert.deepEqual(
-      tags.map((t) => [t.no, t.holder_id, t.toward_id, t.tag, t.cause_fact]),
-      state.grudgeTags.map((t) => [t.no, t.holder, t.toward, t.tag, null]),
-    );
-    assert.ok(tags.length >= 5 && tags.length <= 7);
+      select no::int, holder_id, toward_id, tag, cause_fact::int from grudge_tags where world_id = ${worldId} order by no`;
+    const seeded = tags.filter((t) => t.cause_fact === null);
+    assert.ok(seeded.length >= 5 && seeded.length <= 7);
+    assert.deepEqual(seeded.map((t) => t.no), seeded.map((_, i) => i + 1), 'seeded first, numbered 1..n');
+    for (const t of state.grudgeTags) {
+      assert.ok(tags.some((r) => r.no === t.no && r.tag === t.tag && r.cause_fact === (t.cause?.fact ?? null)), `tag ${t.no}`);
+    }
     const affinity = await tx<{ holder_id: string; toward_id: string; value: number }[]>`
       select holder_id, toward_id, value from affinity where world_id = ${worldId}`;
-    assert.equal(affinity.length, tags.length);
-    for (const a of affinity) {
-      assert.equal(a.value, state.affinity[`${a.holder_id}>${a.toward_id}`]);
-      assert.ok(a.value < -50);
-    }
+    assert.deepEqual(
+      Object.fromEntries(affinity.map((a) => [`${a.holder_id}>${a.toward_id}`, a.value])),
+      state.affinity,
+    );
   });
 });
 

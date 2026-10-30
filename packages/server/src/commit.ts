@@ -1,10 +1,19 @@
 // Shared commit writers: the tick and create_world (day zero) write Facts, ticks rows and world state
 // the same way. Everything is bulk-inserted through jsonb_array_elements (one statement per table).
-import type { BlameEntry, Cause, Fact, WorldState } from '@orc/sim';
+import type { Content } from '@orc/content';
+import { fallbackDialogue, type BlameEntry, type Cause, type Fact, type Fuse, type Trophy, type WorldState } from '@orc/sim';
 import { jsonb, type Tx } from './db.ts';
 
-/** All Facts in one statement (day zero inserts hundreds), with the full Fact kept as payload. */
-export async function insertFacts(tx: Tx, worldId: string, rows: { tickSeq: number; fact: Fact }[]): Promise<void> {
+/**
+ * All Facts in one statement (day zero inserts hundreds), with the full Fact kept as payload, plus their
+ * causal edges, Blame, and every Clash's dialogue (its fallback script, data-model §3 step 6).
+ */
+export async function insertFacts(
+  tx: Tx,
+  worldId: string,
+  rows: { tickSeq: number; fact: Fact }[],
+  content: Content,
+): Promise<void> {
   if (rows.length === 0) return;
   await tx`
     insert into facts (world_id, no, tick_seq, at, kind, story_no, template_id, variant, line, tier, "cast",
@@ -30,6 +39,40 @@ export async function insertFacts(tx: Tx, worldId: string, rows: { tickSeq: numb
              (b->>'verb')::meddle_verb, (b->>'landedFact')::bigint, (b->>'landedAt')::timestamptz, (b->>'hops')::smallint
       from jsonb_array_elements(${jsonb(tx, blame)}) as b`;
   }
+
+  // Every Clash gets its fallback script now, in this transaction; narration (#37) upgrades it later.
+  const dialogue = rows.flatMap(({ fact }) =>
+    fact.kind === 'clash' ? [{ fact: fact.no, at: fact.at, key: fact.fallbackKey, lines: fallbackDialogue(content, fact) }] : [],
+  );
+  if (dialogue.length > 0) {
+    await tx`
+      insert into clash_dialogue (world_id, fact_no, lines, source, fallback_key, updated_at)
+      select ${worldId}, (d->>'fact')::bigint, d->'lines', 'fallback', d->>'key', (d->>'at')::timestamptz
+      from jsonb_array_elements(${jsonb(tx, dialogue)}) as d`;
+  }
+}
+
+/** Puts Trophies in their (new) holders' hands. Current holder only: the history is in the log (D15). */
+export async function upsertTrophies(tx: Tx, worldId: string, trophies: Trophy[], at: string): Promise<void> {
+  if (trophies.length === 0) return;
+  await tx`
+    insert into trophies (world_id, no, kind, holder_id, taken_from_id, origin_fact, acquired_at)
+    select ${worldId}, (t->>'no')::bigint, t->>'key', t->>'holder', t->>'takenFrom', (t#>>'{origin,fact}')::bigint, ${at}
+    from jsonb_array_elements(${jsonb(tx, trophies)}) as t
+    on conflict (world_id, no) do update set
+      holder_id = excluded.holder_id, taken_from_id = excluded.taken_from_id,
+      origin_fact = excluded.origin_fact, acquired_at = excluded.acquired_at`;
+}
+
+/** Queues Fuses: a Meddle's, or a reaction that chained past 3 deep (with its cast and parent Fact). */
+export async function insertFuses(tx: Tx, worldId: string, fuses: Fuse[], createdTick: number): Promise<void> {
+  if (fuses.length === 0) return;
+  await tx`
+    insert into fuses (world_id, no, due_at, kind, meddle_id, template_id, "cast", parent_fact, created_tick)
+    select ${worldId}, (f->>'no')::bigint, (f->>'dueAt')::timestamptz,
+           case when f ? 'reaction' then 'reaction' else 'meddle' end, (f->>'meddleId')::uuid,
+           f#>>'{reaction,templateId}', f#>'{reaction,cast}', (f#>>'{reaction,parent,fact}')::bigint, ${createdTick}
+    from jsonb_array_elements(${jsonb(tx, fuses)}) as f`;
 }
 
 /**
@@ -87,8 +130,8 @@ export async function insertTicks(tx: Tx, worldId: string, rows: TickRow[]): Pro
 }
 
 /**
- * Writes a whole world's Captains, Fears, affinity and Grudge tags. Used once, by create_world, for
- * the state day zero ends in; ticks write changes through the diff instead.
+ * Writes a whole world's Captains, Fears, affinity, Grudge tags, Trophies and reaction Fuses. Used once,
+ * by create_world, for the state day zero ends in (after its Facts); ticks write changes through the diff.
  */
 export async function insertWorldState(tx: Tx, worldId: string, state: WorldState): Promise<void> {
   const captains = Object.values(state.captains).map((c) => ({
@@ -134,4 +177,7 @@ export async function insertWorldState(tx: Tx, worldId: string, state: WorldStat
              (g->>'at')::timestamptz
       from jsonb_array_elements(${jsonb(tx, state.grudgeTags)}) as g`;
   }
+
+  await upsertTrophies(tx, worldId, state.trophies, state.world.now);
+  await insertFuses(tx, worldId, state.fuses, state.world.tickSeq);
 }

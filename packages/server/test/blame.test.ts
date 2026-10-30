@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { content } from '@orc/content';
 import { insertFacts, loadCauses, openEdition, tickWorld } from '@orc/server';
 import { chain, type BlameEntry, type Fact } from '@orc/sim';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
@@ -54,9 +55,10 @@ test('the tick writes fact_blame and fact_causes for a landed Rumour, readable b
 
   const [grudge] = await db()`
     select no::int from facts where world_id = ${world.worldId} and story_no = ${head.no} and kind = 'grudge'`;
+  // Only this story: a Hothead hearer would carry the Blame on into a Clash of its own.
   const blame = await asUser(world.userId, (tx) => tx`
     select fact_no::int, meddle_id, player_id, verb, landed_fact::int, landed_at, hops
-    from fact_blame where world_id = ${world.worldId} order by fact_no`);
+    from fact_blame where world_id = ${world.worldId} and fact_no in (${head.no}, ${grudge!.no}) order by fact_no`);
   assert.deepEqual(
     blame.map((b) => [b.fact_no, b.meddle_id, b.player_id, b.verb, b.landed_fact, new Date(b.landed_at).toISOString(), b.hops]),
     [
@@ -65,7 +67,7 @@ test('the tick writes fact_blame and fact_causes for a landed Rumour, readable b
     ],
   );
   const causes = await asUser(world.userId, (tx) => tx`
-    select fact_no::int, cause_no::int from fact_causes where world_id = ${world.worldId}`);
+    select fact_no::int, cause_no::int from fact_causes where world_id = ${world.worldId} and fact_no in (${head.no}, ${grudge!.no})`);
   assert.deepEqual(causes.map((c) => [c.fact_no, c.cause_no]), [[grudge!.no, head.no]]);
 
   const outsider = await newUser();
@@ -118,7 +120,7 @@ test('Blame lines in an edition name Players in landing order', async () => {
     outcomeKey: 'brawl',
   };
   await db().begin(async (tx) => {
-    await insertFacts(tx, world.worldId, [{ tickSeq: w!.tick_seq, fact: story }]);
+    await insertFacts(tx, world.worldId, [{ tickSeq: w!.tick_seq, fact: story }], content);
     await tx`update worlds set next_no = next_no + 1 where id = ${world.worldId}`;
   });
   assert.deepEqual(
@@ -136,9 +138,11 @@ test('Blame lines in an edition name Players in landing order', async () => {
   );
   assert.equal(lines.get(heads[0]!.no), 'It all began when Dazza planted a Rumour.');
   assert.equal(lines.get(heads[2]!.no), 'It all began when Kev planted a Rumour.');
-  for (const s of out.edition.stories) {
-    if (!heads.some((h) => h.no === s.storyNo) && s.storyNo !== story.no) assert.equal(s.blameLine, null, 'no Blame, no line');
-  }
+  // Anything else gets a line only if it carries Blame (a Clash over one of those Grudges would).
+  const blamed = new Set(
+    (await db()`select distinct fact_no::int from fact_blame where world_id = ${world.worldId}`).map((r) => r.fact_no),
+  );
+  for (const s of out.edition.stories) assert.equal(s.blameLine !== null, blamed.has(s.storyNo), `story ${s.storyNo}: no Blame, no line`);
 
   // Stored with the edition: reopening (nothing new, so no new edition) shows the same lines.
   const again = await openEdition({ sql: db(), now: clock.now }, world);
