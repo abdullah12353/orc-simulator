@@ -74,99 +74,77 @@ const CORS = {
   'access-control-allow-methods': 'POST, OPTIONS',
 };
 
-/**
- * POST /create-world with the caller's Supabase JWT. `getUserId` resolves the bearer token to the
- * signed-in user (null if it isn't valid). Body `{ "name": "...", "displayName": "..." }`.
- */
-export async function handleCreateWorld(
-  req: Request,
-  deps: CreateWorldDeps & { getUserId: (req: Request) => Promise<string | null> },
-): Promise<Response> {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
-  const userId = await deps.getUserId(req);
-  if (!userId) return json({ error: 'sign in first' }, 401, CORS);
+const UUID = /^[0-9a-f-]{36}$/i;
 
-  let body: { name?: unknown; displayName?: unknown };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return json({ error: 'body must be JSON' }, 400, CORS);
-  }
-  try {
-    const out = await createWorld(deps, {
-      userId,
-      name: String(body.name ?? ''),
-      displayName: String(body.displayName ?? ''),
-    });
-    return json(out, 201, CORS);
-  } catch (e) {
-    if (e instanceof CreateWorldError) return json({ error: e.message }, 400, CORS);
-    throw e;
-  }
+/** What every signed-in endpoint needs: `getUserId` resolves the bearer token (null if it isn't valid). */
+interface UserDeps {
+  getUserId: (req: Request) => Promise<string | null>;
 }
+
+/**
+ * A POST from the PWA by a signed-in user, with a JSON body: answers the CORS preflight, refuses other
+ * methods (405), strangers (401) and bodies that aren't JSON (400), and turns the core's refusal error
+ * (its message is the reason) into `status`. Anything else is a real error and propagates.
+ */
+function userEndpoint<D extends UserDeps>(
+  refusal: { error: abstract new (...args: never[]) => Error; status: number },
+  handle: (deps: D, userId: string, body: Record<string, unknown>) => Promise<Response>,
+): (req: Request, deps: D) => Promise<Response> {
+  return async (req, deps) => {
+    if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+    if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
+    const userId = await deps.getUserId(req);
+    if (!userId) return json({ error: 'sign in first' }, 401, CORS);
+    let body: Record<string, unknown>;
+    try {
+      body = ((await req.json()) ?? {}) as Record<string, unknown>;
+    } catch {
+      return json({ error: 'body must be JSON' }, 400, CORS);
+    }
+    try {
+      return await handle(deps, userId, body);
+    } catch (e) {
+      if (e instanceof refusal.error) return json({ error: e.message }, refusal.status, CORS);
+      throw e;
+    }
+  };
+}
+
+/** POST /create-world with the caller's Supabase JWT. Body `{ "name": "...", "displayName": "..." }`. */
+export const handleCreateWorld = userEndpoint<CreateWorldDeps & UserDeps>(
+  { error: CreateWorldError, status: 400 },
+  async (deps, userId, body) =>
+    json(await createWorld(deps, { userId, name: String(body.name ?? ''), displayName: String(body.displayName ?? '') }), 201, CORS),
+);
 
 /**
  * POST /open-edition with the caller's Supabase JWT. Body `{ "worldId": "..." }`. Returns the caller's
  * `OpenEditionResult`: a new edition if one is due, otherwise the last one plus a Stop press.
  */
-export async function handleOpenEdition(
-  req: Request,
-  deps: OpenEditionDeps & { getUserId: (req: Request) => Promise<string | null> },
-): Promise<Response> {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
-  const userId = await deps.getUserId(req);
-  if (!userId) return json({ error: 'sign in first' }, 401, CORS);
-
-  let body: { worldId?: unknown };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return json({ error: 'body must be JSON' }, 400, CORS);
-  }
-  const worldId = String(body.worldId ?? '');
-  if (!/^[0-9a-f-]{36}$/i.test(worldId)) return json({ error: 'worldId must be a uuid' }, 400, CORS);
-  try {
+export const handleOpenEdition = userEndpoint<OpenEditionDeps & UserDeps>(
+  { error: OpenEditionError, status: 403 },
+  async (deps, userId, body) => {
+    const worldId = String(body.worldId ?? '');
+    if (!UUID.test(worldId)) return json({ error: 'worldId must be a uuid' }, 400, CORS);
     return json(await openEdition(deps, { userId, worldId }), 200, CORS);
-  } catch (e) {
-    if (e instanceof OpenEditionError) return json({ error: e.message }, 403, CORS);
-    throw e;
-  }
-}
+  },
+);
 
 /**
  * POST /create-clipping with the caller's Supabase JWT. Body `{ "worldId", "editionId", "storyNo" }`: a story
  * printed in one of the caller's own editions. Returns `{ id, snapshot }` (201).
  */
-export async function handleCreateClipping(
-  req: Request,
-  deps: ClippingDeps & { getUserId: (req: Request) => Promise<string | null> },
-): Promise<Response> {
-  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
-  const userId = await deps.getUserId(req);
-  if (!userId) return json({ error: 'sign in first' }, 401, CORS);
-
-  let body: { worldId?: unknown; editionId?: unknown; storyNo?: unknown };
-  try {
-    body = (await req.json()) as typeof body;
-  } catch {
-    return json({ error: 'body must be JSON' }, 400, CORS);
-  }
-  const uuid = /^[0-9a-f-]{36}$/i;
-  const worldId = String(body.worldId ?? '');
-  const editionId = String(body.editionId ?? '');
-  const storyNo = Number(body.storyNo);
-  if (!uuid.test(worldId) || !uuid.test(editionId)) return json({ error: 'worldId and editionId must be uuids' }, 400, CORS);
-  if (!Number.isSafeInteger(storyNo) || storyNo < 1) return json({ error: 'storyNo must be a Fact number' }, 400, CORS);
-  try {
+export const handleCreateClipping = userEndpoint<ClippingDeps & UserDeps>(
+  { error: ClippingError, status: 403 },
+  async (deps, userId, body) => {
+    const worldId = String(body.worldId ?? '');
+    const editionId = String(body.editionId ?? '');
+    const storyNo = Number(body.storyNo);
+    if (!UUID.test(worldId) || !UUID.test(editionId)) return json({ error: 'worldId and editionId must be uuids' }, 400, CORS);
+    if (!Number.isSafeInteger(storyNo) || storyNo < 1) return json({ error: 'storyNo must be a Fact number' }, 400, CORS);
     return json(await createClipping(deps, { userId, worldId, editionId, storyNo }), 201, CORS);
-  } catch (e) {
-    if (e instanceof ClippingError) return json({ error: e.message }, 403, CORS);
-    throw e;
-  }
-}
+  },
+);
 
 /** Resolves a request's bearer token to a user id by asking Supabase Auth (works with any key type). */
 export function supabaseUserResolver(opts: { supabaseUrl: string; anonKey: string; fetch?: typeof fetch }) {
