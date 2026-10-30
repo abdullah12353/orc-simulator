@@ -1,7 +1,8 @@
 // Mutable scratch for one tick: allocates sim numbers, collects Facts and the diff, and keeps the
 // running values that several steps of one tick touch (affinity, Meddle allowances).
+import { chain, pairCauses, type Links } from './blame.ts';
 import type { Rng } from './rng.ts';
-import type { CaptainId, Fact, PlayerId, StateDiff, WorldState } from './types.ts';
+import type { BlameEntry, CaptainId, Cause, Fact, FactNo, PlayerId, StateDiff, WorldState } from './types.ts';
 
 /** Player allowance caps (Meddle verbs #7). */
 export const MEDDLE_CAP = 6;
@@ -32,6 +33,8 @@ export const pairKey = (holder: CaptainId, toward: CaptainId) => `${holder}>${to
 export class TickContext {
   readonly facts: Fact[] = [];
   readonly diff = emptyDiff();
+  /** Callbacks per Fact number, for comedy weight (D50). Never Blame. */
+  readonly callbacks = new Map<FactNo, number>();
   readonly state: WorldState;
   readonly rng: Rng;
   private nextNo: number;
@@ -49,6 +52,21 @@ export class TickContext {
     const no = this.nextNo++;
     this.diff.world.nextNo = this.nextNo;
     return no;
+  }
+
+  /**
+   * A new Fact's `causes` and `blame` (data-model §2): only what its Template required carries Blame.
+   * Callbacks are counted against `no` for comedy weight. Every new Template and Fact kind goes through this.
+   */
+  link(no: FactNo, links: Links): { causes: FactNo[]; blame: BlameEntry[] } {
+    const { causes, blame, callbacks } = chain(links);
+    if (callbacks > 0) this.callbacks.set(no, (this.callbacks.get(no) ?? 0) + callbacks);
+    return { causes, blame };
+  }
+
+  /** A pair's Grudge tags from the last 7 days (the newest 3, this tick's included) as causes. */
+  pairCauses(holder: CaptainId, toward: CaptainId): Cause[] {
+    return pairCauses([...this.state.grudgeTags, ...this.diff.grudgeTags], holder, toward, this.state.world.now);
   }
 
   /** Living active Captains, in slug order (the determinism rule). */

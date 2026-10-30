@@ -198,6 +198,11 @@ button.link {
   font-style: italic;
   font-size: 0.9rem;
 }
+.blame mark.me {
+  background: #fde047;
+  font-weight: bold;
+  padding: 0 0.15em;
+}
 .gutter summary {
   cursor: pointer;
   font-weight: bold;

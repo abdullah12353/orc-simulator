@@ -26,7 +26,7 @@ export function simulate(state: WorldState, intents: Intent[], seed: number): Si
   fireDueFuses(ctx);
   rollAmbient(ctx);
   ctx.finish();
-  weighStories(state, ctx.facts);
+  weighStories(state, ctx.facts, ctx.callbacks);
   return { facts: ctx.facts, stateDiff: ctx.diff };
 }
 
@@ -55,8 +55,7 @@ function rollAmbient(ctx: TickContext): void {
     line: renderLine(ctx, t.lines[variant], cast),
     tier: 'templated',
     cast: t.roles.map((r) => cast[r.name]!),
-    causes: [],
-    blame: [],
+    ...ctx.link(no, {}), // ambient: nothing required, so no causes and no Blame
     infamy: [],
     kind: 'incident',
     trigger: 'ambient',

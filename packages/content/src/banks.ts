@@ -164,4 +164,14 @@ export const banks: Banks = {
   },
   // insult → mum → betrayal (a theft) → coup. A Fear exposed enters at the bottom.
   garbleLadder: ['insult', 'mum', 'theft', 'coup'],
+  // Deadpan and clean: the joke is the Meddle and where it led, never the Player.
+  blame: {
+    verbs: {
+      rumour: { began: 'planted a Rumour', noun: 'Rumour' },
+      dare: { began: 'set a Dare', noun: 'Dare' },
+    },
+    one: 'It all began when {first}.',
+    two: 'It all began when {first}, and {last} finished the job.',
+    many: 'It all began when {first}, {middle} kept it going, and {last} finished the job.',
+  },
 };

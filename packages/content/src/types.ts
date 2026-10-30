@@ -90,6 +90,22 @@ export interface Banks {
    * Claim one step up; a Claim that isn't on the ladder enters at the bottom.
    */
   garbleLadder: Claim[];
+  /** The Herald's templated Blame line (D53, §4.1). It mocks the Meddle, never the Player. */
+  blame: BlameLineBank;
+}
+
+/**
+ * Blame line templates. `{first}` is "<name> <began>" ("Mo planted a Rumour"); `{middle}` and `{last}`
+ * are "<name>'s <noun>" ("Dazza's Dare"), the middle ones joined "A, B and C".
+ */
+export interface BlameLineBank {
+  verbs: Record<'rumour' | 'dare', { began: string; noun: string }>;
+  /** One Meddle: `{first}`. */
+  one: string;
+  /** Two Meddles: `{first}` and `{last}`. */
+  two: string;
+  /** Three or more: `{first}`, `{middle}` and `{last}`. */
+  many: string;
 }
 
 export interface ClaimDef {

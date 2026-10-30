@@ -145,9 +145,11 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   const variant = rng.int(3) as 0 | 1 | 2;
   const said = state.content.banks.claims[claim].phrasings[variant].replace('{subject}', subjectText(state.content, subject));
   const no = ctx.allocNo();
-  const blame: BlameEntry[] = [
+  const own: BlameEntry[] = [
     { meddleId: meddle.id, playerId: meddle.playerId, verb: 'rumour', landedFact: no, landedAt: state.world.now, hops: 0 },
   ];
+  // A landing requires nothing in the world: its only Blame is its own Meddle.
+  const { causes, blame } = ctx.link(no, { own });
   const cast = [...new Set([r.source, r.target, reached])];
   const head: Fact = {
     no,
@@ -157,7 +159,7 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
     line: template ? renderLine(ctx, template.lines[variant], { source: r.source, target: r.target, reached }, { claim: said }) : '',
     tier: template ? 'templated' : 'silent',
     cast,
-    causes: [],
+    causes,
     blame,
     infamy: [],
     kind: 'rumour',
@@ -178,6 +180,7 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   const after = ctx.setAffinity(reached, r.source, before - RUMOUR.sting[claim]);
   const tag = said;
   const grudgeNo = ctx.allocNo();
+  const landing = { fact: no, blame };
   ctx.facts.push({
     no: grudgeNo,
     at: state.world.now,
@@ -185,8 +188,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
     line: '',
     tier: 'silent',
     cast: [reached, r.source],
-    causes: [],
-    blame,
+    // The Grudge follows from the landing; the same Meddle keeps it at hop 0.
+    ...ctx.link(grudgeNo, { requires: [landing], own }),
     infamy: [],
     kind: 'grudge',
     holder: reached,
@@ -200,7 +203,7 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
     toward: r.source,
     tag,
     at: state.world.now,
-    cause: { fact: no, blame },
+    cause: landing,
   });
 }
 

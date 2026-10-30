@@ -16,7 +16,7 @@ import {
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
-import { insertFacts, insertTicks } from './commit.ts';
+import { insertFacts, insertTicks, loadCauses } from './commit.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
@@ -177,7 +177,8 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     from captain_fears where world_id = ${world.id} order by captain_id, since, fear`;
   const affinityRows = await tx<{ holder_id: string; toward_id: string; value: number }[]>`
     select holder_id, toward_id, value from affinity where world_id = ${world.id}`;
-  // The last 3 tags per pair (narration's top tags). The Blame window's extra tags arrive with #29.
+  // The last 3 tags per pair: narration's top tags, and all a pair's Blame can use (the newest 3
+  // within 7 days, decision 8b). Each comes with its Cause and that Cause's Blame.
   const tagRows = await tx<
     { no: number; holder_id: string; toward_id: string; tag: string; created_at: string; cause_fact: number | null }[]
   >`
@@ -189,6 +190,11 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     ) t
     where rank <= 3
     order by no`;
+  const tagCauses = await loadCauses(
+    tx,
+    world.id,
+    tagRows.flatMap((t) => (t.cause_fact === null ? [] : [t.cause_fact])),
+  );
 
   // FOR UPDATE: blocks submit_intent until this tick commits (data-model decision 2).
   const playerRows = await tx<{ id: string; gold: number; meddles_available: number; first_meddle_done: boolean }[]>`
@@ -254,8 +260,8 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
         toward: t.toward_id,
         tag: t.tag,
         at: new Date(t.created_at).toISOString(),
-        // fact_blame arrives with #29; until then a cause carries no Blame.
-        cause: t.cause_fact === null ? null : { fact: t.cause_fact, blame: [] },
+        // Null: old history seeded at casting, which no Fact caused.
+        cause: t.cause_fact === null ? null : tagCauses.get(t.cause_fact)!,
       }),
     ),
     trophies: [],
