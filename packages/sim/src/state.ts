@@ -1,7 +1,8 @@
 import { hashValue } from '@orc/content';
+import { BLAME } from './blame.ts';
 import { MEDDLE_CAP, VARIETY } from './context.ts';
 import { isoToMs } from './time.ts';
-import type { StateDiff, Trophy, WorldState } from './types.ts';
+import type { GrudgeTag, StateDiff, Trophy, WorldState } from './types.ts';
 
 /** Diff sections applyDiff (and the tick's commit) can apply so far. Others must stay empty. */
 function assertSupported(diff: StateDiff): void {
@@ -51,7 +52,10 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
   }
 
   const removed = new Set(diff.fuses.remove);
-  const fuses = [...state.fuses.filter((f) => !removed.has(f.no)), ...diff.fuses.add];
+  // Kept in firing order, (dueAt, no), as the tick loads them.
+  const fuses = [...state.fuses.filter((f) => !removed.has(f.no)), ...diff.fuses.add].sort(
+    (a, b) => isoToMs(a.dueAt) - isoToMs(b.dueAt) || a.no - b.no,
+  );
 
   // Current holders only (D15), by number.
   const trophies = new Map<number, Trophy>(state.trophies.map((t) => [t.no, t]));
@@ -68,11 +72,25 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     },
     captains,
     affinity,
-    grudgeTags: [...state.grudgeTags, ...diff.grudgeTags],
+    grudgeTags: newestPerPair([...state.grudgeTags, ...diff.grudgeTags]),
     players,
     meddles,
     fuses,
   };
+}
+
+/**
+ * The newest 3 Grudge tags per pair, in number order: all the sim reads (Blame takes at most 3 per pair,
+ * narration the top 3), and exactly what the tick loads. Older tags stay in the database forever.
+ */
+function newestPerPair(tags: GrudgeTag[]): GrudgeTag[] {
+  const kept = new Map<string, GrudgeTag[]>();
+  for (const t of [...tags].sort((a, b) => b.no - a.no)) {
+    const key = `${t.holder}>${t.toward}`;
+    const list = kept.get(key) ?? [];
+    if (list.length < BLAME.pairMaxTags) kept.set(key, [...list, t]);
+  }
+  return [...kept.values()].flat().sort((a, b) => a.no - b.no);
 }
 
 /** Keeps the entries inside the window ending at `now`, as the tick's loader does from `facts`. */

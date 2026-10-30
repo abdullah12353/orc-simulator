@@ -4,7 +4,7 @@ import { tickSeed } from './rng.ts';
 import { simulate } from './simulate.ts';
 import { applyDiff, stateHash } from './state.ts';
 import { addMinutes } from './time.ts';
-import type { Fact, Iso, PlayerId, WorldState } from './types.ts';
+import type { Fact, GrudgeTag, Iso, PlayerId, WorldState } from './types.ts';
 
 /** The day-zero pre-roll (D57): about one simulated day of unwatched 5-minute ticks. */
 export const DAY_ZERO = { steps: 288, minutes: 5 } as const;
@@ -23,6 +23,7 @@ export interface DayZeroStep {
  * DAY_ZERO.steps unwatched ticks, the last one landing on `createdAt`. Each step is exactly what the
  * tick would do (tick_seq 1, 2, …, seed = tickSeed(worldSeed, tickSeq)), so the world carries on
  * from day zero as if it had been ticking all along. `create_world` commits the result once.
+ * `grudgeTags` is every tag day zero made (Grudge tags are permanent; the state keeps only the newest 3 a pair).
  */
 export function dayZero(
   content: Content,
@@ -30,11 +31,12 @@ export function dayZero(
   createdAt: Iso,
   worldId: string,
   players: PlayerId[] = [],
-): { state: WorldState; steps: DayZeroStep[] } {
+): { state: WorldState; steps: DayZeroStep[]; grudgeTags: GrudgeTag[] } {
   const start = addMinutes(createdAt, -DAY_ZERO.steps * DAY_ZERO.minutes);
   const cast = castWorld(content, worldSeed, start, players);
   let state: WorldState = { ...cast, world: { ...cast.world, id: worldId } };
   const steps: DayZeroStep[] = [];
+  const grudgeTags = [...state.grudgeTags];
 
   for (let i = 0; i < DAY_ZERO.steps; i++) {
     const tickSeq = state.world.tickSeq + 1;
@@ -51,7 +53,8 @@ export function dayZero(
     };
     const { facts, stateDiff } = simulate(input, [], seed);
     state = applyDiff(input, stateDiff);
+    grudgeTags.push(...stateDiff.grudgeTags);
     steps.push({ tickSeq, at: state.world.now, seed, facts, stateHash: stateHash(state) });
   }
-  return { state, steps };
+  return { state, steps, grudgeTags };
 }

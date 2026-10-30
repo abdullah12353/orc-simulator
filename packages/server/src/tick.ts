@@ -16,7 +16,7 @@ import {
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
-import { insertFacts, insertTicks, loadCauses } from './commit.ts';
+import { insertFacts, insertFuses, insertTicks, loadCauses, upsertTrophies } from './commit.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
@@ -120,7 +120,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       const cpuMs = Math.round(performance.now() - started);
       const info = { tickSeq, stateHash: hash };
 
-      await insertFacts(tx, worldId, facts.map((fact) => ({ tickSeq, fact })));
+      await insertFacts(tx, worldId, facts.map((fact) => ({ tickSeq, fact })), content);
       await deps.onCommitStep?.('facts', info);
 
       await commitDiff(tx, worldId, stateDiff, { tickSeq, now });
@@ -206,11 +206,22 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
   const meddleRows = await tx<MeddleRow[]>`
     select id, player_id, verb, source_id, target_id, claim, subject, free_text, status, held_on
     from meddles where world_id = ${world.id} and status in ('pending', 'held') order by id`;
-  // Only the Fuses due by now; the sim fires them in (dueAt, no) order.
-  const fuseRows = await tx<{ no: number; due_at: string; meddle_id: string }[]>`
-    select no::float8 as no, to_json(due_at)#>>'{}' as due_at, meddle_id
-    from fuses where world_id = ${world.id} and due_at <= ${now} and kind = 'meddle'
+  // Every pending Fuse (only a few dozen at most), so the loaded state is the state the sim left; the sim
+  // fires the due ones itself, in (dueAt, no) order.
+  const fuseRows = await tx<
+    { no: number; due_at: string; meddle_id: string | null; template_id: string | null; cast: Record<string, string> | null; parent_fact: number | null }[]
+  >`
+    select no::float8 as no, to_json(due_at)#>>'{}' as due_at, meddle_id, template_id, "cast", parent_fact::float8 as parent_fact
+    from fuses where world_id = ${world.id}
     order by due_at, no`;
+  const trophyRows = await tx<{ no: number; kind: string; holder_id: string; taken_from_id: string; origin_fact: number }[]>`
+    select no::float8 as no, kind, holder_id, taken_from_id, origin_fact::float8 as origin_fact
+    from trophies where world_id = ${world.id} order by no`;
+  const causes = await loadCauses(tx, world.id, [
+    ...trophyRows.map((t) => t.origin_fact),
+    ...fuseRows.flatMap((f) => (f.parent_fact === null ? [] : [f.parent_fact])),
+  ]);
+  const recent = await loadRecent(tx, world.id, now);
 
   const fears = new Map<string, CaptainState['fears']>();
   for (const f of fearRows) {
@@ -264,7 +275,13 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
         cause: t.cause_fact === null ? null : tagCauses.get(t.cause_fact)!,
       }),
     ),
-    trophies: [],
+    trophies: trophyRows.map((t) => ({
+      no: t.no,
+      key: t.kind,
+      holder: t.holder_id,
+      takenFrom: t.taken_from_id,
+      origin: causes.get(t.origin_fact)!,
+    })),
     humiliations: [],
     stakes: [],
     players: Object.fromEntries(
@@ -274,9 +291,40 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
       ]),
     ),
     meddles: Object.fromEntries(meddleRows.map((m) => [m.id, toMeddle(m)])),
-    fuses: fuseRows.map((f): Fuse => ({ no: f.no, dueAt: new Date(f.due_at).toISOString(), meddleId: f.meddle_id })),
+    fuses: fuseRows.map(
+      (f): Fuse => ({
+        no: f.no,
+        dueAt: new Date(f.due_at).toISOString(),
+        ...(f.meddle_id !== null ? { meddleId: f.meddle_id } : {}),
+        ...(f.template_id !== null
+          ? { reaction: { templateId: f.template_id, cast: f.cast ?? {}, parent: causes.get(f.parent_fact!)! } }
+          : {}),
+      }),
+    ),
     infamy7d: [],
-    recent: { templates: {}, pairs: {} },
+    recent,
+  };
+}
+
+/**
+ * The variety record (D47) rebuilt from the log: when each Template last ran in the last 24 h, and when
+ * each pair of Captains last shared a templated Fact in the last hour (key `x|y`, x < y by code unit).
+ */
+async function loadRecent(tx: Tx, worldId: string, now: string): Promise<WorldState['recent']> {
+  const templates = await tx<{ template_id: string; at: string }[]>`
+    select template_id, to_json(max(at))#>>'{}' as at
+    from facts
+    where world_id = ${worldId} and template_id is not null and at > ${now}::timestamptz - interval '24 hours'
+    group by template_id`;
+  const pairs = await tx<{ pair: string; at: string }[]>`
+    select x || '|' || y as pair, to_json(max(f.at))#>>'{}' as at
+    from facts f, unnest(f."cast") as x, unnest(f."cast") as y
+    where f.world_id = ${worldId} and f.template_id is not null and f.at > ${now}::timestamptz - interval '1 hour'
+      and x collate "C" < y collate "C"
+    group by 1`;
+  return {
+    templates: Object.fromEntries(templates.map((t) => [t.template_id, new Date(t.at).toISOString()])),
+    pairs: Object.fromEntries(pairs.map((p) => [p.pair, new Date(p.at).toISOString()])),
   };
 }
 
@@ -288,7 +336,6 @@ async function commitDiff(tx: Tx, worldId: string, diff: StateDiff, at: { tickSe
   const unsupported = (
     [
       ['captains', diff.captains],
-      ['trophies', diff.trophies.upsert],
       ['fears', diff.fears],
       ['humiliations', diff.humiliations.upsert],
       ['stakes', diff.stakes],
@@ -363,13 +410,8 @@ async function commitDiff(tx: Tx, worldId: string, diff: StateDiff, at: { tickSe
   if (diff.fuses.remove.length > 0) {
     await tx`delete from fuses where world_id = ${worldId} and no = any(${diff.fuses.remove}::bigint[])`;
   }
-  if (diff.fuses.add.length > 0) {
-    if (diff.fuses.add.some((f) => f.reaction)) throw new Error('commitDiff: reaction Fuses are not committed yet');
-    await tx`
-      insert into fuses (world_id, no, due_at, kind, meddle_id, created_tick)
-      select ${worldId}, (f->>'no')::bigint, (f->>'dueAt')::timestamptz, 'meddle', (f->>'meddleId')::uuid, ${at.tickSeq}
-      from jsonb_array_elements(${jsonb(tx, diff.fuses.add)}) as f`;
-  }
+  await insertFuses(tx, worldId, diff.fuses.add, at.tickSeq);
+  await upsertTrophies(tx, worldId, diff.trophies.upsert, at.now);
 
   // Deltas on the loaded values (the tick holds these rows, so nothing else moved them), capped at 0–6.
   if (diff.playerDeltas.length > 0) {
