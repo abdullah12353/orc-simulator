@@ -1,6 +1,7 @@
 // The day roll at midnight Europe/London (data-model decision 12): allowances accrue for everyone at
 // once, the death counter resets and affinity cools. One roll per London day, however long the world
-// was down. The Stipend joins it with Backing (#36).
+// was down. Every Player's 10-gold Stipend comes with it (#36).
+import { grantStipends } from './backing.ts';
 import type { TickContext } from './context.ts';
 import { londonDate } from './time.ts';
 
@@ -18,6 +19,7 @@ export function rollDay(ctx: TickContext): void {
   if (ctx.state.world.deathsToday !== 0) ctx.diff.world.deathsToday = 0;
 
   for (const playerId of Object.keys(ctx.state.players).sort()) ctx.addMeddles(playerId, DAY_ROLL.meddles);
+  grantStipends(ctx);
 
   for (const [holder, toward] of ctx.affinityPairs()) {
     const v = ctx.getAffinity(holder, toward);

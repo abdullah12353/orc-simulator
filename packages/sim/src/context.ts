@@ -66,6 +66,9 @@ export class TickContext {
   readonly misfortunes: Misfortune[] = [];
   /** The Warlord who fell this tick, and his fall (`warlordFalls` in infamy.ts): the crowning requires it. */
   throneFall: { captainId: CaptainId; cause: Cause } | null = null;
+  /** Running gold per Player and Stakes (`playerId|captainId` → amount, 0 = gone) this tick; see backing.ts. */
+  readonly gold = new Map<PlayerId, number>();
+  readonly stakes = new Map<string, number>();
   readonly state: WorldState;
   readonly rng: Rng;
   private nextNo: number;

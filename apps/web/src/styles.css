@@ -243,6 +243,24 @@ button.link {
   margin: 0.5rem 0 0;
   padding-left: 1.25rem;
 }
+/* Backing and gold (#36): private, so set apart from the shared Herald. */
+.your-stable {
+  border: 1px dashed #a3a3a3;
+  padding: 0.5rem 1rem;
+  margin-top: 1.5rem;
+}
+.ledger {
+  padding-left: 1.25rem;
+}
+.ledger .credit {
+  color: #86efac;
+}
+.ledger .debit {
+  color: #fca5a5;
+}
+.back-form label {
+  display: block;
+}
 .editions {
   display: flex;
   flex-wrap: wrap;

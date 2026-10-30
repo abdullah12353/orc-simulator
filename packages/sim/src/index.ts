@@ -22,3 +22,4 @@ export { ROSTER, UNMASK } from './roster.ts';
 export { introductionScript, shoutName, type IntroBeat, type IntroBeatKind, type IntroductionScript } from './introduction.ts';
 export { INFAMY, POWER, type FallWhy } from './infamy.ts';
 export { INFAMY_WINDOW_DAYS } from './context.ts';
+export { BACKING, edgeFor, isBackingIntent, type BackingIntent, type LedgerReason } from './backing.ts';

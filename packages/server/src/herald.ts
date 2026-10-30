@@ -5,9 +5,10 @@
 // one Accusation (#39) runs as a pull quote over its story's true Blame line. Then (#38) one model call
 // rewrites the lead's and headlines' headline, standfirst and body in the Herald's voice: open-edition
 // waits about 8 s for it, else returns the templated edition and lets the job finish in the background.
-// "Your Stable" comes later.
+// Each edition also freezes the reader's private "Your Stable" (#36) into `editions.stable`.
 import { blameLine, content as shippedContent, hashString, type BlameName, type Content } from '@orc/content';
 import { DAY_ZERO, londonDate } from '@orc/sim';
+import { buildStable, type YourStable } from './backing.ts';
 import { jsonb, type Sql, type Tx } from './db.ts';
 import type { NarrationDeps } from './narration/drain.ts';
 import { queueHeraldJob, runHeraldJob } from './narration/herald-job.ts';
@@ -69,6 +70,8 @@ export interface Edition {
   status: 'templated' | 'generated';
   stories: EditionStory[];
   accusation: EditionAccusation | null;
+  /** The reader's private section, as it stood when the edition was printed (null before #36). */
+  stable: YourStable | null;
 }
 
 export interface StopPressLine {
@@ -205,10 +208,12 @@ async function printEdition(
     const masthead = buildMasthead(content, now, `${input.worldId}:${player.id}:${no}`);
     const printed = candidates.slice(0, HERALD.lastRank);
     const accusation = await loadAccusation(tx, input.worldId, { storyNos: printed.map((c) => c.no) });
+    const stable = await buildStable(tx, player.id, from, now);
     const [edition] = await tx<{ id: string }[]>`
-      insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead, status, accusation_fact)
+      insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead, status, accusation_fact,
+                            stable)
       values (${input.worldId}, ${player.id}, ${no}, ${from}, ${now}, ${now}, ${jsonb(tx, masthead)}, 'templated',
-              ${accusation?.factNo ?? null})
+              ${accusation?.factNo ?? null}, ${jsonb(tx, stable)})
       returning id`;
     const blame = await loadBlameNames(tx, input.worldId, printed.map((c) => c.no));
     const stories: EditionStory[] = printed.map((c, i) => ({
@@ -244,6 +249,7 @@ async function printEdition(
         status: 'templated',
         stories,
         accusation,
+        stable,
       },
       created: true,
       reader: player.display_name,
@@ -330,10 +336,12 @@ async function loadEdition(tx: Sql | Tx, id: string): Promise<Edition> {
       masthead: Masthead;
       status: Edition['status'];
       accusation_fact: number | null;
+      stable: YourStable | null;
     }[]
   >`
     select id, world_id, no, to_json(covers_from)#>>'{}' as covers_from, to_json(covers_to)#>>'{}' as covers_to,
-           to_json(created_at)#>>'{}' as created_at, masthead, status, accusation_fact::float8 as accusation_fact
+           to_json(created_at)#>>'{}' as created_at, masthead, status, accusation_fact::float8 as accusation_fact,
+           stable
     from editions where id = ${id}`;
   const stories = await tx<
     { rank: number; story_no: number; slot: Slot; headline: string; standfirst: string | null; body: string | null; blame_line: string | null }[]
@@ -358,6 +366,7 @@ async function loadEdition(tx: Sql | Tx, id: string): Promise<Edition> {
       blameLine: s.blame_line,
     })),
     accusation: await loadAccusation(tx, e!.world_id, { factNo: e!.accusation_fact }),
+    stable: e!.stable,
   };
 }
 
