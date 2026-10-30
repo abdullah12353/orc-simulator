@@ -43,17 +43,19 @@ test('an ambient incident with Krúg in it weighs its base + 2', () => {
   for (const f of facts) assert.equal(f.comedyWeight, 7, `Fact ${f.no}: ${f.line}`);
 });
 
-test("an ambient incident weighs its Template's base, +2 only when Krúg or the Warlord is in it", () => {
+test("an ambient incident weighs its Template's base, + its story's Infamy / 3, +2 only when Krúg or the Warlord is in it", () => {
   let state = freshWorld({ watched: true });
-  const warlord = state.world.warlordId!;
   let withVip = 0;
   let without = 0;
   for (let i = 0; i < 400; i++) {
+    // The Warlord as the tick started: a fall during the tick doesn't change who was in the story.
+    const warlord = state.world.warlordId;
     const r = step(state);
     for (const f of r.facts.filter((x) => x.kind === 'incident' && x.trigger === 'ambient')) {
       const base = content.templates.find((t) => t.id === f.templateId)!.baseWeight;
-      const vip = f.cast.includes(KRUG) || f.cast.includes(warlord);
-      assert.equal(f.comedyWeight, base + (vip ? 2 : 0), `Fact ${f.no}: ${f.cast.join(', ')}`);
+      const vip = f.cast.includes(KRUG) || (warlord !== null && f.cast.includes(warlord));
+      const infamy = r.facts.filter((x) => x.storyNo === f.no).flatMap((x) => x.infamy).reduce((n, g) => n + g.amount, 0);
+      assert.equal(f.comedyWeight, base + Math.floor(infamy / 3) + (vip ? 2 : 0), `Fact ${f.no}: ${f.cast.join(', ')}`);
       if (vip) withVip++;
       else without++;
     }

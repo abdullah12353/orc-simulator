@@ -2,6 +2,7 @@
 // which works, reaches the wrong orc or gets Garbled, and leaves a directed Grudge behind.
 import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { gainInfamy, INFAMY } from './infamy.ts';
 import { fireReactionFuse, followUp } from './reactions.ts';
 import { maybeUnmask, UNMASK } from './roster.ts';
 import { addMinutes, isoToMs } from './time.ts';
@@ -178,6 +179,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   };
   ctx.facts.push(head);
   ctx.diff.meddles.push({ id: meddle.id, status: 'landed', landedFact: no });
+  // It backfires on its supposed source: the fortress now believes he said it (D42, notable).
+  gainInfamy(ctx, head, r.source, INFAMY.rumourSource);
 
   // Whoever heard it now holds a Grudge against the supposed source: affinity down, a permanent tag.
   const before = ctx.getAffinity(reached, r.source);

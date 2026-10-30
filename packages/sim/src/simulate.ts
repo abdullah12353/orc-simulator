@@ -4,6 +4,7 @@ import { rollGrudgeClashes } from './clash.ts';
 import { weighStories } from './comedy.ts';
 import { TickContext } from './context.ts';
 import { rollDay } from './day.ts';
+import { crownSuccessor, outcomeInfamy } from './infamy.ts';
 import { followUp } from './reactions.ts';
 import { createRng } from './rng.ts';
 import { consumeIntents, fireDueFuses, renderLine } from './rumours.ts';
@@ -22,7 +23,7 @@ export const AMBIENT_CHANCE = { watched: 1 / 3, unwatched: 1 / 10 } as const;
  * Never touches `Date`, `Math.random` or `crypto`; time comes in only through `state.world.now`.
  *
  * Order: the day roll, due Returns (and healed bandages), Players' Intents, due Fuses, one ambient roll,
- * then the Grudge Clash roll. Each story head sets off its reactions (up to 3 deep) as soon as it's
+ * then the Grudge Clash roll, and then, if the Warlord fell along the way, the succession. Each story head sets off its reactions (up to 3 deep) as soon as it's
  * written. Accusations come last, on their own random stream, for the misfortunes reported along the
  * way. Only one ambient roll per
  * call, however long the world was down: missed ticks are never back-filled.
@@ -35,6 +36,7 @@ export function simulate(state: WorldState, intents: Intent[], seed: number): Si
   fireDueFuses(ctx);
   rollAmbient(ctx);
   rollGrudgeClashes(ctx);
+  crownSuccessor(ctx);
   makeAccusations(ctx, accusationRng(seed));
   ctx.finish();
   weighStories(state, ctx.facts, ctx.callbacks);
@@ -74,6 +76,7 @@ function rollAmbient(ctx: TickContext): void {
     outcomeKey: outcome.key,
   };
   ctx.facts.push(fact);
+  outcomeInfamy(ctx, fact, outcome, cast);
   if (outcome.death) disaster(ctx, fact, cast[outcome.death.role]!, outcome.death.tag);
   followUp(ctx, fact, 0);
 }

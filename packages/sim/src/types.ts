@@ -263,6 +263,11 @@ export interface StateDiff {
    * DB rebuilds `recent` from `facts`, so the commit ignores this; applyDiff needs it to step in memory).
    */
   recent: WorldState['recent'];
+  /**
+   * This tick's Infamy gains, as `infamy7d` rows (not in data-model §2: the commit writes `infamy_gains`
+   * from the Facts' `infamy`, so it ignores this; applyDiff needs it to keep the 7-day window in memory).
+   */
+  infamy: WorldState['infamy7d'];
 }
 
 /** A Clash Fact (the story head of a Clash). */

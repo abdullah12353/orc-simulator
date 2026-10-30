@@ -145,6 +145,7 @@ export const ROSTER_TEMPLATES = {
   return: { id: 'roster.return', roles: ['returner'] },
   stepped_in: { id: 'roster.stepped-in', roles: ['newcomer', 'dead'] },
   unmasked: { id: 'roster.unmasked', roles: ['captain'] },
+  crowned: { id: 'roster.crowned', roles: ['warlord'] },
 } as const;
 
 const CAUSE_SET = new Set<string>(CAUSE_TAGS);
@@ -169,6 +170,12 @@ function validateRoster(c: Content): string[] {
     }
     const roles = new Set((t.roles ?? []).map((r) => r.name));
     for (const o of t.outcomes ?? []) {
+      for (const [role, amount] of Object.entries(o.infamy ?? {})) {
+        if (!roles.has(role)) errors.push(`template ${t.id}: outcome "${o.key}" gives Infamy to role "${role}", which it doesn't cast`);
+        if (!Number.isInteger(amount) || amount < 1 || amount > 30) {
+          errors.push(`template ${t.id}: outcome "${o.key}" gives role "${role}" Infamy ${amount} (must be a whole 1–30)`);
+        }
+      }
       if (!o.death) continue;
       if (!roles.has(o.death.role)) errors.push(`template ${t.id}: outcome "${o.key}" kills role "${o.death.role}", which it doesn't cast`);
       if (!CAUSE_SET.has(o.death.tag)) errors.push(`template ${t.id}: outcome "${o.key}" has unknown cause tag "${o.death.tag}"`);
@@ -206,7 +213,12 @@ function validateRoster(c: Content): string[] {
     ['banks.death.averted.grace', death?.averted?.grace],
     ['banks.death.averted.daily_cap', death?.averted?.daily_cap],
     ['banks.death.benched', death?.benched],
+    ['banks.throne.fell.death', c.banks.throne?.fell?.death],
+    ['banks.throne.fell.clash_loss', c.banks.throne?.fell?.clash_loss],
+    ['banks.throne.fell.botched_dare', c.banks.throne?.fell?.botched_dare],
+    ['banks.throne.legendary', c.banks.throne?.legendary],
   ];
+  if (!c.banks.throne?.emptyThrone?.trim()) errors.push('banks.throne.emptyThrone: needs text');
   for (const [where, list] of lists) {
     if (!Array.isArray(list) || list.length === 0) {
       errors.push(`${where}: needs at least 1 sentence`);

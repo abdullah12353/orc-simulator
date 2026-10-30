@@ -1,6 +1,6 @@
 import { hashValue } from '@orc/content';
 import { BLAME } from './blame.ts';
-import { MEDDLE_CAP, VARIETY } from './context.ts';
+import { INFAMY_WINDOW_DAYS, MEDDLE_CAP, VARIETY } from './context.ts';
 import { isoToMs } from './time.ts';
 import type { CaptainState, GrudgeTag, Humiliation, StateDiff, Trophy, WorldState } from './types.ts';
 
@@ -84,6 +84,7 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     captains,
     affinity,
     grudgeTags: newestPerPair([...state.grudgeTags, ...diff.grudgeTags]),
+    infamy7d: infamyWindow([...state.infamy7d, ...diff.infamy], world.now),
     players,
     meddles,
     fuses,
@@ -106,6 +107,14 @@ function newestPerPair(tags: GrudgeTag[]): GrudgeTag[] {
     if (list.length < BLAME.pairMaxTags) kept.set(key, [...list, t]);
   }
   return [...kept.values()].flat().sort((a, b) => a.no - b.no);
+}
+
+/** The 7-day Infamy window ending at `now`, in (fact, Captain) order: exactly what the tick loads. */
+function infamyWindow(gains: WorldState['infamy7d'], now: string): WorldState['infamy7d'] {
+  const since = isoToMs(now) - INFAMY_WINDOW_DAYS * 86_400_000;
+  return gains
+    .filter((g) => isoToMs(g.at) > since)
+    .sort((a, b) => a.fact - b.fact || (a.captainId < b.captainId ? -1 : a.captainId > b.captainId ? 1 : 0));
 }
 
 /** Keeps the entries inside the window ending at `now`, as the tick's loader does from `facts`. */

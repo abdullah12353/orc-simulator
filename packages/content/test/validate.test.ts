@@ -235,3 +235,25 @@ test('Accusation lines must say the mangled {name}, and there must be a few of t
   few.banks.accusations = few.banks.accusations.slice(0, 2);
   assert.ok(validateContent(few).some((e) => e.includes('banks.accusations') && e.includes('at least 3')));
 });
+
+// ---- Infamy and the throne (#34)
+
+test('outcome Infamy must go to a role the Template casts, 1–30 a time', () => {
+  const broken = clone(content);
+  const t = broken.templates.find((x) => x.id === 'ambient.moat-dip')!;
+  t.outcomes[0]!.infamy = { ghost: 3, a: 31, b: 0 };
+  const errors = validateContent(broken).filter((e) => e.includes('Infamy'));
+  assert.equal(errors.length, 3, errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('"ghost"')));
+});
+
+test('the crowned Template exists, and the throne bank names {captain} in every fall and Legendary sentence', () => {
+  const broken = clone(content);
+  broken.templates = broken.templates.filter((t) => t.id !== 'roster.crowned');
+  broken.banks.throne.fell.clash_loss = [];
+  broken.banks.throne.legendary = ['Someone is Legendary.'];
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('roster.crowned')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('banks.throne.fell.clash_loss')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('banks.throne.legendary')), errors.join('\n'));
+});

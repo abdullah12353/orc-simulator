@@ -16,7 +16,7 @@ export const content: Content = {
       roles: [{ name: 'a' }, { name: 'b' }],
       // An accident (#32): now and then the moat keeps him.
       outcomes: [
-        { key: 'splash', weight: 6 },
+        { key: 'splash', weight: 6, infamy: { a: 3 } },
         { key: 'sank', weight: 1, death: { role: 'a', tag: 'drowned' } },
       ],
       lines: [
@@ -32,7 +32,7 @@ export const content: Content = {
       trigger: 'ambient',
       roles: [{ name: 'a' }],
       outcomes: [
-        { key: 'wobble', weight: 5 },
+        { key: 'wobble', weight: 5, infamy: { a: 2 } },
         { key: 'fell', weight: 1, death: { role: 'a', tag: 'fell' } },
       ],
       lines: [
@@ -134,7 +134,7 @@ export const content: Content = {
       trigger: 'reaction',
       after: { kind: 'clash', outcomes: ['won', 'defeated'], chance: 0.25 },
       roles: [{ name: 'loser', from: 'loser' }, { name: 'winner', from: 'winner' }],
-      outcomes: [{ key: 'sulk', weight: 1 }],
+      outcomes: [{ key: 'sulk', weight: 1, infamy: { loser: 2 } }],
       lines: [
         '{loser} is sulking on the battlements and will not come down until {winner} apologises.',
         '{loser} has written a strongly worded letter to {winner}. It is mostly drawings.',
@@ -148,7 +148,7 @@ export const content: Content = {
       trigger: 'reaction',
       after: { kind: 'incident', outcomes: ['splash'], chance: 0.2 },
       roles: [{ name: 'a', from: 'a' }, { name: 'b', from: 'b' }],
-      outcomes: [{ key: 'blame', weight: 1 }],
+      outcomes: [{ key: 'blame', weight: 1, infamy: { a: 1 } }],
       lines: [
         '{a}, still damp, has formally blamed {b} for the moat.',
         '{a} has demanded {b} drain the moat. {b} has offered a cup.',
@@ -197,6 +197,21 @@ export const content: Content = {
         '{captain} has been exposed: there is no such orc as {alias}.',
       ],
       baseWeight: 7,
+    },
+    // Succession (#34): the most infamous orc of the week takes the throne. `{previous}` is who he took it from.
+    {
+      id: 'roster.crowned',
+      kind: 'crowned',
+      trigger: 'roster',
+      roles: [{ name: 'warlord' }],
+      slots: ['previous'],
+      outcomes: [{ key: 'crowned', weight: 1 }],
+      lines: [
+        '{warlord} is the new Warlord, taking the throne from {previous} on the strength of being the stupidest orc this week.',
+        'Nobody voted, but {warlord} has been crowned Warlord in place of {previous}. His first act: a nap.',
+        'Succession by Infamy has made {warlord} Warlord after {previous}. Experts are not surprised, only sad.',
+      ],
+      baseWeight: 9,
     },
   ],
   banks,
