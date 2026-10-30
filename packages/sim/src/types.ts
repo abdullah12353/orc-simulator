@@ -48,6 +48,10 @@ export interface WorldState {
   meddles: Record<MeddleId, Meddle>;
   fuses: Fuse[];
   infamy7d: { captainId: CaptainId; fact: FactNo; at: Iso; amount: number }[];
+  /**
+   * When each Template (last 24 h) and each Captain pair (last 1 h, key `x|y` with x < y) last appeared in
+   * a templated Fact. Feeds the variety rule (D47). Entries outside the windows may linger; the sim ignores them.
+   */
   recent: { templates: Record<TemplateId, Iso>; pairs: Record<string, Iso> };
 }
 
@@ -242,7 +246,15 @@ export interface StateDiff {
   }[];
   playerDeltas: { playerId: PlayerId; meddles?: number; firstMeddleDone?: true }[];
   intents: { id: string; status: 'consumed' | 'rejected'; reason?: string }[];
+  /**
+   * Templates and Captain pairs this tick's Facts used, for the variety rule (not in data-model §2: the
+   * DB rebuilds `recent` from `facts`, so the commit ignores this; applyDiff needs it to step in memory).
+   */
+  recent: WorldState['recent'];
 }
+
+/** A Clash Fact (the story head of a Clash). */
+export type ClashFact = Extract<Fact, { kind: 'clash' }>;
 
 export interface SimResult {
   facts: Fact[];

@@ -174,8 +174,10 @@ test('a landed Rumour drops the hearer’s affinity toward the source and leaves
     assert.equal(grudge.holder, head.reached);
     assert.equal(grudge.toward, source);
     assert.equal(grudge.delta, next.affinity[key]! - before);
-    assert.equal(diff.grudgeTags.length, 1);
-    const tag = diff.grudgeTags[0]!;
+    // A Clash in the same tick (a Hothead, or an old Grudge) leaves tags of its own.
+    const tags = diff.grudgeTags.filter((t) => t.cause?.fact === head.no);
+    assert.equal(tags.length, 1);
+    const tag = tags[0]!;
     assert.deepEqual([tag.holder, tag.toward, tag.cause?.fact], [head.reached, source, head.no]);
     assert.equal(tag.tag, grudge.tag);
     assert.ok(next.grudgeTags.some((t) => t.no === tag.no));
@@ -241,7 +243,7 @@ test('after an outage every overdue Fuse fires on the next tick, in (dueAt, no) 
     assert.deepEqual(landed, [byFuse(f2), byFuse(f4), byFuse(f1), byFuse(f3)], 'due order, then Fuse number');
     assert.equal(r.state.fuses.length, 0);
     assert.equal(Object.keys(r.state.meddles).length, 0);
-    const incidents = r.facts.filter((f) => f.kind === 'incident').length;
+    const incidents = r.facts.filter((f) => f.kind === 'incident' && f.trigger === 'ambient').length;
     assert.ok(incidents <= 1, `${incidents} ambient incidents after a 6-hour gap: never back-filled`);
   }
 });

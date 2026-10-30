@@ -50,7 +50,7 @@ test("an ambient incident weighs its Template's base, +2 only when Krúg or the 
   let without = 0;
   for (let i = 0; i < 400; i++) {
     const r = step(state);
-    for (const f of r.facts) {
+    for (const f of r.facts.filter((x) => x.kind === 'incident' && x.trigger === 'ambient')) {
       const base = content.templates.find((t) => t.id === f.templateId)!.baseWeight;
       const vip = f.cast.includes(KRUG) || f.cast.includes(warlord);
       assert.equal(f.comedyWeight, base + (vip ? 2 : 0), `Fact ${f.no}: ${f.cast.join(', ')}`);

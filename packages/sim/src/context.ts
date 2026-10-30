@@ -2,12 +2,15 @@
 // running values that several steps of one tick touch (affinity, Meddle allowances).
 import { chain, pairCauses, type Links } from './blame.ts';
 import type { Rng } from './rng.ts';
-import type { BlameEntry, CaptainId, Cause, Fact, FactNo, PlayerId, StateDiff, WorldState } from './types.ts';
+import { isoToMs } from './time.ts';
+import type { BlameEntry, CaptainId, Cause, Fact, FactNo, PlayerId, StateDiff, TemplateId, Trophy, WorldState } from './types.ts';
 
 /** Player allowance caps (Meddle verbs #7). */
 export const MEDDLE_CAP = 6;
 /** Directed affinity runs −100..+100 (D49). */
 export const AFFINITY_LIMIT = 100;
+/** The variety rule (D47): a Template seen in the last 24 h, or a pair seen in the last hour, counts half. */
+export const VARIETY = { templateHours: 24, pairHours: 1 } as const;
 
 export function emptyDiff(): StateDiff {
   return {
@@ -25,8 +28,12 @@ export function emptyDiff(): StateDiff {
     ledger: [],
     playerDeltas: [],
     intents: [],
+    recent: { templates: {}, pairs: {} },
   };
 }
+
+/** The `recent.pairs` key for two Captains, in either order. */
+export const pairOf = (x: CaptainId, y: CaptainId) => (x < y ? `${x}|${y}` : `${y}|${x}`);
 
 export const pairKey = (holder: CaptainId, toward: CaptainId) => `${holder}>${toward}` as const;
 
@@ -35,6 +42,8 @@ export class TickContext {
   readonly diff = emptyDiff();
   /** Callbacks per Fact number, for comedy weight (D50). Never Blame. */
   readonly callbacks = new Map<FactNo, number>();
+  /** Unordered pairs (`x|y`) that already Clashed this tick: a pair Clashes at most once a tick. */
+  readonly clashedPairs = new Set<string>();
   readonly state: WorldState;
   readonly rng: Rng;
   private nextNo: number;
@@ -67,6 +76,36 @@ export class TickContext {
   /** A pair's Grudge tags from the last 7 days (the newest 3, this tick's included) as causes. */
   pairCauses(holder: CaptainId, toward: CaptainId): Cause[] {
     return pairCauses([...this.state.grudgeTags, ...this.diff.grudgeTags], holder, toward, this.state.world.now);
+  }
+
+  /** Was this Template used in the last 24 h (this tick included)? */
+  recentTemplate(id: TemplateId): boolean {
+    if (this.facts.some((f) => f.templateId === id)) return true;
+    return this.within(this.state.recent.templates[id], VARIETY.templateHours);
+  }
+
+  /** Did these two Captains share a templated Fact in the last hour (this tick included)? */
+  recentPair(x: CaptainId, y: CaptainId): boolean {
+    if (this.facts.some((f) => f.templateId && f.cast.includes(x) && f.cast.includes(y))) return true;
+    return this.within(this.state.recent.pairs[pairOf(x, y)], VARIETY.pairHours);
+  }
+
+  private within(at: string | undefined, hours: number): boolean {
+    return at !== undefined && isoToMs(at) > isoToMs(this.state.world.now) - hours * 3_600_000;
+  }
+
+  /** The Trophies as they stand at this point in the tick, in number order. */
+  trophies(): Trophy[] {
+    const byNo = new Map(this.state.trophies.map((t) => [t.no, t]));
+    for (const t of this.diff.trophies.upsert) byNo.set(t.no, t);
+    return [...byNo.values()].sort((a, b) => a.no - b.no);
+  }
+
+  /** Puts a Trophy in a (new) holder's hands. */
+  upsertTrophy(t: Trophy): void {
+    const i = this.diff.trophies.upsert.findIndex((x) => x.no === t.no);
+    if (i >= 0) this.diff.trophies.upsert[i] = t;
+    else this.diff.trophies.upsert.push(t);
   }
 
   /** Living active Captains, in slug order (the determinism rule). */
@@ -117,6 +156,11 @@ export class TickContext {
 
   /** Writes the running values into the diff. Call once, at the end of the tick. */
   finish(): void {
+    for (const f of this.facts) {
+      if (!f.templateId) continue;
+      this.diff.recent.templates[f.templateId] = f.at;
+      for (const x of f.cast) for (const y of f.cast) if (x < y) this.diff.recent.pairs[pairOf(x, y)] = f.at;
+    }
     for (const [key, value] of [...this.affinity].sort(([a], [b]) => (a < b ? -1 : 1))) {
       if (value === (this.state.affinity[key as `${string}>${string}`] ?? 0)) continue;
       const [holder, toward] = key.split('>') as [CaptainId, CaptainId];

@@ -2,6 +2,7 @@
 // which works, reaches the wrong orc or gets Garbled, and leaves a directed Grudge behind.
 import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { fireReactionFuse, followUp } from './reactions.ts';
 import { addMinutes, isoToMs } from './time.ts';
 import type { BlameEntry, CaptainId, Fact, Fuse, Intent, Meddle, RumourIntent, Subject } from './types.ts';
 
@@ -110,8 +111,9 @@ export function fireDueFuses(ctx: TickContext): void {
 
 function fire(ctx: TickContext, fuse: Fuse): void {
   ctx.diff.fuses.remove.push(fuse.no);
+  if (fuse.reaction) return fireReactionFuse(ctx, { ...fuse, reaction: fuse.reaction });
   const meddle = fuse.meddleId ? ctx.state.meddles[fuse.meddleId] : undefined;
-  if (!meddle || meddle.intent.kind !== 'rumour') return; // reaction Fuses and Dares arrive later
+  if (!meddle || meddle.intent.kind !== 'rumour') return; // Dares arrive with #35
   const r = meddle.intent;
   if (ctx.state.captains[r.target]?.roster === 'dead') {
     // Held until he Returns (#32 re-fuses it). A diff only, never a Fact: it's still secret.
@@ -205,6 +207,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
     at: state.world.now,
     cause: landing,
   });
+  // Now the hearer reacts (a Hothead goes straight for the source, #7).
+  followUp(ctx, head, 0);
 }
 
 /** 50/30/20, shifted by Traits: a Gullible target swallows it whole, a Compulsive Liar source garbles. */

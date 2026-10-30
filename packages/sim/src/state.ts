@@ -1,12 +1,12 @@
 import { hashValue } from '@orc/content';
-import { MEDDLE_CAP } from './context.ts';
-import type { StateDiff, WorldState } from './types.ts';
+import { MEDDLE_CAP, VARIETY } from './context.ts';
+import { isoToMs } from './time.ts';
+import type { StateDiff, Trophy, WorldState } from './types.ts';
 
 /** Diff sections applyDiff (and the tick's commit) can apply so far. Others must stay empty. */
 function assertSupported(diff: StateDiff): void {
   const unsupported: string[] = [];
   const nonEmpty = (name: string, list: unknown[]) => list.length > 0 && unsupported.push(name);
-  nonEmpty('trophies', diff.trophies.upsert);
   nonEmpty('fears', diff.fears);
   nonEmpty('humiliations', diff.humiliations.upsert);
   nonEmpty('stakes', diff.stakes);
@@ -53,9 +53,19 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
   const removed = new Set(diff.fuses.remove);
   const fuses = [...state.fuses.filter((f) => !removed.has(f.no)), ...diff.fuses.add];
 
+  // Current holders only (D15), by number.
+  const trophies = new Map<number, Trophy>(state.trophies.map((t) => [t.no, t]));
+  for (const t of diff.trophies.upsert) trophies.set(t.no, t);
+
+  const world = { ...state.world, ...diff.world };
   return {
     ...state,
-    world: { ...state.world, ...diff.world },
+    world,
+    trophies: [...trophies.values()].sort((a, b) => a.no - b.no),
+    recent: {
+      templates: recentWithin({ ...state.recent.templates, ...diff.recent.templates }, world.now, VARIETY.templateHours),
+      pairs: recentWithin({ ...state.recent.pairs, ...diff.recent.pairs }, world.now, VARIETY.pairHours),
+    },
     captains,
     affinity,
     grudgeTags: [...state.grudgeTags, ...diff.grudgeTags],
@@ -63,6 +73,12 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     meddles,
     fuses,
   };
+}
+
+/** Keeps the entries inside the window ending at `now`, as the tick's loader does from `facts`. */
+function recentWithin(entries: Record<string, string>, now: string, hours: number): Record<string, string> {
+  const since = isoToMs(now) - hours * 3_600_000;
+  return Object.fromEntries(Object.entries(entries).filter(([, at]) => isoToMs(at) > since));
 }
 
 /** A hash of everything in the state except the content bundle (represented by its version). */

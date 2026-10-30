@@ -31,9 +31,9 @@ test('an ambient incident is a templated story head naming distinct active Capta
   for (let i = 0; i < 200; i++) {
     const before = state.world.nextNo;
     const r = step(state);
+    // Clashes (the seeded Grudges) and reactions come too; this is about the ambient roll.
     for (const f of r.facts) {
-      assert.equal(f.kind, 'incident');
-      if (f.kind !== 'incident') continue;
+      if (f.kind !== 'incident' || f.trigger !== 'ambient') continue;
       seen++;
       assert.equal(f.no, before, 'Fact numbers come from nextNo');
       assert.equal(f.storyNo, f.no, 'an incident heads its own story');
@@ -47,7 +47,9 @@ test('an ambient incident is a templated story head naming distinct active Capta
       }
       assert.doesNotMatch(f.line, /[{}]/, 'no placeholder left in the line');
     }
-    assert.equal(r.state.world.nextNo, before + r.facts.length, 'nextNo advances past every Fact');
+    // Grudge tags and Trophies share the counter, so it can run further than the Facts.
+    assert.ok(r.state.world.nextNo >= before + r.facts.length, 'nextNo advances past every Fact');
+    assert.ok(r.facts.every((f) => f.no >= before && f.no < r.state.world.nextNo));
     state = r.state;
   }
   assert.ok(seen > 20, `only ${seen} incidents`);
