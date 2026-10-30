@@ -8,7 +8,7 @@
 //   npm run voices krug announcer           just those voices
 //   npm run voices krug-taunt               re-render one take, even if it exists
 //   npm run voices:pick krug-shout~2        use an alternative take as the game file (no API call)
-// Designing the voices (prompts in voices/test-cast.ts DESIGNS), instead of the web UI:
+// Designing the voices (prompts in voices/test-cast.ts DESIGNS), instead of the web UI (paid plans only):
 //   npm run voices:design krug vorgash      three Voice Design previews each, in voices/designs/
 //   npm run voices:save krug 2              save preview 2 to your account and write its voice ID
 // The voices:* scripts carry their flag because PowerShell's npm drops a `--`, and npm then eats the flag.

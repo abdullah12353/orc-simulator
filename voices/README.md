@@ -9,7 +9,7 @@ Everything fits the **free tier** (10k credits a month): about 2.7k credits for 
 1. Sign up at elevenlabs.io (free, no card).
 2. Profile → **API keys** → create one. If it asks for permissions, allow **Text to Speech** and **Voices** (write).
 3. In the repo root, create `.env.voices` (git-ignored) holding one line: `ELEVENLABS_API_KEY=…`. Don't paste the key anywhere else.
-4. Design, then listen to the three previews in `voices/designs/` and save the best:
+4. Design, then listen to the three previews in `voices/designs/` and save the best. **Designing through the API needs a paid plan** (Starter, $6); on free, use the web UI below instead.
 
 ```powershell
 npm run voices:design krug vorgash announcer  # three previews each, about 250 credits a voice
@@ -20,7 +20,7 @@ The prompts are `DESIGNS` in [`test-cast.ts`](test-cast.ts), all on one template
 
 **Slots:** free accounts hold **3 saved voices**. Start with **Krúg, Vorgash and the announcer**. Vorgash's whole Introduction is then real: the stinger, his name shout, "…the Polished", his catchphrase. Design the other four to hear them, but don't save them. Starter ($6, 10 slots) holds all seven at once. Saving a voice again replaces its ID and clears its old takes.
 
-The web UI works too (Voices → Create a voice → Voice Design, with v3): paste a description and preview text from `DESIGNS`, then copy the saved voice's ID (My Voices → ⋯ → Copy voice ID) into [`voice-ids.json`](voice-ids.json).
+The web UI is free (Voices → Create a voice → Voice Design, with v3): paste a description and preview text from `DESIGNS`, then copy the saved voice's ID (My Voices → ⋯ → Copy voice ID) into [`voice-ids.json`](voice-ids.json).
 
 ## 2. Render the lines
 
