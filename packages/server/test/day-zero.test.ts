@@ -20,10 +20,14 @@ test('create_world casts the world: 12 active with Krúg, the rest in reserve, t
     const active = captains.filter((c) => c.roster === 'active');
     assert.equal(active.length, 12);
     assert.ok(active.some((c) => c.id === 'krug'));
-    assert.equal(captains.filter((c) => c.roster === 'reserve').length, 18);
-    for (const c of captains) {
-      assert.equal(c.epithet, content.cast.find((card) => card.id === c.id)!.epithet ?? null, c.id);
-    }
+    // Day zero's deaths may leave someone dead at creation; the rest wait in reserve.
+    assert.equal(captains.filter((c) => c.roster !== 'active').length, 18);
+    assert.deepEqual(
+      captains.filter((c) => c.roster === 'dead').map((c) => c.id),
+      Object.values(state.captains).filter((c) => c.roster === 'dead').map((c) => c.id).sort(),
+    );
+    // Starting Epithets, unless a Humiliation in day zero gave him a new one.
+    for (const c of captains) assert.equal(c.epithet, state.captains[c.id]!.epithet, c.id);
 
     const [w] = await tx`select warlord_id from worlds where id = ${worldId}`;
     const top = Math.max(...active.map((c) => c.power));
@@ -31,8 +35,9 @@ test('create_world casts the world: 12 active with Krúg, the rest in reserve, t
     assert.notEqual(w!.warlord_id, 'krug');
 
     const fears = await tx`select captain_id, fear, added from captain_fears where world_id = ${worldId}`;
-    assert.equal(fears.length, 30);
-    assert.ok(fears.every((f) => !f.added));
+    // Every starting Fear, plus any day zero's Humiliations added.
+    assert.equal(fears.filter((f) => !f.added).length, 30);
+    assert.equal(fears.length, Object.values(state.captains).reduce((n, c) => n + c.fears.length, 0));
     assert.deepEqual(
       fears.find((f) => f.captain_id === 'krug'),
       { captain_id: 'krug', fear: 'Water', added: false },
