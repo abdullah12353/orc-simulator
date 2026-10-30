@@ -386,8 +386,12 @@ inspector_port = 55483
 # The Deno major version to use.
 deno_version = 2
 
-# [edge_runtime.secrets]
-# secret_key = "env(SECRET_VALUE)"
+# Local-only values. Production secrets are set with `supabase secrets set`.
+[edge_runtime.secrets]
+TICK_SECRET = "local-tick-secret"
+# Deno's resolver rejects the underscore in the default `supabase_db_<project>` host, so use the
+# `db` alias. In production ORC_DB_URL is the Supavisor transaction-mode URL (port 6543).
+ORC_DB_URL = "postgresql://postgres:postgres@db:5432/postgres"
 
 [analytics]
 enabled = false
@@ -420,8 +424,6 @@ enabled = true
 # The clock Worker authenticates with a shared secret (TICK_SECRET), not a user JWT.
 [functions.tick]
 verify_jwt = false
-import_map = "./functions/import_map.json"
 
 [functions.create-world]
 verify_jwt = true
-import_map = "./functions/import_map.json"

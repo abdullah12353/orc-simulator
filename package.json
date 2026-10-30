@@ -15,7 +15,10 @@
     "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
     "content:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
-    "db:start": "supabase start",
+    "db:start": "node scripts/db-lock.mjs -- npx supabase start",
+    "db:lock": "node scripts/db-lock.mjs",
+    "smoke:local": "node scripts/db-lock.mjs -- node scripts/smoke-local.mjs",
+    "web:env": "node scripts/web-env.mjs",
     "dev:web": "npm run dev -w @orc/web",
     "dev:clock": "node scripts/dev-clock.mjs",
     "build:web": "npm run build -w @orc/web"
