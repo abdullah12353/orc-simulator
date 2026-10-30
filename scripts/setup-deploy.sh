@@ -206,6 +206,17 @@ TOTAL_STAGES=14
 cd "$(dirname "$0")/.."
 ENV_FILE=".env.deploy"
 
+# Git Bash doesn't always inherit Node's PATH entry; fall back to the default Windows install folder.
+if ! command -v node >/dev/null 2>&1 && [[ -x "/c/Program Files/nodejs/node.exe" ]]; then
+  PATH="/c/Program Files/nodejs:$PATH"
+fi
+for tool in node npx; do
+  command -v "$tool" >/dev/null 2>&1 \
+    || { warn "$tool isn't on PATH. Install Node 22+ (nodejs.org) or add its folder to PATH, then re-run."; exit 1; }
+done
+command -v docker >/dev/null 2>&1 \
+  || warn "docker isn't on PATH. Stage 9 bundles the Edge Functions with Docker, so start Docker Desktop before then."
+
 # keep_or KEY CMD...: reuse KEY from .env.deploy, else generate it with CMD and save it.
 keep_or() {
   local key="$1" value; shift
