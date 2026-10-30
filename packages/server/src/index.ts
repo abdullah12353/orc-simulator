@@ -18,4 +18,16 @@ export {
   type StopPressLine,
 } from './herald.ts';
 export { registerNameRender, NameRenderError, type NameRenderInput } from './name-renders.ts';
-export { handleTick, handleCreateWorld, handleOpenEdition, supabaseUserResolver } from './http.ts';
+export { handleTick, handleCreateWorld, handleOpenEdition, supabaseUserResolver, type TickHandlerDeps } from './http.ts';
+export {
+  drainJobs,
+  NARRATION,
+  MODELS,
+  NEURON_RATES,
+  QUOTA,
+  neuronsFor,
+  type DrainReport,
+  type NarrationDeps,
+  type NarrationFailure,
+  type ProviderKeys,
+} from './narration/index.ts';

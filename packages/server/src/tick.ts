@@ -188,7 +188,7 @@ export const CADENCE = { watchedWindowMs: 5 * 60_000, unwatchedMs: 5 * 60_000 } 
  * sighting after `now` doesn't count: the tick's clock is the only clock, so injected clocks stay
  * deterministic (in production the two clocks agree, and the client marks itself seen every minute).
  */
-async function isWatched(tx: Tx, worldId: string, now: string): Promise<boolean> {
+export async function isWatched(tx: Sql | Tx, worldId: string, now: string): Promise<boolean> {
   const [row] = await tx<{ watched: boolean }[]>`
     select exists (
       select 1 from player_private pp join players p on p.id = pp.player_id

@@ -1,9 +1,30 @@
 // Thin Deno entrypoint. All logic lives in packages/server (tested in-process from Node).
-import { connect, handleTick } from '@orc/server';
+import { connect, handleTick, type ProviderKeys } from '@orc/server';
 
 // ORC_DB_URL: in production the Supavisor transaction-mode URL (port 6543); the pool is created with
 // `prepare: false` for that. Locally it's set in supabase/config.toml.
 const sql = connect(Deno.env.get('ORC_DB_URL') ?? Deno.env.get('SUPABASE_DB_URL')!, { max: 1 });
 const secret = Deno.env.get('TICK_SECRET') ?? '';
 
-Deno.serve((req) => handleTick(req, { sql, now: () => new Date(), secret }));
+// Narration secrets (`supabase secrets set`), unset until the accounts exist. A provider without its keys
+// is skipped; with none, every Clash keeps its fallback script and no call is made.
+const env = (name: string) => Deno.env.get(name) || undefined;
+const cfAccount = env('CF_ACCOUNT_ID');
+const cfToken = env('CF_AI_TOKEN');
+const groqKey = env('GROQ_API_KEY');
+const providers: ProviderKeys = {
+  ...(cfAccount && cfToken ? { workersAi: { accountId: cfAccount, apiToken: cfToken } } : {}),
+  ...(groqKey ? { groq: { apiKey: groqKey } } : {}),
+};
+
+declare const EdgeRuntime: { waitUntil(work: Promise<unknown>): void };
+
+Deno.serve((req) =>
+  handleTick(req, {
+    sql,
+    now: () => new Date(),
+    secret,
+    narration: { fetch, providers },
+    waitUntil: (work) => EdgeRuntime.waitUntil(work),
+  }),
+);

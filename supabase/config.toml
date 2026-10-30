@@ -392,6 +392,9 @@ TICK_SECRET = "local-tick-secret"
 # Deno's resolver rejects the underscore in the default `supabase_db_<project>` host, so use the
 # `db` alias. In production ORC_DB_URL is the Supavisor transaction-mode URL (port 6543).
 ORC_DB_URL = "postgresql://postgres:postgres@db:5432/postgres"
+# Narration providers (#37), deliberately unset here and in production until the accounts exist:
+# CF_ACCOUNT_ID + CF_AI_TOKEN (Workers AI) and GROQ_API_KEY (turn on Zero Data Retention first). Set with
+# `supabase secrets set`. Without them every Clash keeps its fallback script and no call is made.
 
 [analytics]
 enabled = false
