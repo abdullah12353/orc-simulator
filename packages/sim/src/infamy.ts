@@ -154,7 +154,7 @@ export function successor(ctx: TickContext, exclude: CaptainId | null): CaptainI
 }
 
 /**
- * Fills an empty throne, once the tick's other events are in (so their Infamy counts): the `crowned` story
+ * Fills an empty throne, once the tick's other Facts are in (so their Infamy counts): the `crowned` story
  * head (it plays his Introduction), requiring the fall, and +20 Infamy for taking it.
  */
 export function crownSuccessor(ctx: TickContext): void {

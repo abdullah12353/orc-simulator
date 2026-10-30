@@ -40,7 +40,7 @@ export function mergeBlame(causes: readonly Cause[], own: readonly BlameEntry[] 
 export interface Links {
   /** State the Template required: these become `fact.causes` and carry Blame. */
   requires?: readonly Cause[];
-  /** State the event merely called back to: comedy weight only, never a cause, never Blame. */
+  /** State the Fact merely calls back to: comedy weight only, never a cause, never Blame. */
   callbacks?: readonly unknown[];
   /** The Fact's own Meddle, if it is a Meddle landing (hop 0). */
   own?: readonly BlameEntry[];
