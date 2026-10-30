@@ -1,7 +1,7 @@
 // Code-side checks on a model's Clash dialogue. The shape rules are `shapeProblem`'s (the one Clash-shape
 // definition, shared with the prompt and the fallback scripts); this adds parsing, refusal spotting, and
 // mapping a speaker given by display name back to his id (Gemma does that, #13's findings).
-import type { Content } from '@orc/content';
+import { SWEAR, type Content } from '@orc/content';
 import { shapeProblem, type ClashFact, type ClashLine } from '@orc/sim';
 
 /** Why a job kept its fallback (data-model §1.5 `narration_jobs.failure`). */
@@ -55,19 +55,7 @@ export function validateClash(content: Content, fact: ClashFact, raw: string): C
   return { ok: true, lines: mapped };
 }
 
-/**
- * Swearing, which the Herald never does (tone bible: "everywhere except the Herald"). Whole words with
- * explicit inflections, so "Arsenal", "prickly", "Dickensian" and "knobbly" don't count (#13's list).
- */
-const SWEAR = new RegExp(
-  `\\b(${[
-    '(mother)?fuck(s|ed|er|ers|ing|in|wit|wits)?', 'shit(s|e|ty|ter|ting|head|heads)?', 'shat', 'cunts?', 'bastards?',
-    'bollocks', 'bollox', 'arse(s|d|hole|holes)?', 'wank(s|ed|er|ers|ing)?', 'twats?', 'pricks?', 'bellends?',
-    'piss(ed|es|ing|er|y)?', 'tossers?', 'bugger(s|ed|ing)?', 'knob(s|head|heads)?', 'fanny', 'fannies', 'turds?',
-    'dick(s|head|heads)?', 'bloody', 'crap(s|py|per)?', 'minge', 'sod off',
-  ].join('|')})\\b`,
-  'i',
-);
+// Swearing (the Herald never does it) is the tone bible's list, shared with the content check (#44).
 
 /** What the model wrote for one printed story. Blame lines are never among them. */
 export interface HeraldWriting {

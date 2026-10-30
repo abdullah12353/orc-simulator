@@ -192,9 +192,10 @@ test('a landed Rumour drops the hearer’s affinity toward the source and leaves
     assert.equal(grudge.storyNo, head.no, 'a consequence of the Rumour');
     assert.equal(grudge.holder, head.reached);
     assert.equal(grudge.toward, source);
+    // A Clash between the two in the same tick (a Hothead, or a forcing reaction) moves the pair again.
+    const clashed = facts.some((f) => f.kind === 'clash' && f.cast.includes(head.reached) && f.cast.includes(source));
+    if (!clashed) assert.equal(grudge.delta, next.affinity[key]! - before);
     assert.ok(grudge.delta < 0);
-    // A Clash later in the tick (a Hothead going for the source) moves it again; otherwise it's all the Rumour.
-    if (!facts.some((f) => f.kind === 'clash')) assert.equal(grudge.delta, next.affinity[key]! - before);
     // A Clash in the same tick (a Hothead, or an old Grudge) leaves tags of its own.
     const tags = diff.grudgeTags.filter((t) => t.cause?.fact === head.no);
     assert.equal(tags.length, 1);
@@ -263,7 +264,8 @@ test('after an outage every overdue Fuse fires on the next tick, in (dueAt, no) 
     const fired = r.diff.meddles.filter((m) => m.status !== 'pending').map((m) => m.id);
     const byFuse = (f: typeof f1) => f!.meddleId;
     assert.deepEqual(fired, [byFuse(f2), byFuse(f4), byFuse(f1), byFuse(f3)], 'due order, then Fuse number');
-    assert.equal(r.state.fuses.length, 0);
+    // Every Meddle's Fuse fired (a reaction 4 deep may leave a reaction Fuse of its own).
+    assert.equal(r.state.fuses.filter((f) => f.meddleId).length, 0);
     const held = r.diff.meddles.filter((m) => m.status === 'held').length;
     assert.equal(Object.keys(r.state.meddles).length, held);
     const incidents = r.facts.filter((f) => f.kind === 'incident' && f.trigger === 'ambient').length;

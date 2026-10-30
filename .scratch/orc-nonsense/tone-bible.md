@@ -67,7 +67,7 @@ Rule of thumb: **anything prerecorded is hand-written**, so its pronunciation an
 2. "Stabbed meself in the arse. Still sound, that. Proper sound."
 3. "Swear down, there was a dragon. It was a goose. But it was a big fucking goose."
 
-**Grishnack** (Glaswegian)
+**Grizzock** (Glaswegian)
 1. "I'll take yous all on. One at a time. Starting with that wall, ya bastard."
 2. "Whit d'you mean it's a bucket? It's a HELMET, ya absolute fanny."
 3. "Ma head's fine. It's ma pride that's deid. And ma left baw."

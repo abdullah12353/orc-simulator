@@ -1,6 +1,8 @@
 import { LEGENDARY_LAYER } from './portrait.ts';
 import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, PARENT_ROLES, TRAITS } from './pools.ts';
-import type { CastCard, ClashOutcome, Content } from './types.ts';
+import { allText, forbiddenNameIn, heraldText, swearIn } from './tone.ts';
+import type { ParentKind } from './pools.ts';
+import type { CastCard, ClashOutcome, Content, TemplateDef } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
 const FEAR_POOL = new Set<string>(FEARS);
@@ -128,6 +130,93 @@ export function validateContent(c: Content): string[] {
   errors.push(...validateReactions(c));
   errors.push(...validateRoster(c));
   errors.push(...validateAccusations(c));
+  errors.push(...validateTone(c));
+  errors.push(...validateRunnable(c));
+  return errors;
+}
+
+/** The Template kinds the sim writes for each trigger (ambient and reaction incidents are written as `incident`). */
+const TRIGGER_KINDS: Record<TemplateDef['trigger'], readonly TemplateDef['kind'][]> = {
+  ambient: ['incident'],
+  reaction: ['incident', 'clash'],
+  meddle: ['rumour', 'dare'],
+  grudge: ['clash'],
+  roster: ['return', 'stepped_in', 'unmasked', 'crowned'],
+};
+
+/**
+ * The outcomes the sim resolves itself, per parent kind a reaction can follow (incidents: their Templates').
+ * Roster heads have none, so a reaction after one can't ask for an outcome.
+ */
+const SIM_OUTCOMES: Record<ParentKind, readonly string[]> = {
+  rumour: ['works', 'wrong_orc', 'garbled'],
+  clash: ['won', 'defeated', 'fled'],
+  dare: ['botched', 'pulled_off', 'refused'],
+  return: [],
+  stepped_in: [],
+  unmasked: [],
+  crowned: [],
+};
+
+/**
+ * Templates the sim can actually run (#44): each trigger's kinds, unique outcome keys, real Traits on roles,
+ * and reactions that can fire, following outcomes their parent kind has, on a parent offering their roles.
+ */
+function validateRunnable(c: Content): string[] {
+  const errors: string[] = [];
+  const tagPool = new Set<string>([...TRAITS, ...FEARS, ...Object.values(c.banks.humiliations ?? {}).flatMap((h) => (h.fear ? [h.fear] : []))]);
+  for (const t of c.templates) {
+    const where = `template ${t.id}`;
+    if (!TRIGGER_KINDS[t.trigger]?.includes(t.kind)) {
+      errors.push(`${where}: kind ${t.kind} can't run on trigger ${t.trigger} (it takes ${TRIGGER_KINDS[t.trigger]?.join(', ')})`);
+    }
+    const keys = (t.outcomes ?? []).map((o) => o.key);
+    for (const k of new Set(keys)) if (keys.filter((x) => x === k).length > 1) errors.push(`${where}: duplicate outcome "${k}"`);
+    if (t.kind === 'clash' && [...keys].sort().join(',') !== 'defeated,fled,won') {
+      errors.push(`${where}: a Clash Template's outcomes are exactly won, defeated, fled`);
+    }
+    for (const role of t.roles ?? []) {
+      if (role.trait !== undefined && !TRAIT_POOL.has(role.trait)) errors.push(`${where}: role "${role.name}" needs unknown Trait "${role.trait}"`);
+    }
+    for (const tag of t.tags ?? []) if (!tagPool.has(tag)) errors.push(`${where}: tag "${tag}" is not a Trait or Fear`);
+  }
+  // Every Trait and Fear in the pools gives events something to trigger on (pools.ts).
+  const covered = new Set(c.templates.flatMap((t) => [...(t.roles ?? []).flatMap((r) => (r.trait ? [r.trait] : [])), ...(t.tags ?? [])]));
+  for (const key of [...TRAITS, ...FEARS]) if (!covered.has(key)) errors.push(`templates: no Template for "${key}" (a role that needs it, or a tag)`);
+
+  const incidents = c.templates.filter((t) => t.kind === 'incident');
+  for (const t of c.templates) {
+    if (t.trigger !== 'reaction' || !t.after) continue;
+    const where = `template ${t.id}`;
+    const wanted = t.after.outcomes;
+    if (t.after.kind !== 'incident') {
+      const known = SIM_OUTCOMES[t.after.kind];
+      for (const o of wanted ?? []) if (!known.includes(o)) errors.push(`${where}: follows outcome "${o}", which a ${t.after.kind} never has`);
+      continue;
+    }
+    // An incident parent offers its own Template's roles: some incident must have them all and a wanted outcome.
+    const from = (t.roles ?? []).flatMap((r) => (r.from ? [r.from] : []));
+    const parents = incidents.filter(
+      (p) =>
+        from.every((f) => p.roles.some((r) => r.name === f)) &&
+        (!wanted || p.outcomes.some((o) => wanted.includes(o.key))),
+    );
+    if (parents.length === 0) errors.push(`${where}: can never fire (no incident Template has roles ${from.join(', ')} and outcome ${wanted?.join(' or ') ?? 'any'})`);
+  }
+  return errors;
+}
+
+/** The tone bible's checkable boundaries (§4): a clean Herald, and no real or borrowed names anywhere. */
+function validateTone(c: Content): string[] {
+  const errors: string[] = [];
+  for (const [where, text] of heraldText(c)) {
+    const word = swearIn(text);
+    if (word) errors.push(`${where}: the Herald never swears ("${word}" in "${text}")`);
+  }
+  for (const [where, text] of allText(c)) {
+    const name = forbiddenNameIn(text);
+    if (name) errors.push(`${where}: names a real person, party or borrowed setting ("${name}")`);
+  }
   return errors;
 }
 
@@ -334,7 +423,6 @@ function validateReactions(c: Content): string[] {
       if (role.from !== undefined && !offered.has(role.from)) {
         errors.push(`${where}: role "${role.name}" casts from "${role.from}", which a ${t.after.kind} doesn't offer`);
       }
-      if (role.trait !== undefined && !TRAIT_POOL.has(role.trait)) errors.push(`${where}: role "${role.name}" needs unknown Trait "${role.trait}"`);
     }
   }
   return errors;

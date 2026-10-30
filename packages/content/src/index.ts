@@ -36,6 +36,7 @@ export {
 export { validateContent, RUMOUR_TEMPLATES, DARE_TEMPLATES, ROSTER_TEMPLATES } from './validate.ts';
 export { compareCodeUnits, hashString, hashValue, stableStringify } from './hash.ts';
 export { TONE_BIBLE } from './tone-bible.ts';
+export { FORBIDDEN_NAMES, SWEAR, allText, forbiddenNameIn, heraldText, swearIn } from './tone.ts';
 
 const versions = new WeakMap<Content, string>();
 
