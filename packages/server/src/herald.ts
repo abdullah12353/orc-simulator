@@ -1,8 +1,9 @@
 // open-edition (data-model §4.1): a Player's own "Since You Left" edition of The Gutter Herald, built on
 // open. It works out the window, decides between a new edition and a Stop press, ranks the story heads
 // and fills the lead, the headlines and the gutter. This is the templated edition: headlines are the
-// Facts' template lines. Blame lines, the Accusation, "Your Stable" and the model call come later.
-import { content as shippedContent, hashString, type Content } from '@orc/content';
+// Facts' template lines, and each Meddle-caused story carries its templated Blame line (#29). The
+// Accusation, "Your Stable" and the model call come later.
+import { blameLine, content as shippedContent, hashString, type BlameName, type Content } from '@orc/content';
 import { DAY_ZERO, londonDate } from '@orc/sim';
 import { jsonb, type Sql, type Tx } from './db.ts';
 
@@ -56,6 +57,8 @@ export interface OpenEditionResult {
   /** The new edition, or the last one if no new edition is due. */
   edition: Edition;
   created: boolean;
+  /** The reader's display name, so the client can highlight it in Blame lines. */
+  reader: string;
   /** New stories since the last edition, as lines, when no new edition is due (else empty). */
   stopPress: StopPressLine[];
 }
@@ -99,8 +102,8 @@ export async function openEdition(
 ): Promise<OpenEditionResult> {
   const content = deps.content ?? shippedContent;
   return deps.sql.begin(async (tx) => {
-    const [player] = await tx<{ id: string; world_created_at: string }[]>`
-      select p.id, to_json(w.created_at)#>>'{}' as world_created_at
+    const [player] = await tx<{ id: string; display_name: string; world_created_at: string }[]>`
+      select p.id, p.display_name, to_json(w.created_at)#>>'{}' as world_created_at
       from players p join worlds w on w.id = p.world_id
       where p.world_id = ${input.worldId} and p.user_id = ${input.userId} and p.removed_at is null`;
     if (!player) throw new OpenEditionError('not_a_player');
@@ -127,6 +130,7 @@ export async function openEdition(
       return {
         edition: await loadEdition(tx, last.id),
         created: false,
+        reader: player.display_name,
         stopPress: candidates.map((c) => ({ storyNo: c.no, at: c.at, line: c.line })),
       };
     }
@@ -137,19 +141,22 @@ export async function openEdition(
       insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead, status)
       values (${input.worldId}, ${player.id}, ${no}, ${from}, ${now}, ${now}, ${jsonb(tx, masthead)}, 'templated')
       returning id`;
-    const stories: EditionStory[] = candidates.slice(0, HERALD.lastRank).map((c, i) => ({
+    const printed = candidates.slice(0, HERALD.lastRank);
+    const blame = await loadBlameNames(tx, input.worldId, printed.map((c) => c.no));
+    const stories: EditionStory[] = printed.map((c, i) => ({
       rank: i + 1,
       storyNo: c.no,
       slot: slotFor(i + 1),
       headline: c.line,
       standfirst: null,
       body: null,
-      blameLine: null,
+      blameLine: blameLine(content, blame.get(c.no) ?? []),
     }));
     if (stories.length > 0) {
       await tx`
-        insert into edition_stories (edition_id, rank, story_no, slot, headline)
-        select ${edition!.id}, (s->>'rank')::smallint, (s->>'storyNo')::bigint, s->>'slot', s->>'headline'
+        insert into edition_stories (edition_id, rank, story_no, slot, headline, blame_line)
+        select ${edition!.id}, (s->>'rank')::smallint, (s->>'storyNo')::bigint, s->>'slot', s->>'headline',
+               s->>'blameLine'
         from jsonb_array_elements(${jsonb(tx, stories)}) as s`;
     }
     await tx`update player_private set last_edition_no = ${no} where player_id = ${player.id}`;
@@ -157,6 +164,7 @@ export async function openEdition(
     return {
       edition: { id: edition!.id, no, coversFrom: from, coversTo: now, createdAt: now, masthead, status: 'templated', stories },
       created: true,
+      reader: player.display_name,
       stopPress: [],
     };
   });
@@ -173,6 +181,22 @@ async function loadCandidates(tx: Tx, worldId: string, from: string, to: string)
     where f.world_id = ${worldId} and f.no = f.story_no and f.tier <> 'silent'
       and f.at > ${from} and f.at <= ${to}`;
   return rows.map((r) => ({ no: r.no, at: iso(r.at), line: r.line, weight: r.weight ?? 0, legendaryDeed: r.legendary_deed }));
+}
+
+/**
+ * Who to name in each story's Blame line: the head's `fact_blame` rows (one indexed lookup, no
+ * recursion; decision 9), in landing order, with each Player's display name.
+ */
+async function loadBlameNames(tx: Tx, worldId: string, storyNos: number[]): Promise<Map<number, BlameName[]>> {
+  const names = new Map<number, BlameName[]>();
+  if (storyNos.length === 0) return names;
+  const rows = await tx<{ fact_no: number; display_name: string; verb: BlameName['verb'] }[]>`
+    select b.fact_no::float8 as fact_no, p.display_name, b.verb::text as verb
+    from fact_blame b join players p on p.id = b.player_id
+    where b.world_id = ${worldId} and b.fact_no = any(${storyNos}::bigint[])
+    order by b.fact_no, b.landed_at, b.landed_fact, b.meddle_id`;
+  for (const r of rows) names.set(r.fact_no, [...(names.get(r.fact_no) ?? []), { name: r.display_name, verb: r.verb }]);
+  return names;
 }
 
 async function loadEdition(tx: Tx, id: string): Promise<Edition> {

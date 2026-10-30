@@ -1,6 +1,6 @@
 // Shared commit writers: the tick and create_world (day zero) write Facts, ticks rows and world state
 // the same way. Everything is bulk-inserted through jsonb_array_elements (one statement per table).
-import type { Fact, WorldState } from '@orc/sim';
+import type { BlameEntry, Cause, Fact, WorldState } from '@orc/sim';
 import { jsonb, type Tx } from './db.ts';
 
 /** All Facts in one statement (day zero inserts hundreds), with the full Fact kept as payload. */
@@ -13,6 +13,54 @@ export async function insertFacts(tx: Tx, worldId: string, rows: { tickSeq: numb
            (f->>'storyNo')::bigint, f->>'templateId', (f->>'variant')::smallint, f->>'line', (f->>'tier')::tier,
            array(select jsonb_array_elements_text(f->'cast')), (f->>'comedyWeight')::smallint, f
     from jsonb_array_elements(${jsonb(tx, rows)}) as r, lateral (select r->'fact' as f) as x`;
+
+  // The causal edges and the materialised Blame (decision 9), straight from what the sim computed.
+  const causes = rows.flatMap(({ fact }) => fact.causes.map((cause) => ({ fact: fact.no, cause })));
+  if (causes.length > 0) {
+    await tx`
+      insert into fact_causes (world_id, fact_no, cause_no)
+      select ${worldId}, (c->>'fact')::bigint, (c->>'cause')::bigint
+      from jsonb_array_elements(${jsonb(tx, causes)}) as c`;
+  }
+  const blame = rows.flatMap(({ fact }) => fact.blame.map((b) => ({ ...b, fact: fact.no })));
+  if (blame.length > 0) {
+    await tx`
+      insert into fact_blame (world_id, fact_no, meddle_id, player_id, verb, landed_fact, landed_at, hops)
+      select ${worldId}, (b->>'fact')::bigint, (b->>'meddleId')::uuid, (b->>'playerId')::uuid,
+             (b->>'verb')::meddle_verb, (b->>'landedFact')::bigint, (b->>'landedAt')::timestamptz, (b->>'hops')::smallint
+      from jsonb_array_elements(${jsonb(tx, blame)}) as b`;
+  }
+}
+
+/**
+ * The Causes behind the given Facts, each with that Fact's Blame, for state that can cause later
+ * events (Grudge tags now; Trophies, Humiliations and deaths later). Blame comes out in the sim's
+ * canonical order (landing time, landing Fact, Meddle id), so a loaded Cause equals the one in memory.
+ */
+export async function loadCauses(tx: Tx, worldId: string, factNos: readonly number[]): Promise<Map<number, Cause>> {
+  const causes = new Map<number, Cause>();
+  const wanted = [...new Set(factNos)];
+  for (const no of wanted) causes.set(no, { fact: no, blame: [] });
+  if (wanted.length === 0) return causes;
+  const rows = await tx<
+    { fact_no: number; meddle_id: string; player_id: string; verb: BlameEntry['verb']; landed_fact: number; landed_at: string; hops: number }[]
+  >`
+    select fact_no::float8 as fact_no, meddle_id::text, player_id::text, verb::text, landed_fact::float8 as landed_fact,
+           to_json(landed_at)#>>'{}' as landed_at, hops
+    from fact_blame
+    where world_id = ${worldId} and fact_no = any(${wanted}::bigint[])
+    order by fact_no, landed_at, landed_fact, meddle_id`;
+  for (const r of rows) {
+    causes.get(r.fact_no)!.blame.push({
+      meddleId: r.meddle_id,
+      playerId: r.player_id,
+      verb: r.verb,
+      landedFact: r.landed_fact,
+      landedAt: new Date(r.landed_at).toISOString(),
+      hops: r.hops,
+    });
+  }
+  return causes;
 }
 
 export interface TickRow {

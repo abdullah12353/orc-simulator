@@ -30,6 +30,8 @@ interface Edition {
 interface Opened {
   edition: Edition;
   created: boolean;
+  /** My display name: highlighted wherever a Blame line names me. */
+  reader: string;
   stopPress: { storyNo: number; at: string; line: string }[];
 }
 
@@ -120,7 +122,7 @@ export function Herald({ worldId }: { worldId: string }) {
           </ul>
         </aside>
       )}
-      <EditionView edition={edition} />
+      <EditionView edition={edition} reader={opened.reader} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>
@@ -138,7 +140,24 @@ export function Herald({ worldId }: { worldId: string }) {
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
-function EditionView({ edition }: { edition: Edition }) {
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * A story's Blame line (templated, #29) with the reader's own name highlighted. Names are unique per
+ * world, so a whole-word match on mine is enough ("Mo" never lights up inside "Moira").
+ */
+function BlameLine({ line, reader }: { line: string; reader: string }) {
+  if (!reader) return <p className="blame">{line}</p>;
+  const mine = new RegExp(`(?<![\\p{L}\\p{N}])(${escapeRegExp(reader)})(?![\\p{L}\\p{N}])`, 'giu');
+  const parts = line.split(mine);
+  return (
+    <p className="blame">
+      {parts.map((part, i) => (i % 2 === 1 ? <mark key={i} className="me">{part}</mark> : part))}
+    </p>
+  );
+}
+
+function EditionView({ edition, reader }: { edition: Edition; reader: string }) {
   const lead = edition.stories.find((s) => s.slot === 'lead');
   const headlines = edition.stories.filter((s) => s.slot === 'headline');
   const gutter = edition.stories.filter((s) => s.slot === 'gutter');
@@ -162,7 +181,7 @@ function EditionView({ edition }: { edition: Edition }) {
           <h3>{lead.headline}</h3>
           {lead.standfirst && <p className="standfirst">{lead.standfirst}</p>}
           {lead.body && <p>{lead.body}</p>}
-          {lead.blameLine && <p className="blame">{lead.blameLine}</p>}
+          {lead.blameLine && <BlameLine line={lead.blameLine} reader={reader} />}
         </div>
       )}
       {headlines.length > 0 && (
@@ -171,7 +190,7 @@ function EditionView({ edition }: { edition: Edition }) {
             <li key={s.rank}>
               <h4>{s.headline}</h4>
               {s.body && <p>{s.body}</p>}
-              {s.blameLine && <p className="blame">{s.blameLine}</p>}
+              {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
             </li>
           ))}
         </ol>
