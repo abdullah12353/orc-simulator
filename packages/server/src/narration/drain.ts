@@ -33,7 +33,7 @@ export const NARRATION = {
 } as const;
 
 /** Provider order (D65). */
-const ORDER: ProviderId[] = ['workers-ai', 'groq'];
+export const ORDER: ProviderId[] = ['workers-ai', 'groq'];
 
 interface Job {
   id: number;
@@ -82,7 +82,7 @@ type Attempt =
   | { ok: true; provider: ProviderId; lines: ClashLine[] }
   | { ok: false; provider: ProviderId; failure: NarrationFailure };
 
-interface Outcome {
+export interface Outcome {
   status: 'done' | 'fallback';
   provider: ProviderId | null;
   failure: NarrationFailure | null;
@@ -175,7 +175,7 @@ async function loadStory(sql: Sql, job: Job): Promise<ClashStory> {
   return { clash, trophy: trophy?.kind === 'trophy' ? { key: trophy.key, from: trophy.from, to: trophy.to } : null };
 }
 
-async function finish(deps: NarrationDeps, job: Job, o: Outcome): Promise<void> {
+export async function finish(deps: Pick<NarrationDeps, 'sql' | 'now'>, job: { id: number }, o: Outcome): Promise<void> {
   await deps.sql`
     update narration_jobs
     set status = ${o.status}::job_status, provider = ${o.provider}, failure = ${o.failure}, excerpt = ${o.excerpt},

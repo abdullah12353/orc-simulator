@@ -1,7 +1,8 @@
 // The narration prompt (data-model decision 13, #13's bake-off): a fixed system prefix (the house rules
 // and the whole tone bible), byte-identical on every call so providers can cache it, then one JSON input
-// built from Facts only: the Clash, the speakers' voice cards and the pair's top Grudge tags. Nothing
-// private goes in (no Blame, no Players, no gold).
+// built from Facts only: for a Clash, the Clash, the speakers' voice cards and the pair's top Grudge
+// tags; for a Herald edition, each printed story head's line and its Captains' names. Nothing private
+// goes in (no Blame, no Players, no gold).
 import { ACCENT_LABELS, TONE_BIBLE, type Content } from '@orc/content';
 import { clashShape, type ClashFact } from '@orc/sim';
 
@@ -19,12 +20,20 @@ TASK "clash": write the Clash dialogue.
 - Each Captain speaks in his own accent through word choice and grammar only, no phonetic respelling. His jokes come from his Traits, Fear, Grudges and Trophies, never from his accent (swap test).
 - Full British profanity is allowed for the orcs. The c-word at most once per Clash.
 
+TASK "herald": write the stories of one edition of The Gutter Herald from the game's templated story lines.
+- Output ONLY a JSON object: {"stories":[{"rank":<rank>,"headline":"<HEADLINE>","standfirst":"<sentence>","body":"<sentences>"}]}
+- Exactly one entry per input story, with its "rank". Rank 1 is the lead.
+- "headline": an ALL CAPS red-top headline. "standfirst": one deadpan sentence under it. "body": two to four deadpan sentences for the lead, one or two for the others.
+- Report only what the story's "line" says happened. Never change who won, who lost, who died or what was taken. Names are the "captains" names.
+- Clean, deadpan red-top tabloid. No swearing at all, not even mild. Treat orc idiocy with the gravity of history.
+- Do not name or mention Players. Blame lines are added by the game, not by you.
+
 No preamble, no markdown, no commentary. JSON only.
 
 === TONE BIBLE ===
 `;
 
-/** The cached prefix: the same bytes on every call, Clash or Herald (#38 adds its task to the contract). */
+/** The cached prefix: the same bytes on every call, Clash or Herald. */
 export const NARRATION_PREFIX = CONTRACT + TONE_BIBLE;
 
 export interface ChatMessage {
@@ -80,5 +89,35 @@ export function clashMessages(content: Content, story: ClashStory): ChatMessage[
   return [
     { role: 'system', content: NARRATION_PREFIX },
     { role: 'user', content: JSON.stringify(clashInput(content, story)) },
+  ];
+}
+
+/** One story the model writes up: a printed head (the lead or a headline), as the log has it. */
+export interface HeraldStory {
+  rank: number;
+  kind: string;
+  /** The head's templated line. */
+  line: string;
+  /** The Captains in it (`fact.cast`). */
+  cast: string[];
+}
+
+/** The model's input for one edition: whitelisted fields only, so Blame lines and Players can't leak in. */
+export function heraldInput(content: Content, stories: HeraldStory[]) {
+  return {
+    task: 'herald' as const,
+    stories: stories.map((s) => ({
+      rank: s.rank,
+      kind: s.kind,
+      line: s.line,
+      captains: s.cast.map((id) => content.cast.find((c) => c.id === id)?.name ?? id),
+    })),
+  };
+}
+
+export function heraldMessages(content: Content, stories: HeraldStory[]): ChatMessage[] {
+  return [
+    { role: 'system', content: NARRATION_PREFIX },
+    { role: 'user', content: JSON.stringify(heraldInput(content, stories)) },
   ];
 }

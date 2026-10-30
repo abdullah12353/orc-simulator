@@ -54,3 +54,69 @@ export function validateClash(content: Content, fact: ClashFact, raw: string): C
   if (problem) return { ok: false, failure: 'bad_output', why: problem };
   return { ok: true, lines: mapped };
 }
+
+/**
+ * Swearing, which the Herald never does (tone bible: "everywhere except the Herald"). Whole words with
+ * explicit inflections, so "Arsenal", "prickly", "Dickensian" and "knobbly" don't count (#13's list).
+ */
+const SWEAR = new RegExp(
+  `\\b(${[
+    '(mother)?fuck(s|ed|er|ers|ing|in|wit|wits)?', 'shit(s|e|ty|ter|ting|head|heads)?', 'shat', 'cunts?', 'bastards?',
+    'bollocks', 'bollox', 'arse(s|d|hole|holes)?', 'wank(s|ed|er|ers|ing)?', 'twats?', 'pricks?', 'bellends?',
+    'piss(ed|es|ing|er|y)?', 'tossers?', 'bugger(s|ed|ing)?', 'knob(s|head|heads)?', 'fanny', 'fannies', 'turds?',
+    'dick(s|head|heads)?', 'bloody', 'crap(s|py|per)?', 'minge', 'sod off',
+  ].join('|')})\\b`,
+  'i',
+);
+
+/** What the model wrote for one printed story. Blame lines are never among them. */
+export interface HeraldWriting {
+  rank: number;
+  headline: string;
+  standfirst: string | null;
+  body: string;
+}
+
+export type HeraldVerdict = { ok: true; stories: HeraldWriting[] } | { ok: false; failure: 'refusal' | 'bad_output'; why: string };
+
+/** Longest a field may run before it breaks the page. */
+export const HERALD_LIMITS = { headline: 200, standfirst: 400, body: 1500 } as const;
+
+/**
+ * Checks a model's Herald edition: exactly one story per rank asked for, each with a headline and a
+ * body, and not one swear word anywhere. Only the three written fields are kept; anything else the
+ * model adds (a Blame line of its own, say) is dropped.
+ */
+export function validateHerald(raw: string, ranks: number[]): HeraldVerdict {
+  const parsed = parseJson(raw);
+  if (parsed === undefined) {
+    return LECTURE.test(raw) ? { ok: false, failure: 'refusal', why: 'refused' } : { ok: false, failure: 'bad_output', why: 'not JSON' };
+  }
+  const stories = (parsed as { stories?: unknown })?.stories;
+  const fine = (v: unknown, max: number) => typeof v === 'string' && v.trim().length > 0 && v.length <= max;
+  if (
+    !Array.isArray(stories) ||
+    !stories.every(
+      (s) =>
+        typeof s?.rank === 'number' &&
+        fine(s.headline, HERALD_LIMITS.headline) &&
+        fine(s.body, HERALD_LIMITS.body) &&
+        (s.standfirst == null || (typeof s.standfirst === 'string' && s.standfirst.length <= HERALD_LIMITS.standfirst)),
+    )
+  ) {
+    return { ok: false, failure: 'bad_output', why: 'not {"stories":[{rank,headline,standfirst,body}]}' };
+  }
+  const got = (stories as { rank: number }[]).map((s) => s.rank).sort((a, b) => a - b);
+  const want = [...ranks].sort((a, b) => a - b);
+  if (got.length !== want.length || got.some((r, i) => r !== want[i])) {
+    return { ok: false, failure: 'bad_output', why: `story count: ranks ${got.join(',')} for ${want.join(',')}` };
+  }
+  const writing: HeraldWriting[] = (stories as { rank: number; headline: string; standfirst?: string | null; body: string }[])
+    .map((s) => ({ rank: s.rank, headline: s.headline.trim(), standfirst: s.standfirst?.trim() || null, body: s.body.trim() }))
+    .sort((a, b) => a.rank - b.rank);
+  for (const s of writing) {
+    const swore = `${s.headline}\n${s.standfirst ?? ''}\n${s.body}`.match(SWEAR);
+    if (swore) return { ok: false, failure: 'bad_output', why: `swore: ${swore[0].toLowerCase()}` };
+  }
+  return { ok: true, stories: writing };
+}

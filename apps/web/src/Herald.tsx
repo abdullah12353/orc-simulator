@@ -9,7 +9,9 @@ import { supabase } from './supabase.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
 // or, if none is due, my last one plus a Stop press. Older editions (the last 7) are read directly
-// under RLS (owner-only). Shapes mirror packages/server/src/herald.ts.
+// under RLS (owner-only). Shapes mirror packages/server/src/herald.ts. When open-edition answers before
+// the model has written the edition's words (#38), it says `generating`, and the page rereads the edition
+// until it turns `generated`, then swaps the new headlines, standfirsts and bodies in.
 
 type Slot = 'lead' | 'headline' | 'gutter';
 
@@ -68,6 +70,8 @@ interface Opened {
   /** My display name: highlighted wherever a Blame line names me. */
   reader: string;
   stopPress: { storyNo: number; at: string; line: string }[];
+  /** The Herald's words are still being written; reread the edition shortly. */
+  generating?: boolean;
 }
 
 interface EditionRow {
@@ -89,6 +93,10 @@ interface EditionRow {
 }
 
 const SHOWN_EDITIONS = 7;
+const EDITION_COLUMNS =
+  'id, no, covers_from, covers_to, masthead, status, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)';
+/** Rereads while the words are being written: the job gives up on the model after about 20 s. */
+const PICKUP = { everyMs: 3_000, tries: 12 } as const;
 /** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
 const playedKey = (editionId: string) => `orc:lead-played:${editionId}`;
 
@@ -133,7 +141,7 @@ export function Herald({ worldId }: { worldId: string }) {
       void autoPlayLead(data.edition);
       const past = await supabase
         .from('editions')
-        .select('id, no, covers_from, covers_to, masthead, status, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)')
+        .select(EDITION_COLUMNS)
         .eq('world_id', worldId)
         .order('no', { ascending: false })
         .limit(SHOWN_EDITIONS);
@@ -167,12 +175,41 @@ export function Herald({ worldId }: { worldId: string }) {
     };
   }, [worldId]);
 
+  // #38: pick up the generated words when they land (or stop waiting once the job must be over).
+  const writing = opened && !('error' in opened) && opened.generating ? opened.edition.id : null;
+  useEffect(() => {
+    if (!writing) return;
+    let tries = 0;
+    let busy = false;
+    const stop = (fresh: Edition | null) => {
+      clearInterval(timer);
+      setOpened((o) =>
+        o && !('error' in o) && o.edition.id === writing
+          ? { ...o, generating: false, edition: fresh ? { ...fresh, accusation: o.edition.accusation } : o.edition }
+          : o,
+      );
+      if (fresh) setArchive((list) => list.map((e) => (e.id === writing ? fresh : e)));
+    };
+    const timer = setInterval(async () => {
+      if (busy) return;
+      busy = true;
+      tries += 1;
+      const { data } = await supabase.from('editions').select(EDITION_COLUMNS).eq('id', writing).maybeSingle();
+      busy = false;
+      const row = data as EditionRow | null;
+      if (row?.status === 'generated') stop(fromRow(row));
+      else if (tries >= PICKUP.tries) stop(null);
+    }, PICKUP.everyMs);
+    return () => clearInterval(timer);
+  }, [writing]);
+
   if (opened === null) return <p className="quiet">The Herald is on its way…</p>;
   if ('error' in opened) return <p className="error">{opened.error}</p>;
 
   const latest = opened.edition;
   const shown = archive.find((e) => e.id === showing) ?? latest;
-  const edition = shown.id === latest.id ? { ...shown, accusation: latest.accusation } : shown;
+  // The latest edition as open-edition gave it (with its Accusation, and the generated words once picked up).
+  const edition = shown.id === latest.id ? latest : shown;
   const isLatest = edition.id === latest.id;
   const watch = async (story: Story) => {
     const kind = pieces.get(story.storyNo);
@@ -196,6 +233,7 @@ export function Herald({ worldId }: { worldId: string }) {
           </ul>
         </aside>
       )}
+      {isLatest && opened.generating && <p className="quiet">The subs are still at it. Fresh ink shortly.</p>}
       <EditionView edition={edition} reader={opened.reader} pieces={pieces} onWatch={watch} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
@@ -271,6 +309,7 @@ function EditionView({
           {headlines.map((s) => (
             <li key={s.rank}>
               <h4>{s.headline}</h4>
+              {s.standfirst && <p className="standfirst">{s.standfirst}</p>}
               {s.body && <p>{s.body}</p>}
               {accused(s)}
               {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
