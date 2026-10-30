@@ -58,6 +58,15 @@ export async function asUser<T>(userId: string, fn: (tx: Sql) => Promise<T>, sql
 }
 class Rollback extends Error {}
 
+/** Like `asUser`, but commits: for multi-step flows (invites, joins) whose effects later steps read. */
+export async function asUserCommitted<T>(userId: string, fn: (tx: Sql) => Promise<T>, sql: Sql = db()): Promise<T> {
+  return (await sql.begin(async (tx) => {
+    await tx`select set_config('request.jwt.claims', ${JSON.stringify({ sub: userId, role: 'authenticated' })}, true)`;
+    await tx`set local role authenticated`;
+    return fn(tx as unknown as Sql);
+  })) as T;
+}
+
 /** A world seed whose first tick is guaranteed to produce Facts (found by asking the sim). */
 export function seedWithFactsOnFirstTick(c: Content = content, now = '2026-10-30T12:00:00.000Z'): number {
   for (let seed = 1; seed < 10_000; seed++) {
