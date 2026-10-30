@@ -118,6 +118,7 @@ export function validateContent(c: Content): string[] {
   }
 
   errors.push(...validateRumours(c, templateIds));
+  errors.push(...validateBlameLines(c));
   return errors;
 }
 
@@ -127,6 +128,23 @@ export const RUMOUR_TEMPLATES = {
   wrong_orc: 'rumour.wrong-orc',
   garbled: 'rumour.garbled',
 } as const;
+
+/** The Blame line templates (#29): a began/noun pair per verb, and every placeholder in its template. */
+function validateBlameLines(c: Content): string[] {
+  const errors: string[] = [];
+  const bank = c.banks.blame;
+  for (const verb of ['rumour', 'dare'] as const) {
+    const v = bank?.verbs?.[verb];
+    if (!v?.began?.trim() || !v?.noun?.trim()) errors.push(`banks.blame.verbs.${verb}: needs "began" and "noun"`);
+  }
+  const needs = { one: ['{first}'], two: ['{first}', '{last}'], many: ['{first}', '{middle}', '{last}'] } as const;
+  for (const [key, slots] of Object.entries(needs) as [keyof typeof needs, readonly string[]][]) {
+    for (const slot of slots) {
+      if (!String(bank?.[key] ?? '').includes(slot)) errors.push(`banks.blame.${key}: missing ${slot}`);
+    }
+  }
+  return errors;
+}
 
 /** What Rumours need: subject phrases, Claim phrasings, the Garble ladder and absurd subjects (#28). */
 function validateRumours(c: Content, templateIds: Set<string>): string[] {

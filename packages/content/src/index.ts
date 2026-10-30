@@ -5,6 +5,7 @@ export * from './types.ts';
 export { content } from './bundle.ts';
 export { ACCENTS, ACCENT_LABELS, CASTING, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 export { subjectText, type SubjectRef } from './subjects.ts';
+export { blameLine, type BlameName } from './blame-line.ts';
 export { validateContent, RUMOUR_TEMPLATES } from './validate.ts';
 export { hashString, hashValue, stableStringify } from './hash.ts';
 
