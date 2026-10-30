@@ -53,9 +53,9 @@ export interface RoleDef {
 
 /** What a reaction Template follows (D46 trigger `reaction`), and how likely it is to. */
 export interface AfterDef {
-  /** The parent Fact's kind: `incident`, `rumour` or `clash`. */
-  kind: 'incident' | 'rumour' | 'clash';
-  /** Only after these outcomes (an incident's outcome key, a Rumour's or a Clash's outcome). Omit for any. */
+  /** The parent Fact's kind: `incident`, `rumour`, `clash` or `dare`. */
+  kind: 'incident' | 'rumour' | 'clash' | 'dare';
+  /** Only after these outcomes (an incident's outcome key, a Rumour's, a Clash's or a Dare's outcome). Omit for any. */
   outcomes?: string[];
   /** Chance it follows a matching parent, 0–1. Halved if the Template ran in the last 24 h. */
   chance: number;
@@ -87,9 +87,10 @@ export interface TemplateDef {
    * `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). `clash` Templates start
    * a Clash and voice its headline: their lines get the `{tag}` and `{result}` slots (see `ClashBanks`).
    * `return`, `stepped_in`, `unmasked` and `crowned` voice the roster's story heads (#32, #34, see
-   * ROSTER_TEMPLATES).
+   * ROSTER_TEMPLATES). `dare` Templates voice a landed Dare, one per kind and outcome (DARE_TEMPLATES), with
+   * the `{dare}` slot (the Dare's text, rendered).
    */
-  kind: 'incident' | 'rumour' | 'clash' | 'return' | 'stepped_in' | 'unmasked' | 'crowned';
+  kind: 'incident' | 'rumour' | 'clash' | 'dare' | 'return' | 'stepped_in' | 'unmasked' | 'crowned';
   /**
    * `ambient`: rolled on a tick. `meddle`: a Meddle landing. `grudge`: the Grudge Clash roll (one Template,
    * roles `a` and `b`). `reaction`: follows another Fact (see `after`), up to 3 deep in a tick. `roster`:
@@ -153,6 +154,31 @@ export interface Banks {
   death: DeathBank;
   /** The throne (#34): the Warlord's fall, by why, and a Captain becoming Legendary. */
   throne: ThroneBank;
+  /** The Dare bank (#35, D46): Stunts and Pranks a Player can Dare a Captain into. Keys are `meddles.dare_key`. */
+  dares: Record<BankKey, DareDef>;
+  /** Appended to a Dare's line when it plays on his Fear; `{fear}` reads after "his" ("fear of water"). */
+  dareFear: string[];
+}
+
+/**
+ * One Dare (#35). A Stunt is aimed at one Captain (the target); a Prank also names a victim Captain, who
+ * holds a Grudge against the target if it comes off (or goes wrong on him).
+ */
+export interface DareDef {
+  kind: 'stunt' | 'prank';
+  /** What the picker calls it: "Swim the moat". */
+  label: string;
+  /** Completes "dared {target} to …": "swim the moat in full armour". A Prank names `{victim}`. */
+  text: string;
+  /**
+   * The Traits and Fears it plays on. A Dare whose tags include one of the target's Fears plays on his Fear
+   * (`playsOnFear`), which the Herald calls out and which makes it likelier to go wrong.
+   */
+  tags: string[];
+  /** Only a Captain with this Trait can be Dared into it (a Drunkard into the keg). */
+  needs?: string;
+  /** Prank only: the Grudge tag the victim holds against the target, third person ("put a frog in his helmet"). */
+  grudge?: string;
 }
 
 /** Sentences for the throne (#34). `fell` and `legendary` use `{captain}`; they are appended to the story's line. */

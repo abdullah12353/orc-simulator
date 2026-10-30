@@ -3,7 +3,7 @@ import { cast } from './cast.ts';
 import type { Content } from './types.ts';
 
 // The content bundle: the full cast (#26), starter banks, one ambient incident (#24) and the Rumour
-// Templates (#28).
+// Templates (#28), Clashes (#30), the roster (#32, #34) and Dares (#35).
 // The v1 catalogue arrives with #44.
 
 export const content: Content = {
@@ -124,6 +124,114 @@ export const content: Content = {
         '{a} heard that {b} {tag}, and did not wait to hear the rest. {result}',
         '{a}, a Hothead, went straight for {b}, who {tag}, apparently. {result}',
         'Within minutes of hearing that {b} {tag}, {a} was rolling up his sleeves. {result}',
+      ],
+      baseWeight: 9,
+    },
+    // A landed Dare (#35), one Template per kind and outcome. `{dare}` is the Dare's text, rendered.
+    {
+      id: 'dare.stunt.botched',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'botched', weight: 1 }],
+      lines: [
+        '{target} was dared to {dare}. It went about as well as anyone hoped.',
+        'Someone dared {target} to {dare}. He tried. The fortress will be talking about it for weeks.',
+        '{target} accepted a Dare to {dare}, and made a mess of it in front of everyone.',
+      ],
+      baseWeight: 7,
+    },
+    {
+      id: 'dare.stunt.pulled-off',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'pulled_off', weight: 1 }],
+      lines: [
+        '{target} was dared to {dare}, and somehow did it. He has not stopped mentioning it.',
+        'Against all advice and most of physics, {target} managed to {dare}.',
+        '{target} took a Dare to {dare} and pulled it off. Nobody is more surprised than {target}.',
+      ],
+      baseWeight: 4,
+    },
+    {
+      id: 'dare.stunt.refused',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'refused', weight: 1 }],
+      lines: [
+        '{target} was dared to {dare}. He said he had a cold.',
+        '{target} has refused a Dare to {dare}, citing "reasons".',
+        'Dared to {dare}, {target} went for a lie-down instead. The fortress has noticed.',
+      ],
+      baseWeight: 5,
+    },
+    {
+      id: 'dare.prank.botched',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }, { name: 'victim' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'botched', weight: 1 }],
+      lines: [
+        '{target} was dared to {dare}. It went wrong, mostly for {target}, though {victim} is not pleased either.',
+        'A Dare to {dare} ended with {target} in a heap and {victim} asking who put him up to it.',
+        '{target} tried to {dare}. {victim} caught him at it, and the prank turned on its author.',
+      ],
+      baseWeight: 7,
+    },
+    {
+      id: 'dare.prank.pulled-off',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }, { name: 'victim' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'pulled_off', weight: 1 }],
+      lines: [
+        'Somebody dared {target} to {dare}, and he did. {victim} has not seen the funny side.',
+        '{target} managed to {dare}. {victim} is now plotting.',
+        'On a Dare, {target} went and did it: he managed to {dare}. {victim} is furious.',
+      ],
+      baseWeight: 6,
+    },
+    {
+      id: 'dare.prank.refused',
+      kind: 'dare',
+      trigger: 'meddle',
+      roles: [{ name: 'target' }, { name: 'victim' }],
+      slots: ['dare'],
+      outcomes: [{ key: 'refused', weight: 1 }],
+      lines: [
+        '{target} was dared to {dare}, but lost his nerve. {victim} never knew how close it came.',
+        'Dared to {dare}, {target} said he was "above that sort of thing". He is not.',
+        '{target} refused a Dare to {dare}. {victim} remains unpranked, for now.',
+      ],
+      baseWeight: 4,
+    },
+    // A pranked Hothead goes straight for whoever did it (#35, like `clash.hothead` after a Rumour).
+    {
+      id: 'clash.pranked',
+      kind: 'clash',
+      trigger: 'reaction',
+      after: { kind: 'dare', outcomes: ['pulled_off', 'botched'], chance: 1 },
+      roles: [
+        { name: 'a', from: 'victim', trait: 'Hothead' },
+        { name: 'b', from: 'target' },
+      ],
+      slots: ['tag', 'result'],
+      outcomes: [
+        { key: 'won', weight: 1 },
+        { key: 'defeated', weight: 1 },
+        { key: 'fled', weight: 1 },
+      ],
+      lines: [
+        '{a} found out that {b} {tag}, and went straight for him. {result}',
+        '{a}, a Hothead, did not take kindly to the news that {b} {tag}. {result}',
+        'Within the hour {a} had found {b}, who {tag}. {result}',
       ],
       baseWeight: 9,
     },

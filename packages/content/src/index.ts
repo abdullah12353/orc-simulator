@@ -6,6 +6,7 @@ export { content } from './bundle.ts';
 export { ACCENTS, ACCENT_LABELS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 export { subjectText, type SubjectRef } from './subjects.ts';
 export { blameLine, type BlameName } from './blame-line.ts';
+export { DARE_OFFERS, SURPRISE, dareFits, dareOffers, daresFor, playsOnFear } from './dares.ts';
 export {
   BARK_EMOTIONS,
   STINGERS,
@@ -32,7 +33,7 @@ export {
   type PortraitLayer,
   type PortraitMark,
 } from './portrait.ts';
-export { validateContent, RUMOUR_TEMPLATES, PARENT_ROLES, ROSTER_TEMPLATES } from './validate.ts';
+export { validateContent, RUMOUR_TEMPLATES, DARE_TEMPLATES, PARENT_ROLES, ROSTER_TEMPLATES } from './validate.ts';
 export { hashString, hashValue, stableStringify } from './hash.ts';
 export { TONE_BIBLE } from './tone-bible.ts';
 

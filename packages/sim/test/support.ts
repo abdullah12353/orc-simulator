@@ -92,3 +92,22 @@ export function rumour(
     firstMeddle: r.firstMeddle ?? false,
   };
 }
+
+/** A Dare intent on `target` (a Prank when `victim` is given), as submitted by `playerId`. */
+export function dare(
+  state: WorldState,
+  playerId: string,
+  d: { target: CaptainId; dareKey: string; victim?: CaptainId; firstMeddle?: boolean; id?: string },
+): Intent {
+  intentCounter++;
+  return {
+    id: d.id ?? `00000000-0000-4000-9000-${String(intentCounter).padStart(12, '0')}`,
+    playerId,
+    at: state.world.now,
+    kind: 'dare',
+    target: d.target,
+    dareKey: d.dareKey,
+    ...(d.victim !== undefined ? { victim: d.victim } : {}),
+    firstMeddle: d.firstMeddle ?? false,
+  };
+}
