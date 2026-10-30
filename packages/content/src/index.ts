@@ -6,7 +6,17 @@ export { content } from './bundle.ts';
 export { ACCENTS, ACCENT_LABELS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 export { subjectText, type SubjectRef } from './subjects.ts';
 export { blameLine, type BlameName } from './blame-line.ts';
-export { BARK_EMOTIONS, STINGERS, barkPath, stingerPath, type BarkEmotion, type Stinger } from './audio.ts';
+export {
+  BARK_EMOTIONS,
+  STINGERS,
+  barkPath,
+  epithetPath,
+  introShoutPath,
+  introSignaturePath,
+  stingerPath,
+  type BarkEmotion,
+  type Stinger,
+} from './audio.ts';
 export {
   composePortrait,
   marksAsOf,
