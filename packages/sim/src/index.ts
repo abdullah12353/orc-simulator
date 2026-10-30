@@ -10,3 +10,4 @@ export { tickSeed } from './rng.ts';
 export { addMinutes, londonDate } from './time.ts';
 export { dayZero, DAY_ZERO, type DayZeroStep } from './day-zero.ts';
 export { comedyWeight, type ComedyInputs } from './comedy.ts';
+export { BLAME, chain, mergeBlame, pairCauses, type Links } from './blame.ts';
