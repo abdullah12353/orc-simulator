@@ -31,39 +31,75 @@ export function useSeen(worldId: string): void {
  */
 export type LiveListener = (tickSeq: number | null) => void;
 
+/** A Clash's generated dialogue landed (#37): `factNo` is the Clash. Refetch its `clash_dialogue`. */
+export type DialogueListener = (factNo: number) => void;
+
 interface Feed {
   channel: RealtimeChannel;
   listeners: Set<LiveListener>;
+  dialogue: Set<DialogueListener>;
 }
 const feeds = new Map<string, Feed>();
 
-/** Listens to a world's channel. One channel per world, shared by every listener in the app. */
-export function listenLive(worldId: string, listener: LiveListener): () => void {
+/** The world's one shared channel, opened on first use. */
+function feedFor(worldId: string): Feed {
   let feed = feeds.get(worldId);
   if (!feed) {
     const listeners = new Set<LiveListener>();
+    const dialogue = new Set<DialogueListener>();
     const channel = supabase.channel(`world:${worldId}`, { config: { private: true } });
     channel.on('broadcast', { event: 'tick' }, (message) => {
       const tickSeq = Number((message.payload as { tick_seq?: unknown }).tick_seq);
       if (Number.isFinite(tickSeq)) for (const l of listeners) l(tickSeq);
+    });
+    channel.on('broadcast', { event: 'dialogue' }, (message) => {
+      const factNo = Number((message.payload as { fact_no?: unknown }).fact_no);
+      if (Number.isFinite(factNo)) for (const l of dialogue) l(factNo);
     });
     void supabase.realtime.setAuth().then(() =>
       channel.subscribe((status) => {
         if (status === 'SUBSCRIBED') for (const l of listeners) l(null);
       }),
     );
-    feed = { channel, listeners };
+    feed = { channel, listeners, dialogue };
     feeds.set(worldId, feed);
   }
-  const current = feed;
-  current.listeners.add(listener);
+  return feed;
+}
+
+/** Closes the world's channel once nobody listens to it. */
+function release(worldId: string, feed: Feed): void {
+  if (feed.listeners.size === 0 && feed.dialogue.size === 0 && feeds.get(worldId) === feed) {
+    feeds.delete(worldId);
+    void supabase.removeChannel(feed.channel);
+  }
+}
+
+/** Listens to a world's channel. One channel per world, shared by every listener in the app. */
+export function listenLive(worldId: string, listener: LiveListener): () => void {
+  const feed = feedFor(worldId);
+  feed.listeners.add(listener);
   return () => {
-    current.listeners.delete(listener);
-    if (current.listeners.size === 0 && feeds.get(worldId) === current) {
-      feeds.delete(worldId);
-      void supabase.removeChannel(current.channel);
-    }
+    feed.listeners.delete(listener);
+    release(worldId, feed);
   };
+}
+
+/** Listens for generated Clash dialogue landing in this world (on the same shared channel). */
+export function listenDialogue(worldId: string, listener: DialogueListener): () => void {
+  const feed = feedFor(worldId);
+  feed.dialogue.add(listener);
+  return () => {
+    feed.dialogue.delete(listener);
+    release(worldId, feed);
+  };
+}
+
+/** Calls `onDialogue` whenever a Clash's generated lines land (latest callback, stable subscription). */
+export function useDialogue(worldId: string, onDialogue: DialogueListener): void {
+  const latest = useRef(onDialogue);
+  latest.current = onDialogue;
+  useEffect(() => listenDialogue(worldId, (no) => latest.current(no)), [worldId]);
 }
 
 /** Calls `onNudge` on every live nudge for this world (latest callback, stable subscription). */
