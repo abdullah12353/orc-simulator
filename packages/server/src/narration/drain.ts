@@ -28,7 +28,8 @@ export const NARRATION = {
   timeoutMs: 20_000,
   /** A drain stops after this many jobs; the rest wait for the next tick's drain. */
   maxJobsPerDrain: 40,
-  excerptChars: 400,
+  /** Per failed call: a job's excerpt holds at most two (Gemma's, then Groq's). */
+  excerptChars: 240,
 } as const;
 
 /** Provider order (D65). */
@@ -112,12 +113,12 @@ async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
       spent.tokens += used.tokens;
     }
     if (!result.ok) {
-      excerpts.push(`${provider} ${result.failure}: ${result.detail}`);
+      excerpts.push(`${provider} ${result.failure}: ${result.detail}`.slice(0, NARRATION.excerptChars));
       return { ok: false, provider, failure: result.failure };
     }
     const verdict = validateClash(content, story.clash, result.content);
     if (!verdict.ok) {
-      excerpts.push(`${provider} ${verdict.failure} (${verdict.why}): ${result.content}`);
+      excerpts.push(`${provider} ${verdict.failure} (${verdict.why}): ${result.content}`.slice(0, NARRATION.excerptChars));
       return { ok: false, provider, failure: verdict.failure };
     }
     return { ok: true, provider, lines: verdict.lines };
@@ -134,7 +135,7 @@ async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
   }
 
   const base = {
-    excerpt: excerpts.length > 0 ? excerpts.join(' | ').slice(0, NARRATION.excerptChars) : null,
+    excerpt: excerpts.length > 0 ? excerpts.join(' | ') : null,
     neurons: spent.any ? spent.neurons : null,
     tokens: spent.any ? spent.tokens : null,
   };
