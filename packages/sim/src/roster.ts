@@ -6,7 +6,7 @@
 // The seams: anything that can kill calls `disaster(ctx, head, victim, causeTag)` once its story head is
 // written; anything that can expose a disguise calls `maybeUnmask`. `processReturns` runs once a tick,
 // straight after the day roll.
-import { KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
+import { compareCodeUnits, KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
 import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
@@ -109,7 +109,7 @@ export function processReturns(ctx: TickContext): void {
   const due = Object.keys(ctx.state.captains)
     .map((id) => ctx.captain(id))
     .filter((c) => c.roster === 'dead' && c.returnsAt !== null && isoToMs(c.returnsAt) <= now)
-    .sort((a, b) => isoToMs(a.returnsAt!) - isoToMs(b.returnsAt!) || (a.id < b.id ? -1 : 1));
+    .sort((a, b) => isoToMs(a.returnsAt!) - isoToMs(b.returnsAt!) || compareCodeUnits(a.id, b.id));
   for (const c of due) returnCaptain(ctx, c.id);
 }
 
@@ -183,7 +183,7 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
   const { min, max } = ROSTER.refuseMinutes;
   const held = Object.values(state.meddles)
     .filter((m) => m.status === 'held' && m.heldOn === id)
-    .sort((a, b) => (a.id < b.id ? -1 : 1));
+    .sort((a, b) => compareCodeUnits(a.id, b.id));
   for (const m of held) {
     ctx.diff.meddles.push({ id: m.id, status: 'pending', heldOn: null });
     ctx.diff.fuses.add.push({ no: ctx.allocNo(), dueAt: addMinutes(now, min + rng.int(max - min + 1)), meddleId: m.id });
@@ -201,7 +201,7 @@ function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
   const warlord = ctx.warlord();
   const [id] = active
     .filter((x) => x !== returner && x !== KRUG && x !== warlord && ctx.captain(x).legendaryFact === null)
-    .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || (a < b ? -1 : 1));
+    .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || compareCodeUnits(a, b));
   if (!id) return;
   ctx.patchCaptain(id, { roster: 'reserve' });
   const no = ctx.allocNo();
@@ -319,7 +319,7 @@ function applyHumiliation(ctx: TickContext, id: CaptainId, choice: Choice, story
     const fears = ctx.fears(id);
     const oldest = fears
       .filter((f) => f.added)
-      .sort((a, b) => isoToMs(a.since) - isoToMs(b.since) || (a.fear < b.fear ? -1 : a.fear > b.fear ? 1 : 0))[0];
+      .sort((a, b) => isoToMs(a.since) - isoToMs(b.since) || compareCodeUnits(a.fear, b.fear))[0];
     const remove = fears.length >= ROSTER.maxFears ? oldest?.fear : undefined;
     if (remove !== undefined) {
       replaced.push(...current.filter((h) => h.cat === 'fear' && state.content.banks.humiliations[h.key]?.fear === remove));

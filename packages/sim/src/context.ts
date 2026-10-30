@@ -1,5 +1,6 @@
 // Mutable scratch for one tick: allocates sim numbers, collects Facts and the diff, and keeps the
 // running values that several steps of one tick touch (affinity, Meddle allowances).
+import { compareCodeUnits } from '@orc/content';
 import type { Misfortune } from './accusations.ts';
 import { chain, pairCauses, type Links } from './blame.ts';
 import type { Rng } from './rng.ts';
@@ -268,7 +269,7 @@ export class TickContext {
 
   /** Writes the running values into the diff. Call once, at the end of the tick. */
   finish(): void {
-    for (const [id, patch] of [...this.captainPatches].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const [id, patch] of [...this.captainPatches].sort(([a], [b]) => compareCodeUnits(a, b))) {
       this.diff.captains.push({ id, ...patch });
     }
     for (const f of this.facts) {
@@ -276,7 +277,7 @@ export class TickContext {
       this.diff.recent.templates[f.templateId] = f.at;
       for (const x of f.cast) for (const y of f.cast) if (x < y) this.diff.recent.pairs[pairOf(x, y)] = f.at;
     }
-    for (const [key, value] of [...this.affinity].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    for (const [key, value] of [...this.affinity].sort(([a], [b]) => compareCodeUnits(a, b))) {
       if (value === (this.state.affinity[key as `${string}>${string}`] ?? 0)) continue;
       const [holder, toward] = key.split('>') as [CaptainId, CaptainId];
       this.diff.affinity.push({ holder, toward, value });

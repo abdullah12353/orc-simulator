@@ -10,7 +10,7 @@
 // - `warlordFalls(ctx, fact, id, why)`: call it whenever `id` dies, loses a Clash or botches a Dare (a no-op
 //   unless he is the Warlord). The throne stays empty until `crownSuccessor` runs at the end of the tick.
 // - `drift(ctx, fact, id, delta)`: the ONE way to change Power (±1, kept within 1–10), with a `power` Fact.
-import { ROSTER_TEMPLATES, type OutcomeDef } from '@orc/content';
+import { compareCodeUnits, ROSTER_TEMPLATES, type OutcomeDef } from '@orc/content';
 import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { followUp } from './reactions.ts';
@@ -151,7 +151,7 @@ export function successor(ctx: TickContext, exclude: CaptainId | null): CaptainI
     .activeCaptains()
     .filter((id) => id !== exclude)
     .map((id) => ({ id, week: ctx.infamy7d(id), c: ctx.captain(id) }))
-    .sort((a, b) => b.week - a.week || b.c.power - a.c.power || b.c.infamy - a.c.infamy || (a.id < b.id ? -1 : 1));
+    .sort((a, b) => b.week - a.week || b.c.power - a.c.power || b.c.infamy - a.c.infamy || compareCodeUnits(a.id, b.id));
   return ranked[0]?.id ?? null;
 }
 

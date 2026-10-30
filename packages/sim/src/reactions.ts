@@ -5,7 +5,7 @@
 // The seam: anything that writes a story head calls `followUp(ctx, head, depth)` once the head and its
 // consequences are in. A Fact kind joins in by offering roles in `parentRoles` (named in `PARENT_ROLES`).
 // A head that isn't itself a reaction (a Return, a death's stepping in) takes the depth of whatever set it off.
-import type { ParentKind, PARENT_ROLES, TemplateDef } from '@orc/content';
+import { compareCodeUnits, type ParentKind, type PARENT_ROLES, type TemplateDef } from '@orc/content';
 import { causeOf } from './blame.ts';
 import { resolveClash } from './clash.ts';
 import type { TickContext } from './context.ts';
@@ -73,7 +73,7 @@ export function followUp(ctx: TickContext, head: Fact, depth: number): void {
   const templates = ctx.state.content.templates
     .filter((t) => t.trigger === 'reaction' && t.after?.kind === head.kind)
     .filter((t) => !t.after!.outcomes || (parent.outcome !== null && t.after!.outcomes.includes(parent.outcome)))
-    .sort((x, y) => (x.id < y.id ? -1 : 1));
+    .sort((x, y) => compareCodeUnits(x.id, y.id));
   for (const t of templates) {
     const cast = castRoles(ctx, t, parent.roles);
     if (!cast || !ctx.rng.chance(t.after!.chance)) continue;

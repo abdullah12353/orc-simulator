@@ -2,6 +2,7 @@
 // Template REQUIRED; its Blame is every cause's Blame one hop further on, plus its own Meddle at hop 0,
 // deduped per Meddle (the nearest path wins) and cut off past the hop cap. Callbacks add comedy weight
 // but never Blame. The sim materialises Blame on every Fact, so the DB never has to recurse.
+import { compareCodeUnits } from '@orc/content';
 import { isoToMs } from './time.ts';
 import type { BlameEntry, Cause, Fact, FactNo, GrudgeTag, Iso } from './types.ts';
 
@@ -20,7 +21,7 @@ function byLanding(a: BlameEntry, b: BlameEntry): number {
   return (
     isoToMs(a.landedAt) - isoToMs(b.landedAt) ||
     a.landedFact - b.landedFact ||
-    (a.meddleId < b.meddleId ? -1 : a.meddleId > b.meddleId ? 1 : 0)
+    compareCodeUnits(a.meddleId, b.meddleId)
   );
 }
 
