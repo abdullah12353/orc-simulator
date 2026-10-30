@@ -120,7 +120,7 @@ test('a landed Dare is a story in my next edition, with its Blame line', async (
 test('Dares (a Prank and a surprise) commit and reload exactly like the sim in memory', async () => {
   const clock = fakeClock();
   const createdAt = clock.iso();
-  const seed = 3535;
+  const seed = 3558; // the Prank lands here with the v1 catalogue (with 3535 a death held it)
   const { worldId, playerId, userId } = await freshWorld({ clock, seed });
   let { state } = dayZero(content, seed, createdAt, worldId);
   state = { ...state, players: { [playerId]: { gold: STARTING.gold, meddles: STARTING.meddles, firstMeddleDone: false, renderedFor: [] } } };
@@ -163,7 +163,8 @@ test('Dares (a Prank and a surprise) commit and reload exactly like the sim in m
   assert.ok(dares.length >= 2, `${dares.length} Dares landed`);
 
   // The Prank's Grudge tag is in the DB, caused by the Dare.
-  const prank = dares.find((f) => f.kind === 'dare' && f.meddleId === intents[0]!.id)!;
+  const prank = dares.find((f) => f.kind === 'dare' && f.meddleId === intents[0]!.id);
+  assert.ok(prank, 'the Prank landed');
   if (prank.kind === 'dare' && prank.outcome !== 'refused') {
     const tags = await db()`
       select tag, cause_fact::int from grudge_tags where world_id = ${worldId} and holder_id = ${victim} and toward_id = ${target}`;

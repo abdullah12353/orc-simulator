@@ -189,14 +189,15 @@ test('after an outage, overdue Fuses fire in due order on one tick, with no extr
 
   const out = await tick(world, clock, 6 * 60); // six hours of nothing
   const facts = await db()`
-    select kind, payload->>'meddleId' as meddle_id from facts
+    select kind, payload->>'meddleId' as meddle_id, payload->>'trigger' as trigger from facts
     where world_id = ${world.worldId} and tick_seq = ${out.status === 'stepped' ? out.tickSeq : -1} order by no`;
   assert.deepEqual(
     facts.filter((f) => f.kind === 'rumour').map((f) => f.meddle_id),
     fuses.map((f) => f.meddle_id),
     'every overdue Fuse fired, in due order',
   );
-  assert.ok(facts.filter((f) => f.kind === 'incident').length <= 1, 'one ambient roll, not 72');
+  // Reactions to the Rumours are incidents too; only ambient ones count.
+  assert.ok(facts.filter((f) => f.kind === 'incident' && f.trigger === 'ambient').length <= 1, 'one ambient roll, not 72');
   assert.equal((await db()`select count(*)::int as n from fuses where world_id = ${world.worldId}`)[0]!.n, 0);
 });
 
