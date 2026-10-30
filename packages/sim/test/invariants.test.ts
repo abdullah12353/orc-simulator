@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { CLAIMS, content } from '@orc/content';
-import { fallbackDialogue, shapeProblem, stateHash, type Fact, type Intent, type WorldState } from '@orc/sim';
+import { CLAIMS, content, KRUG } from '@orc/content';
+import { fallbackDialogue, londonDate, shapeProblem, stateHash, type Fact, type Intent, type WorldState } from '@orc/sim';
 import { activeIds, freshWorld, rumour, SEEDS, step } from './support.ts';
 
 const PLAYERS = ['11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222222'];
@@ -32,11 +32,35 @@ function meddle(state: WorldState, worldSeed: number): { state: WorldState; inte
 function play(worldSeed: number, ticks: number) {
   let state = freshWorld({ seed: worldSeed, players: PLAYERS, now: '2026-10-30T20:00:00.000Z' });
   const facts: Fact[] = [];
+  const deathsByDay = new Map<string, number>();
   for (let i = 0; i < ticks; i++) {
     const m = meddle(state, worldSeed);
     const r = step(m.state, worldSeed, 5, m.intents);
     state = r.state;
     facts.push(...r.facts);
+
+    // The roster (#32): always 12 active; Krúg and the Warlord are never benched; at most 3 deaths a day.
+    assert.equal(activeIds(state).length, 12, `tick ${state.world.tickSeq}: the active roster is 12`);
+    for (const f of r.facts) {
+      if (f.kind === 'benched') {
+        assert.notEqual(f.captainId, KRUG, 'Krúg is never benched');
+        assert.notEqual(f.captainId, m.state.world.warlordId, 'the Warlord is never benched');
+        assert.notEqual(f.captainId, state.world.warlordId, 'the Warlord is never benched');
+      }
+      if (f.kind === 'death') {
+        const day = londonDate(f.at);
+        deathsByDay.set(day, (deathsByDay.get(day) ?? 0) + 1);
+        assert.ok(deathsByDay.get(day)! <= 3, `${deathsByDay.get(day)} deaths on ${day}`);
+      }
+      if (f.kind === 'return') {
+        const story = r.facts.filter((x) => x.storyNo === f.no && x.kind === 'humiliation');
+        assert.equal(story.length, 1, `Return ${f.no} carries exactly one Humiliation`);
+      }
+    }
+    for (const c of Object.values(state.captains)) {
+      assert.equal(c.roster === 'dead', c.death !== null && c.returnsAt !== null, `${c.id}: dead ⇔ a death and a Return time`);
+      assert.ok(c.fears.length <= 3 && c.fears.some((f) => !f.added), `${c.id}: at most 3 Fears, his starting one kept`);
+    }
 
     for (const v of Object.values(state.affinity)) assert.ok(v >= -100 && v <= 100 && v !== 0, `affinity ${v}`);
     for (const p of Object.values(state.players)) assert.ok(p.meddles >= 0 && p.meddles <= 6, `meddles ${p.meddles}`);
@@ -60,10 +84,14 @@ function play(worldSeed: number, ticks: number) {
 test('invariants hold over long runs with Players Meddling, and the same inputs replay to the same states', () => {
   let landed = 0;
   let clashes = 0;
+  let deaths = 0;
+  let returns = 0;
   for (let worldSeed = 1; worldSeed <= SEEDS; worldSeed++) {
     const a = play(worldSeed, 300);
     landed += a.facts.filter((f) => f.kind === 'rumour').length;
     clashes += a.facts.filter((f) => f.kind === 'clash').length;
+    deaths += a.facts.filter((f) => f.kind === 'death').length;
+    returns += a.facts.filter((f) => f.kind === 'return').length;
     if (worldSeed <= 3) {
       const b = play(worldSeed, 300);
       assert.equal(b.hash, a.hash, `world seed ${worldSeed} replays to the same state`);
@@ -72,4 +100,6 @@ test('invariants hold over long runs with Players Meddling, and the same inputs 
   }
   assert.ok(landed > SEEDS * 10, `only ${landed} Rumours landed`);
   assert.ok(clashes > SEEDS, `only ${clashes} Clashes`);
+  assert.ok(deaths > SEEDS, `only ${deaths} deaths`);
+  assert.ok(returns > SEEDS / 2, `only ${returns} Returns`);
 });

@@ -7,6 +7,7 @@
 import type { TemplateDef } from '@orc/content';
 import { resolveClash } from './clash.ts';
 import type { TickContext } from './context.ts';
+import { disaster } from './roster.ts';
 import { renderLine } from './rumours.ts';
 import { castRoles } from './select.ts';
 import { addMinutes } from './time.ts';
@@ -104,5 +105,6 @@ function react(ctx: TickContext, t: TemplateDef, cast: Record<string, CaptainId>
     outcomeKey: outcome.key,
   };
   ctx.facts.push(fact);
+  if (outcome.death) disaster(ctx, fact, cast[outcome.death.role]!, outcome.death.tag);
   followUp(ctx, fact, depth);
 }

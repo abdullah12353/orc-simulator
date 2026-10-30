@@ -35,14 +35,17 @@ test('an ambient incident is a templated story head naming distinct active Capta
     for (const f of r.facts) {
       if (f.kind !== 'incident' || f.trigger !== 'ambient') continue;
       seen++;
-      assert.equal(f.no, before, 'Fact numbers come from nextNo');
+      // Returns and healed bandages come earlier in the tick, so they may take the first numbers.
+      if (!r.facts.some((x) => x.no < f.no)) assert.equal(f.no, before, 'Fact numbers come from nextNo');
       assert.equal(f.storyNo, f.no, 'an incident heads its own story');
       assert.equal(f.tier, 'templated');
       const template = content.templates.find((t) => t.id === f.templateId);
       assert.ok(template, `unknown template ${f.templateId}`);
       assert.equal(new Set(f.cast).size, f.cast.length, 'cast is distinct');
       for (const id of f.cast) {
-        assert.equal(state.captains[id]?.roster, 'active');
+        // Active when cast: still active after the tick, unless something in it killed him.
+        const died = r.facts.some((x) => x.kind === 'death' && x.captainId === id);
+        assert.equal(r.state.captains[id]?.roster, died ? 'dead' : 'active');
         assert.ok(f.line.includes(names.get(id)!), `line "${f.line}" names ${id}`);
       }
       assert.doesNotMatch(f.line, /[{}]/, 'no placeholder left in the line');

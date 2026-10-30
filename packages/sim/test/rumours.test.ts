@@ -238,11 +238,13 @@ test('after an outage every overdue Fuse fires on the next tick, in (dueAt, no) 
     state = { ...state, fuses: [due(f4, 30), due(f3, 50), due(f1, 50), due(f2, 20)] };
 
     const r = step(state, seed, 6 * 60);
-    const landed = r.facts.filter((f) => f.kind === 'rumour').map((f) => (f.kind === 'rumour' ? f.meddleId : ''));
+    // Each one lands, or is held if an earlier one in the tick got its target killed.
+    const fired = r.diff.meddles.filter((m) => m.status !== 'pending').map((m) => m.id);
     const byFuse = (f: typeof f1) => f!.meddleId;
-    assert.deepEqual(landed, [byFuse(f2), byFuse(f4), byFuse(f1), byFuse(f3)], 'due order, then Fuse number');
+    assert.deepEqual(fired, [byFuse(f2), byFuse(f4), byFuse(f1), byFuse(f3)], 'due order, then Fuse number');
     assert.equal(r.state.fuses.length, 0);
-    assert.equal(Object.keys(r.state.meddles).length, 0);
+    const held = r.diff.meddles.filter((m) => m.status === 'held').length;
+    assert.equal(Object.keys(r.state.meddles).length, held);
     const incidents = r.facts.filter((f) => f.kind === 'incident' && f.trigger === 'ambient').length;
     assert.ok(incidents <= 1, `${incidents} ambient incidents after a 6-hour gap: never back-filled`);
   }

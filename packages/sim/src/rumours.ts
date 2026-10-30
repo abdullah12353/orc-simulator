@@ -3,6 +3,7 @@
 import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { fireReactionFuse, followUp } from './reactions.ts';
+import { maybeUnmask, UNMASK } from './roster.ts';
 import { addMinutes, isoToMs } from './time.ts';
 import type { BlameEntry, CaptainId, Fact, Fuse, Intent, Meddle, RumourIntent, Subject } from './types.ts';
 
@@ -55,7 +56,7 @@ function invalidRumour(ctx: TickContext, r: Intent & RumourIntent): string | nul
   const target = captains[r.target];
   if (!source || !target) return 'unknown_captain';
   if (r.source === r.target) return 'same_captain';
-  if (source.roster === 'reserve' || target.roster === 'reserve') return 'benched_captain';
+  if (ctx.rosterOf(r.source) === 'reserve' || ctx.rosterOf(r.target) === 'reserve') return 'benched_captain';
   if (!isClaim(r.claim)) return 'bad_claim';
   const s = r.subject as Subject | undefined;
   const ok =
@@ -115,8 +116,9 @@ function fire(ctx: TickContext, fuse: Fuse): void {
   const meddle = fuse.meddleId ? ctx.state.meddles[fuse.meddleId] : undefined;
   if (!meddle || meddle.intent.kind !== 'rumour') return; // Dares arrive with #35
   const r = meddle.intent;
-  if (ctx.state.captains[r.target]?.roster === 'dead') {
-    // Held until he Returns (#32 re-fuses it). A diff only, never a Fact: it's still secret.
+  if (ctx.rosterOf(r.target) === 'dead') {
+    // Held until he Returns (and re-fused then). A diff only, never a Fact: it's still secret. A dead
+    // source doesn't hold it (data-model decision 16).
     ctx.diff.meddles.push({ id: meddle.id, status: 'held', heldOn: r.target });
     return;
   }
@@ -207,6 +209,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
     at: state.world.now,
     cause: landing,
   });
+  // A Rumour about a disguised Captain may blow his cover.
+  maybeUnmask(ctx, head, r.target, 'rumour', UNMASK.rumour);
   // Now the hearer reacts (a Hothead goes straight for the source, #7).
   followUp(ctx, head, 0);
 }

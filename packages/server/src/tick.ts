@@ -9,7 +9,9 @@ import {
   tickSeed,
   type CaptainState,
   type Claim,
+  type Fact,
   type Fuse,
+  type Humiliation,
   type GrudgeTag,
   type Intent,
   type Meddle,
@@ -17,7 +19,16 @@ import {
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
-import { insertFacts, insertFuses, insertTicks, loadCauses, upsertTrophies } from './commit.ts';
+import {
+  applyFears,
+  insertFacts,
+  insertFuses,
+  insertTicks,
+  loadCauses,
+  updateCaptains,
+  upsertHumiliations,
+  upsertTrophies,
+} from './commit.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 import { broadcast } from './realtime.ts';
 
@@ -61,6 +72,8 @@ interface CaptainRow {
   alias_idx: 0 | 1 | null;
   returns_at: string | null;
   grace_until: string | null;
+  death_fact: number | null;
+  death_cause_tag: string | null;
   legendary_fact: number | null;
 }
 
@@ -135,7 +148,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       await insertFacts(tx, worldId, facts.map((fact) => ({ tickSeq, fact })), content);
       await deps.onCommitStep?.('facts', info);
 
-      await commitDiff(tx, worldId, stateDiff, { tickSeq, now });
+      await commitDiff(tx, worldId, stateDiff, { tickSeq, now, facts });
       await tx`
         update worlds set tick_seq = ${tickSeq}, last_tick_at = ${now}, content_version = ${state.world.contentVersion}
         where id = ${worldId}`;
@@ -204,11 +217,19 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
   const captainRows = await tx<CaptainRow[]>`
     select id, roster, power, infamy, traits, epithet, alias_idx,
            to_json(returns_at)#>>'{}' as returns_at, to_json(grace_until)#>>'{}' as grace_until,
-           legendary_fact::float8 as legendary_fact
+           death_fact::float8 as death_fact, death_cause_tag, legendary_fact::float8 as legendary_fact
     from captains where world_id = ${world.id} order by id`;
+  // Oldest first, then by name in code-unit order (as applyDiff keeps them).
   const fearRows = await tx<{ captain_id: string; fear: string; added: boolean; since: string }[]>`
     select captain_id, fear, added, to_json(since)#>>'{}' as since
-    from captain_fears where world_id = ${world.id} order by captain_id, since, fear`;
+    from captain_fears where world_id = ${world.id} order by captain_id, since, fear collate "C"`;
+  // Current Humiliations only; ended ones are history.
+  const humiliationRows = await tx<
+    { no: number; captain_id: string; cat: Humiliation['cat']; kind: string; gained_fact: number; expires_at: string | null }[]
+  >`
+    select no::float8 as no, captain_id, cat::text as cat, kind, gained_fact::float8 as gained_fact,
+           to_json(expires_at)#>>'{}' as expires_at
+    from humiliations where world_id = ${world.id} and ended_at is null order by no`;
   const affinityRows = await tx<{ holder_id: string; toward_id: string; value: number }[]>`
     select holder_id, toward_id, value from affinity where world_id = ${world.id}`;
   // The last 3 tags per pair: narration's top tags, and all a pair's Blame can use (the newest 3
@@ -264,6 +285,8 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
   const causes = await loadCauses(tx, world.id, [
     ...trophyRows.map((t) => t.origin_fact),
     ...fuseRows.flatMap((f) => (f.parent_fact === null ? [] : [f.parent_fact])),
+    ...humiliationRows.map((h) => h.gained_fact),
+    ...captainRows.flatMap((c) => (c.death_fact === null ? [] : [c.death_fact])),
   ]);
   const recent = await loadRecent(tx, world.id, now);
 
@@ -287,7 +310,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
       aliasIdx: c.alias_idx,
       returnsAt: c.returns_at && new Date(c.returns_at).toISOString(),
       graceUntil: c.grace_until && new Date(c.grace_until).toISOString(),
-      death: null,
+      death: c.death_fact === null ? null : { cause: causes.get(c.death_fact)!, causeTag: c.death_cause_tag! },
       legendaryFact: c.legendary_fact,
     };
   }
@@ -326,7 +349,17 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
       takenFrom: t.taken_from_id,
       origin: causes.get(t.origin_fact)!,
     })),
-    humiliations: [],
+    humiliations: humiliationRows.map(
+      (h): Humiliation => ({
+        no: h.no,
+        captainId: h.captain_id,
+        cat: h.cat,
+        key: h.kind,
+        gained: causes.get(h.gained_fact)!,
+        expiresAt: h.expires_at && new Date(h.expires_at).toISOString(),
+        ended: false,
+      }),
+    ),
     stakes: [],
     players: Object.fromEntries(
       playerRows.map((p) => [
@@ -381,12 +414,14 @@ async function loadRecent(tx: Tx, worldId: string, now: string): Promise<WorldSt
  * Writes a StateDiff to the tables. Extend this alongside the sim: a diff section the commit can't
  * write must fail loudly, never be dropped (applyDiff guards the same list in memory).
  */
-async function commitDiff(tx: Tx, worldId: string, diff: StateDiff, at: { tickSeq: number; now: string }): Promise<void> {
+async function commitDiff(
+  tx: Tx,
+  worldId: string,
+  diff: StateDiff,
+  at: { tickSeq: number; now: string; facts: Fact[] },
+): Promise<void> {
   const unsupported = (
     [
-      ['captains', diff.captains],
-      ['fears', diff.fears],
-      ['humiliations', diff.humiliations.upsert],
       ['stakes', diff.stakes],
       ['ledger', diff.ledger],
     ] as [string, unknown[]][]
@@ -405,6 +440,11 @@ async function commitDiff(tx: Tx, worldId: string, diff: StateDiff, at: { tickSe
         warlord_id = case when ${'warlordId' in w} then ${w.warlordId ?? null}::text else warlord_id end
       where id = ${worldId}`;
   }
+
+  // Deaths, Returns, benchings and the marks Humiliations leave (#32).
+  await updateCaptains(tx, worldId, diff.captains, at.now);
+  await applyFears(tx, worldId, diff.fears, at.now);
+  await upsertHumiliations(tx, worldId, diff.humiliations.upsert, at.facts, at.now);
 
   // Affinity is absolute; 0 deletes the row.
   const zero = diff.affinity.filter((a) => a.value === 0);
