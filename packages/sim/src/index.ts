@@ -19,3 +19,5 @@ export { VARIETY } from './context.ts';
 export { clashShape, shapeProblem, fallbackDialogue, type ClashLine, type ClashShape } from './dialogue.ts';
 export { ROSTER, UNMASK } from './roster.ts';
 export { introductionScript, shoutName, type IntroBeat, type IntroBeatKind, type IntroductionScript } from './introduction.ts';
+export { INFAMY, POWER, type FallWhy } from './infamy.ts';
+export { INFAMY_WINDOW_DAYS } from './context.ts';

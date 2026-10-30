@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content, type Content } from '@orc/content';
-import { simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
+import { applyDiff, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
 import { activeIds, addMinutes, freshWorld } from './support.ts';
 
 type Of<K extends Fact['kind']> = Extract<Fact, { kind: K }>;
@@ -196,4 +196,36 @@ test('crossing 150 lifetime Infamy writes one legendary Fact, pointing at the st
   const later = simulate(again.state, [], again.seed);
   assert.equal(ofKind(later.facts, 'legendary').length, 0);
   assert.equal(later.stateDiff.captains.find((c) => c.id === warlord)!.legendaryFact, undefined);
+});
+
+test('a Legendary Captain is introduced with his stamp', () => {
+  // The Warlord dies; a Legendary orc with the most Infamy this week takes the throne.
+  const { state, seed } = warlordDies((s) => {
+    const heir = activeIds(s, (id) => id !== s.world.warlordId)[3]!;
+    return {
+      ...s,
+      captains: { ...s.captains, [heir]: { ...s.captains[heir]!, infamy: 200, legendaryFact: 7 } },
+      infamy7d: [{ captainId: heir, fact: 7, at: s.world.now, amount: 30 }],
+    };
+  });
+  const [crowned] = ofKind(simulate(state, [], seed).facts, 'crowned');
+  assert.equal(crowned!.intro.legendary, true);
+});
+
+test('the 7-day window moves on in memory as the tick reloads it: old gains drop out, this tick’s join', () => {
+  const { state, seed } = warlordDies((s) => ({
+    ...s,
+    infamy7d: [
+      { captainId: 'krug', fact: 3, at: addMinutes(s.world.now, -7 * 1440), amount: 9 },
+      { captainId: 'krug', fact: 4, at: addMinutes(s.world.now, -7 * 1440 + 1), amount: 4 },
+    ],
+  }));
+  const { facts, stateDiff } = simulate(state, [], seed);
+  const next = applyDiff(state, stateDiff);
+  const mine = facts.flatMap((f) => f.infamy.map((g) => ({ captainId: g.captainId, fact: f.no, at: f.at, amount: g.amount })));
+  assert.ok(mine.length >= 2, 'the death and the throne');
+  const expected = [{ captainId: 'krug', fact: 4, at: addMinutes(state.world.now, -7 * 1440 + 1), amount: 4 }, ...mine].sort(
+    (a, b) => a.fact - b.fact || (a.captainId < b.captainId ? -1 : 1),
+  );
+  assert.deepEqual(next.infamy7d, expected);
 });

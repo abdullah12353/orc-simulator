@@ -289,6 +289,12 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     ...captainRows.flatMap((c) => (c.death_fact === null ? [] : [c.death_fact])),
   ]);
   const recent = await loadRecent(tx, world.id, now);
+  // The 7-day Infamy window (§4.4), in (fact, Captain) order as applyDiff keeps it.
+  const infamyRows = await tx<{ captain_id: string; fact_no: number; at: string; amount: number }[]>`
+    select g.captain_id, g.fact_no::float8 as fact_no, to_json(f.at)#>>'{}' as at, g.amount
+    from infamy_gains g join facts f on f.world_id = g.world_id and f.no = g.fact_no
+    where g.world_id = ${world.id} and f.at > ${now}::timestamptz - interval '7 days'
+    order by g.fact_no, g.captain_id collate "C"`;
 
   const fears = new Map<string, CaptainState['fears']>();
   for (const f of fearRows) {
@@ -383,7 +389,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
           : {}),
       }),
     ),
-    infamy7d: [],
+    infamy7d: infamyRows.map((g) => ({ captainId: g.captain_id, fact: g.fact_no, at: new Date(g.at).toISOString(), amount: g.amount })),
     recent,
   };
 }

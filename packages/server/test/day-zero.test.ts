@@ -29,10 +29,11 @@ test('create_world casts the world: 12 active with Krúg, the rest in reserve, t
     // Starting Epithets, unless a Humiliation in day zero gave him a new one.
     for (const c of captains) assert.equal(c.epithet, state.captains[c.id]!.epithet, c.id);
 
+    // Cast as the strongest (never Krúg), but day zero's falls and successions (#34) may have moved the throne.
     const [w] = await tx`select warlord_id from worlds where id = ${worldId}`;
-    const top = Math.max(...active.map((c) => c.power));
-    assert.equal(captains.find((c) => c.id === w!.warlord_id)?.power, top);
-    assert.notEqual(w!.warlord_id, 'krug');
+    assert.equal(w!.warlord_id, state.world.warlordId);
+    assert.equal(captains.find((c) => c.id === w!.warlord_id)?.roster, 'active');
+    for (const c of captains) assert.equal(c.power, state.captains[c.id]!.power, `${c.id}: Power after day zero`);
 
     const fears = await tx`select captain_id, fear, added from captain_fears where world_id = ${worldId}`;
     // Every starting Fear, plus any day zero's Humiliations added.
