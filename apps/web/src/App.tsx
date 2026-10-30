@@ -14,6 +14,9 @@ import { Stable } from './Stable.tsx';
 import { supabase } from './supabase.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
+import { storyLink, withoutStoryLink } from './push-link.ts';
+import { InstallPrompt, PushOptIn } from './PushOptIn.tsx';
+import { StoryView } from './StoryView.tsx';
 
 // Tracer-bullet screens (#24): magic-link sign-in, create a world, and a bare list of the world's
 // Fact lines, newest first. While a world is open its Player is marked seen, and live nudges over
@@ -88,14 +91,18 @@ interface WorldRow {
   name: string;
 }
 
+// A tapped push opens `/?world=<id>&story=<no>` (#42): that world, on that story.
+const pushLink = typeof location === 'undefined' ? null : storyLink(location.search);
+
 function Worlds({ initial }: { initial?: string }) {
   const [worlds, setWorlds] = useState<WorldRow[] | null>(null);
-  const [selected, setSelected] = useState<string | null>(initial ?? null);
+  const [selected, setSelected] = useState<string | null>(initial ?? pushLink?.worldId ?? null);
 
   async function load() {
     const { data } = await supabase.from('worlds').select('id, name').order('created_at');
     setWorlds(data ?? []);
-    if (data && data.length > 0) setSelected((s) => s ?? data[0]!.id);
+    // A world we can't see (a stale push link, say) falls back to the first one.
+    if (data && data.length > 0) setSelected((s) => (s && data.some((w) => w.id === s) ? s : data[0]!.id));
   }
   useEffect(() => {
     void load();
@@ -119,6 +126,8 @@ function Worlds({ initial }: { initial?: string }) {
           ))}
         </select>
       )}
+      <InstallPrompt />
+      {selected && <PushOptIn key={`push-${selected}`} worldId={selected} />}
       {selected && <InvitePanel key={selected} worldId={selected} />}
       {selected ? <WorldTabs worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
     </main>
@@ -127,6 +136,7 @@ function Worlds({ initial }: { initial?: string }) {
 
 function WorldTabs({ worldId }: { worldId: string }) {
   const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'hall' | 'facts'>('herald');
+  const [story, setStory] = useState<number | null>(pushLink?.worldId === worldId ? pushLink.storyNo : null);
   useSeen(worldId);
   // First open (#43, D58): Krúg's Introduction, then the edition, then the guided first Rumour. Never again.
   const firstOpen = useFirstOpen(worldId);
@@ -150,6 +160,16 @@ function WorldTabs({ worldId }: { worldId: string }) {
         </p>
       )}
       <LiveStage key={worldId} worldId={worldId} />
+      {story !== null && (
+        <StoryView
+          worldId={worldId}
+          storyNo={story}
+          onClose={() => {
+            setStory(null);
+            history.replaceState(null, '', withoutStoryLink(location.pathname + location.search));
+          }}
+        />
+      )}
       <nav className="tabs">
         <button className={tab === 'herald' ? 'on' : ''} onClick={() => setTab('herald')}>
           The Herald
@@ -170,7 +190,7 @@ function WorldTabs({ worldId }: { worldId: string }) {
           What happened
         </button>
       </nav>
-      {tab === 'herald' && <Herald worldId={worldId} />}
+      {tab === 'herald' && story === null && <Herald worldId={worldId} />}
       {tab === 'meddle' && <Meddle worldId={worldId} guided={step === 'rumour'} onSent={() => setDone('rumour')} />}
       {tab === 'stable' && <Stable worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}

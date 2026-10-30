@@ -731,3 +731,16 @@ button.link {
 .first-open button {
   margin-left: 0.5rem;
 }
+
+/* Install and pushes (#42) */
+.install,
+.pushes {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.story-view {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid #44403c;
+  border-radius: 8px;
+}
