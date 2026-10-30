@@ -15,6 +15,7 @@ import {
   type GrudgeTag,
   type Intent,
   type Meddle,
+  type NameRender,
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
@@ -29,6 +30,7 @@ import {
   upsertTrophies,
 } from './commit.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
+import { broadcast } from './realtime.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
 export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
@@ -44,6 +46,8 @@ export interface TickDeps {
 
 export type TickOutcome =
   | { status: 'stepped'; worldId: string; tickSeq: number; factCount: number; stateHash: string }
+  /** Unwatched and inside the 5-minute cadence: nothing happened, the call only counted as activity. */
+  | { status: 'idle'; worldId: string }
   | { status: 'busy'; worldId: string }
   | { status: 'not_found'; worldId: string };
 
@@ -122,7 +126,15 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       await deps.onCommitStep?.('locked', { tickSeq });
 
       const now = deps.now().toISOString();
+      // Cadence (D39): a watched world steps on every call (the clock calls once a minute); an
+      // unwatched one only every 5 minutes. An idle call commits nothing.
+      const watched = await isWatched(tx, worldId, now);
+      if (!watched && Date.parse(now) - Date.parse(world.last_tick_at) < CADENCE.unwatchedMs) {
+        return { status: 'idle', worldId } as const;
+      }
+
       const state = await loadState(tx, world, content, now, tickSeq);
+      state.world.watched = watched;
       // After the Player rows are locked (loadState), so no submit_intent is half-way through.
       const intents = await loadIntents(tx, worldId);
 
@@ -157,12 +169,34 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       ]);
       await deps.onCommitStep?.('tick', info);
 
+      // Last, so it goes out only if everything above commits: one per productive watched tick.
+      if (watched && facts.length > 0) await broadcast(tx, worldId, { event: 'tick', payload: { tick_seq: tickSeq } });
+
       return { status: 'stepped', worldId, tickSeq, factCount: facts.length, stateHash: hash } as const;
     });
   } catch (e) {
     if (isLockNotAvailable(e)) return { status: 'busy', worldId };
     throw e;
   }
+}
+
+/** The tick cadence (D39). A world is watched while any of its Players was seen in the last 5 minutes. */
+export const CADENCE = { watchedWindowMs: 5 * 60_000, unwatchedMs: 5 * 60_000 } as const;
+
+/**
+ * Watched = some Player was seen in the 5 minutes up to the tick's `now` (data-model §3 step 2). A
+ * sighting after `now` doesn't count: the tick's clock is the only clock, so injected clocks stay
+ * deterministic (in production the two clocks agree, and the client marks itself seen every minute).
+ */
+async function isWatched(tx: Tx, worldId: string, now: string): Promise<boolean> {
+  const [row] = await tx<{ watched: boolean }[]>`
+    select exists (
+      select 1 from player_private pp join players p on p.id = pp.player_id
+      where p.world_id = ${worldId} and p.removed_at is null
+        and pp.last_seen_at > ${now}::timestamptz - make_interval(secs => ${CADENCE.watchedWindowMs / 1000})
+        and pp.last_seen_at <= ${now}::timestamptz
+    ) as watched`;
+  return row!.watched;
 }
 
 /** Ticks every world, one transaction each. One world failing doesn't stop the others. */
@@ -224,6 +258,16 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     where p.world_id = ${world.id} and p.removed_at is null
     order by p.id
     for update of pp`;
+  // Name renders (D59): an accuser can only name a Player he has a clip for. In accuser order, as memory has them.
+  const renderRows = await tx<{ player_id: string; accuser_id: string; clip_key: string; says: string }[]>`
+    select r.player_id, r.accuser_id, r.clip_key, r.says
+    from name_renders r join players p on p.id = r.player_id
+    where p.world_id = ${world.id} and p.removed_at is null
+    order by r.player_id, r.accuser_id collate "C"`;
+  const renders = new Map<string, NameRender[]>();
+  for (const r of renderRows) {
+    renders.set(r.player_id, [...(renders.get(r.player_id) ?? []), { accuser: r.accuser_id, clipKey: r.clip_key, says: r.says }]);
+  }
   const meddleRows = await tx<MeddleRow[]>`
     select id, player_id, verb, source_id, target_id, claim, subject, free_text, status, held_on
     from meddles where world_id = ${world.id} and status in ('pending', 'held') order by id`;
@@ -277,7 +321,7 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
       tickSeq,
       now,
       prevTickAt: new Date(world.last_tick_at).toISOString(),
-      watched: false, // the watched check and cadence arrive with #31
+      watched: false, // tickWorld sets it after the cadence check
       day: world.day,
       deathsToday: world.deaths_today,
       warlordId: world.warlord_id,
@@ -320,7 +364,12 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     players: Object.fromEntries(
       playerRows.map((p) => [
         p.id,
-        { gold: p.gold, meddles: p.meddles_available, firstMeddleDone: p.first_meddle_done, renderedFor: [] },
+        {
+          gold: p.gold,
+          meddles: p.meddles_available,
+          firstMeddleDone: p.first_meddle_done,
+          renderedFor: renders.get(p.id) ?? [],
+        },
       ]),
     ),
     meddles: Object.fromEntries(meddleRows.map((m) => [m.id, toMeddle(m)])),

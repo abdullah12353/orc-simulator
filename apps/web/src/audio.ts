@@ -40,7 +40,7 @@ class AudioPlayer {
       const ctx = this.context();
       clip = !ctx
         ? Promise.resolve(null)
-        : fetch(`${import.meta.env.BASE_URL}${path}`)
+        : fetch(/^https?:\/\//.test(path) ? path : `${import.meta.env.BASE_URL}${path}`)
             .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(`${r.status} ${path}`))))
             .then((bytes) => ctx.decodeAudioData(bytes))
             .catch(() => null);
@@ -120,3 +120,12 @@ export const bark = (captainId: string, emotion: BarkEmotion, opts?: PlayOptions
 
 /** One of the announcer's stingers. */
 export const sting = (name: Stinger) => audio.play(stingerPath(name));
+
+/**
+ * An accuser's clip of a Player's mangled name (#39), by its storage key. Name clips live in storage (R2),
+ * served from `VITE_NAME_CLIPS_URL`; without it (local dev) the key is a path under the PWA's public root.
+ */
+export const nameClip = (clipKey: string) => {
+  const base = import.meta.env.VITE_NAME_CLIPS_URL as string | undefined;
+  return audio.play(base ? `${base.replace(/\/$/, '')}/${clipKey}` : clipKey);
+};

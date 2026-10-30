@@ -129,6 +129,11 @@ export interface Banks {
   /** Everything a Clash needs to be voiced without a model: headline results, fallback scripts, tags. */
   clash: ClashBanks;
   /**
+   * What an accuser shouts when he names a Player (D20). `{name}` is the Player's mangled name, as said
+   * in the accuser's prerecorded clip.
+   */
+  accusations: string[];
+  /**
    * Humiliations (#32, D41): what a Return (or a death averted) leaves on a Captain. Keys are the
    * `humiliations.kind` stored in the DB; the portrait overlay is keyed by them too (#33).
    */

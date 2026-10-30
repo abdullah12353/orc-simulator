@@ -104,9 +104,13 @@ export interface StoryFact {
   tier?: 'generated' | 'templated' | 'silent';
   /** The head this consequence belongs to (an index into the same list); omit for a head. */
   consequenceOf?: number;
+  /** Or: the number of a head already in the log that this consequence belongs to. */
+  storyNo?: number;
   /** For a `legendary` consequence: the head (an index into the same list) that was the deed. */
   deed?: number;
   line?: string;
+  /** Extra payload fields, for kinds that need them (an Accusation's accuser, accused, clipKey…). */
+  payload?: Record<string, unknown>;
 }
 
 /**
@@ -120,11 +124,11 @@ export async function insertStoryFacts(worldId: string, from: string, list: Stor
   const nos = list.map((_, i) => w!.next_no + i);
   const rows = list.map((f, i) => {
     const no = nos[i]!;
-    const head = f.consequenceOf === undefined;
+    const head = f.consequenceOf === undefined && f.storyNo === undefined;
     const fact = {
       no,
       at: new Date(Date.parse(from) + f.minute * 60_000).toISOString(),
-      storyNo: head ? no : nos[f.consequenceOf!]!,
+      storyNo: head ? no : (f.storyNo ?? nos[f.consequenceOf!]!),
       line: f.line ?? `Story fact ${no}.`,
       tier: f.tier ?? 'templated',
       cast: [],
@@ -134,6 +138,7 @@ export async function insertStoryFacts(worldId: string, from: string, list: Stor
       kind: f.kind ?? (head ? 'incident' : 'power'),
       ...(head ? { comedyWeight: f.weight ?? 4 } : {}),
       ...(f.deed !== undefined ? { deed: nos[f.deed]! } : {}),
+      ...f.payload,
     };
     return { tickSeq: w!.tick_seq, fact };
   });

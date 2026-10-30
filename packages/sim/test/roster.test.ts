@@ -361,3 +361,32 @@ test('dying again ends a disguise too', () => {
   assert.equal(next.captains[id]!.aliasIdx, null);
   assert.deepEqual(next.humiliations, []);
 });
+
+test('deaths and Humiliations are misfortunes an accuser can blame on a Player', () => {
+  const accuser = KRUG; // one of the 6 accusers
+  const says = 'Mo-mo';
+  const kinds = new Set<string>();
+  for (const capped of [false, true]) {
+    const base = freshWorld({ content: deadlyContent('drowned'), watched: true });
+    // Only Krúg can be cast in the deadly accident.
+    const captains = { ...base.captains };
+    for (const x of activeIds(base)) if (x !== accuser) captains[x] = { ...captains[x]!, roster: 'reserve' };
+    const state: WorldState = {
+      ...base,
+      captains,
+      affinity: {},
+      grudgeTags: [],
+      players: { [P1]: { gold: 30, meddles: 3, firstMeddleDone: true, renderedFor: [{ accuser, clipKey: 'names/mo.mp3', says }] } },
+      world: { ...base.world, tickSeq: 1, deathsToday: capped ? 3 : 0 },
+    };
+    for (let seed = 1; seed <= 400; seed++) {
+      const { facts } = simulate(state, [], seed);
+      for (const a of ofKind(facts, 'accusation')) {
+        const misfortune = facts.find((f) => a.causes.includes(f.no))!;
+        assert.ok(misfortune.kind === 'death' || misfortune.kind === 'humiliation', misfortune.kind);
+        kinds.add(misfortune.kind);
+      }
+    }
+  }
+  assert.deepEqual([...kinds].sort(), ['death', 'humiliation']);
+});

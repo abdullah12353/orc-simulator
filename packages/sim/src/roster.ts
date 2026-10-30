@@ -67,7 +67,9 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   const no = ctx.allocNo();
   const { causes, blame } = ctx.link(no, { requires: [headCause] });
   const line = say(ctx, bank.died, head, victim);
-  ctx.facts.push({ no, at: now, storyNo: head.no, line, tier: 'silent', cast: [victim], causes, blame, infamy: [], kind: 'death', captainId: victim, causeTag: tag, returnsAt });
+  const deathFact: Fact = { no, at: now, storyNo: head.no, line, tier: 'silent', cast: [victim], causes, blame, infamy: [], kind: 'death', captainId: victim, causeTag: tag, returnsAt };
+  ctx.facts.push(deathFact);
+  ctx.misfortune(victim, deathFact);
   appendLine(head, line);
   const death: Cause = { fact: no, blame };
   ctx.patchCaptain(victim, { roster: 'dead', returnsAt, death: { cause: death, causeTag: tag } });
@@ -299,7 +301,7 @@ function applyHumiliation(ctx: TickContext, id: CaptainId, choice: Choice, story
   }
 
   const expiresAt = def.cat === 'bandage' ? addMinutes(now, ROSTER.bandageHours * 60) : null;
-  ctx.facts.push({
+  const fact: Fact = {
     no,
     at: now,
     storyNo,
@@ -315,7 +317,9 @@ function applyHumiliation(ctx: TickContext, id: CaptainId, choice: Choice, story
     key,
     ...(replaced[0] ? { replaces: replaced[0].no } : {}),
     ...(expiresAt ? { expiresAt } : {}),
-  });
+  };
+  ctx.facts.push(fact);
+  ctx.misfortune(id, fact);
   ctx.upsertHumiliation({ no: ctx.allocNo(), captainId: id, cat: def.cat, key, gained, expiresAt, ended: false });
   for (const old of replaced) endHumiliation(ctx, old, 'replaced', storyNo, [gained]);
 }

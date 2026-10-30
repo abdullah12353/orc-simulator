@@ -391,4 +391,14 @@ export const banks: Banks = {
       '{captain} has been moved to the reserve. His chair has already been sat in.',
     ],
   },
+  // Accusations (D20, #39): hand-written, spoken by the accuser over his prerecorded clip of the Player's
+  // mangled name. They blame the Player's meddling, never the Player as a person (tone bible §2).
+  accusations: [
+    "It was {name}. I know it was {name}. I can smell a meddler from here.",
+    "I ain't saying it was {name}. But it was {name}.",
+    "Don't look at me, look at {name}. It's always bloody {name}.",
+    "This has got {name}'s fingerprints all over it. Mark my words.",
+    "Somebody's been meddling, and that somebody is called {name}. Probably.",
+    "{name}! I'll have {name} for this, see if I don't.",
+  ],
 };

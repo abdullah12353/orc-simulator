@@ -1,4 +1,5 @@
 import type { TemplateDef } from '@orc/content';
+import { accusationRng, makeAccusations } from './accusations.ts';
 import { rollGrudgeClashes } from './clash.ts';
 import { weighStories } from './comedy.ts';
 import { TickContext } from './context.ts';
@@ -20,8 +21,10 @@ export const AMBIENT_CHANCE = { watched: 1 / 3, unwatched: 1 / 10 } as const;
  * One simulation step. Pure: the same state, intents and seed always give the same result.
  * Never touches `Date`, `Math.random` or `crypto`; time comes in only through `state.world.now`.
  *
- * Order: the day roll, due Returns (and healed bandages), Players' Intents, due Fuses, one ambient roll, then the Grudge Clash roll. Each
- * story head sets off its reactions (up to 3 deep) as soon as it's written. Only one ambient roll per
+ * Order: the day roll, due Returns (and healed bandages), Players' Intents, due Fuses, one ambient roll,
+ * then the Grudge Clash roll. Each story head sets off its reactions (up to 3 deep) as soon as it's
+ * written. Accusations come last, on their own random stream, for the misfortunes reported along the
+ * way. Only one ambient roll per
  * call, however long the world was down: missed ticks are never back-filled.
  */
 export function simulate(state: WorldState, intents: Intent[], seed: number): SimResult {
@@ -32,6 +35,7 @@ export function simulate(state: WorldState, intents: Intent[], seed: number): Si
   fireDueFuses(ctx);
   rollAmbient(ctx);
   rollGrudgeClashes(ctx);
+  makeAccusations(ctx, accusationRng(seed));
   ctx.finish();
   weighStories(state, ctx.facts, ctx.callbacks);
   return { facts: ctx.facts, stateDiff: ctx.diff };

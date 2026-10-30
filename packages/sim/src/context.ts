@@ -1,5 +1,6 @@
 // Mutable scratch for one tick: allocates sim numbers, collects Facts and the diff, and keeps the
 // running values that several steps of one tick touch (affinity, Meddle allowances).
+import type { Misfortune } from './accusations.ts';
 import { chain, pairCauses, type Links } from './blame.ts';
 import type { Rng } from './rng.ts';
 import { isoToMs } from './time.ts';
@@ -57,6 +58,8 @@ export class TickContext {
   readonly callbacks = new Map<FactNo, number>();
   /** Unordered pairs (`x|y`) that already Clashed this tick: a pair Clashes at most once a tick. */
   readonly clashedPairs = new Set<string>();
+  /** Misfortunes reported this tick, in order (see `misfortune`). */
+  readonly misfortunes: Misfortune[] = [];
   readonly state: WorldState;
   readonly rng: Rng;
   private nextNo: number;
@@ -86,6 +89,15 @@ export class TickContext {
     const { causes, blame, callbacks } = chain(links);
     if (callbacks > 0) this.callbacks.set(no, (this.callbacks.get(no) ?? 0) + callbacks);
     return { causes, blame };
+  }
+
+  /**
+   * The misfortune hook (#39): `victim` just suffered `fact` (a lost Clash; a death or a Humiliation).
+   * Call it once the Fact (with its Blame) is written. If the victim is an accuser, he may name a Player
+   * for it at the end of the tick (accusations.ts). One Accusation at most per victim per story.
+   */
+  misfortune(victim: CaptainId, fact: Fact): void {
+    this.misfortunes.push({ victim, fact });
   }
 
   /** A pair's Grudge tags from the last 7 days (the newest 3, this tick's included) as causes. */

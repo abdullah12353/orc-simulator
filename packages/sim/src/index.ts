@@ -12,6 +12,7 @@ export { dayZero, DAY_ZERO, type DayZeroStep } from './day-zero.ts';
 export { comedyWeight, type ComedyInputs } from './comedy.ts';
 export { BLAME, chain, mergeBlame, pairCauses, type Links } from './blame.ts';
 export { CLASH, powerOdds, backingEdge } from './clash.ts';
+export { ACCUSATION } from './accusations.ts';
 export { REACTIONS, parentRoles } from './reactions.ts';
 export { SELECTION } from './select.ts';
 export { VARIETY } from './context.ts';
