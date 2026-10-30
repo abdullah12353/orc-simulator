@@ -1,6 +1,6 @@
 # ORC NONSENSE: Exploratory Game Design Document (draft 1)
 
-Status: **locked MVP spec** (2026-10-29), apart from the narration model, which [#13](https://github.com/abdullah12353/orc-simulator/issues/13) still chooses. Nothing is built. The wayfinder map is [issue #14](https://github.com/abdullah12353/orc-simulator/issues/14), and the data model and sim interface are in [data-model.md](./data-model.md).
+Status: **locked MVP spec** (2026-10-30). Nothing is built. The wayfinder map is [issue #14](https://github.com/abdullah12353/orc-simulator/issues/14), and the data model and sim interface are in [data-model.md](./data-model.md).
 Vocabulary: [GLOSSARY.md](../../GLOSSARY.md). Decision log: §10 here, plus the map's *Decisions so far*.
 
 Sources: the Mohammed/Haris brainstorm summary (§1), the supplementary creative direction note (§1.5), and first-round grilling answers.
@@ -243,7 +243,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D34 | Backing is a standing Stake: withdraw for half back, held through death; who backs whom public, amounts private | **Decided** | Ticket *Backing economy* |
 | D35 | Backing edge is flat for each backer (≈+5%, max +10%) and applies to Clashes only; gold never buys odds | **Decided** | Ticket *Backing economy* |
 | D36 | Payouts: ≈10% of Stake per win, ≈1% per Infamy point, rounded up; shown only privately, never in the Herald | **Decided** | Ticket *Backing economy* |
-| D37 | Narration runs at $0: Cloudflare Workers AI as primary, Groq gpt-oss-120b as fallback, templates as the last resort; the free quota is the cap; model chosen by bake-off | **Decided** | Ticket *Narration tiers* |
+| D37 | Narration runs at $0: Cloudflare Workers AI as primary, Groq gpt-oss-120b as fallback, templates as the last resort; the free quota is the cap; model chosen by bake-off (D65) | **Decided** | Ticket *Narration tiers* |
 | D38 | Tiers: every Clash gets generated dialogue; the Herald is generated on open; notable events are templated; minor changes are silent; no runtime TTS | **Decided** | Ticket *Narration tiers* |
 | D39 | Tick every 1 min when watched (Player seen within 5 min), every 5 min otherwise; Worker as clock, Edge Function runs the tick; narration never blocks it | **Decided** | Ticket *Narration tiers* |
 | D40 | Any disaster can kill (Clash, botched Dare, accident), about 1–3 deaths a day; every Captain Returns after 2–12 h with an Introduction and an hour's grace from dying | **Decided** | Ticket *Failing Upward* |
@@ -271,3 +271,5 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D62 | State tables are canonical, with an append-only Fact log in the same transaction; one tick per world at a time, seeded from its tick counter; Player ledgers debited at submit (amends §8.1 to "world state") | **Decided** | Ticket *Data model* |
 | D63 | Blame links only through state a Template required, capped at 6 hops, written into `fact_blame` at tick time; Facts never carry gold or pending Meddles | **Decided** | Ticket *Data model* |
 | D64 | Affinity is directed per ordered pair (amends D49); days roll at midnight Europe/London, LLM quotas on UTC; content ships as TS/JSON in the repo; narration runs after commit in the tick function | **Decided** | Ticket *Data model* |
+| D65 | Narration model: Gemma 4 26B on Workers AI (thinking off) as primary, Groq gpt-oss-120b as fallback; Llama 3.3 70B dropped | **Decided** | Ticket *Bake-off* |
+| D66 | A format failure from the primary retries once on the fallback; refusals and timeouts go straight to the template (amends ticket *Narration tiers*'s no-retries rule) | **Decided** | Ticket *Bake-off* |
