@@ -714,3 +714,20 @@ button.link {
   gap: 1rem;
   margin-top: 0.75rem;
 }
+
+/* First open and hints (#43) */
+.hint {
+  border-left: 3px solid #d97706;
+  padding: 0.25rem 0.75rem;
+  color: #fde68a;
+  font-style: italic;
+}
+.first-open {
+  background: #292524;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.first-open button {
+  margin-left: 0.5rem;
+}
