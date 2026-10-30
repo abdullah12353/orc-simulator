@@ -1,9 +1,11 @@
 // End-to-end smoke test of the served stack, doing what the PWA does over HTTP:
 // magic-link sign-in (code read from Mailpit) → create-world → ticks via the tick endpoint →
-// read the world's Fact lines under RLS → invite a friend, who joins; a revoked invite is refused.
+// read the world's Fact lines under RLS → invite a friend, who joins; a revoked invite is refused →
+// a Rumour → both Players watch live on the private world channel, and a stranger is refused.
 // `npm run smoke:local`. Needs the functions served by the
 // stack (they're served from the worktree that ran `supabase start`).
 import { execSync } from 'node:child_process';
+import { createClient } from '@supabase/supabase-js';
 
 const status = JSON.parse(execSync('npx supabase status -o json', { encoding: 'utf8' }));
 const api = status.API_URL;
@@ -130,3 +132,58 @@ if (mine?.status !== 'pending') throw new Error(`the creator's Meddle after a ti
 const theirs = await call(`/rest/v1/meddles?id=eq.${intentId}&select=status`, { token: friend });
 if (theirs.length !== 0) throw new Error('the friend can see a pending Meddle');
 console.log('a Rumour was planted (2 Meddles left), consumed by the tick, and is secret from the friend: ok');
+
+// 7. Live watching, the way two open PWAs watch: both Players join the private channel world:<id> and
+// a signed-in stranger is refused. The friend is marked seen, so the world is watched, and ticks run
+// until one makes Facts: that tick's {tick_seq} broadcast reaches both, and refetching that tick's
+// Facts (what the PWA does on a broadcast) finds them.
+const topic = `world:${worldId}`;
+async function joinChannel(accessToken) {
+  const client = createClient(api, anon, { auth: { persistSession: false, autoRefreshToken: false } });
+  await client.realtime.setAuth(accessToken);
+  const received = [];
+  const channel = client.channel(topic, { config: { private: true } });
+  channel.on('broadcast', { event: 'tick' }, (m) => received.push(m.payload));
+  const status = await new Promise((resolve) => {
+    const timer = setTimeout(() => resolve('NO_ANSWER'), 10_000);
+    channel.subscribe((s) => {
+      if (s === 'SUBSCRIBED' || s === 'CHANNEL_ERROR' || s === 'TIMED_OUT') {
+        clearTimeout(timer);
+        resolve(s);
+      }
+    });
+  });
+  return { client, status, received };
+}
+const watchers = [await joinChannel(token), await joinChannel(friend)];
+const outsider = await joinChannel(late);
+try {
+  if (watchers.some((w) => w.status !== 'SUBSCRIBED')) throw new Error(`members joining ${topic}: ${watchers.map((w) => w.status)}`);
+  if (outsider.status === 'SUBSCRIBED') throw new Error(`a stranger joined ${topic}`);
+  console.log(`both Players joined ${topic}; a stranger was refused (${outsider.status}): ok`);
+
+  await call('/rest/v1/rpc/mark_seen', { method: 'POST', token: friend, body: { world_id: worldId } });
+  let productive;
+  for (let i = 0; i < 30 && !productive; i++) {
+    const { outcomes } = await call('/functions/v1/tick', { method: 'POST', token: 'local-tick-secret', body: { worldId } });
+    if (outcomes[0].status !== 'stepped') throw new Error(`a watched tick did not step: ${JSON.stringify(outcomes)}`);
+    if (outcomes[0].factCount > 0) productive = outcomes[0];
+  }
+  if (!productive) throw new Error('no watched tick made Facts in 30 tries');
+  for (let i = 0; i < 50 && watchers.some((w) => w.received.length === 0); i++) await new Promise((r) => setTimeout(r, 200));
+  for (const w of watchers) {
+    const seqs = w.received.map((p) => p.tick_seq);
+    if (seqs.length !== 1 || seqs[0] !== productive.tickSeq) {
+      throw new Error(`broadcasts received: ${JSON.stringify(seqs)}, expected [${productive.tickSeq}]`);
+    }
+  }
+  if (outsider.received.length > 0) throw new Error('the stranger heard a broadcast');
+  const fresh = await call(`/rest/v1/facts?world_id=eq.${worldId}&tick_seq=eq.${productive.tickSeq}&select=no,line`, { token: friend });
+  if (fresh.length !== productive.factCount) throw new Error(`refetch found ${fresh.length} of ${productive.factCount} Facts`);
+  console.log(`tick ${productive.tickSeq} made ${productive.factCount} Fact(s); both Players heard it once and refetched them: ok`);
+} finally {
+  for (const w of [...watchers, outsider]) {
+    await w.client.removeAllChannels();
+    w.client.realtime.disconnect();
+  }
+}

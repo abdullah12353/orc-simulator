@@ -2,14 +2,16 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
 import { Herald } from './Herald.tsx';
+import { useLive, useSeen } from './live.ts';
+import { LiveStage } from './LiveStage.tsx';
 import { Meddle } from './Meddle.tsx';
 import { supabase } from './supabase.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
 
 // Tracer-bullet screens (#24): magic-link sign-in, create a world, and a bare list of the world's
-// Fact lines, newest first. Live refresh over Realtime arrives with #31; until then we poll.
-const POLL_MS = 10_000;
+// Fact lines, newest first. While a world is open its Player is marked seen, and live nudges over
+// Realtime (#31) refetch the lines and play new Clashes and notable events on the live stage.
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -119,8 +121,10 @@ function Worlds({ initial }: { initial?: string }) {
 
 function WorldTabs({ worldId }: { worldId: string }) {
   const [tab, setTab] = useState<'herald' | 'meddle' | 'captains' | 'facts'>('herald');
+  useSeen(worldId);
   return (
     <>
+      <LiveStage key={worldId} worldId={worldId} />
       <nav className="tabs">
         <button className={tab === 'herald' ? 'on' : ''} onClick={() => setTab('herald')}>
           The Herald
@@ -186,10 +190,13 @@ interface FactRow {
 
 function FactLines({ worldId }: { worldId: string }) {
   const [facts, setFacts] = useState<FactRow[]>([]);
+  const [version, setVersion] = useState(0);
+  // Every live nudge (a productive tick, or the channel reconnecting) refetches.
+  useLive(worldId, () => setVersion((v) => v + 1));
 
   useEffect(() => {
     let cancelled = false;
-    async function load() {
+    void (async () => {
       const { data } = await supabase
         .from('facts')
         .select('no, at, line')
@@ -199,14 +206,11 @@ function FactLines({ worldId }: { worldId: string }) {
         .order('no', { ascending: false })
         .limit(200);
       if (!cancelled && data) setFacts(data);
-    }
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
+    })();
     return () => {
       cancelled = true;
-      clearInterval(timer);
     };
-  }, [worldId]);
+  }, [worldId, version]);
 
   if (facts.length === 0) return <p className="quiet">Nothing has happened yet. Give it a few ticks.</p>;
   return (

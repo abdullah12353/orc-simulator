@@ -1,6 +1,7 @@
 export { connect, type Sql, type Tx } from './db.ts';
 export { insertFacts, loadCauses } from './commit.ts';
-export { tickWorld, tickAllWorlds, type TickDeps, type TickOutcome, type CommitStep } from './tick.ts';
+export { tickWorld, tickAllWorlds, CADENCE, type TickDeps, type TickOutcome, type CommitStep } from './tick.ts';
+export { broadcast, worldTopic, type WorldBroadcast } from './realtime.ts';
 export { createWorld, CreateWorldError, type CreateWorldDeps, type CreateWorldInput } from './create-world.ts';
 export {
   openEdition,
