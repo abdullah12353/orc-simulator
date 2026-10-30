@@ -1,4 +1,9 @@
+import { ACCENTS, CASTING, FEARS, KRUG, TRAITS } from './pools.ts';
 import type { CastCard, Content } from './types.ts';
+
+const TRAIT_POOL = new Set<string>(TRAITS);
+const FEAR_POOL = new Set<string>(FEARS);
+const ACCENT_SET = new Set<string>(ACCENTS);
 
 const REQUIRED_CARD_FIELDS: (keyof CastCard)[] = [
   'id',
@@ -32,8 +37,41 @@ export function validateContent(c: Content): string[] {
     if (typeof card.power === 'number' && (card.power < 1 || card.power > 10 || !Number.isInteger(card.power))) {
       errors.push(`cast ${card.id}: power must be an integer 1–10`);
     }
-    if (Array.isArray(card.traits) && card.traits.length !== 2) errors.push(`cast ${card.id}: needs exactly 2 traits`);
+    if (Array.isArray(card.traits)) {
+      if (card.traits.length !== 2) errors.push(`cast ${card.id}: needs exactly 2 traits`);
+      else if (card.traits[0] === card.traits[1]) errors.push(`cast ${card.id}: its 2 traits must be distinct`);
+      for (const t of card.traits) {
+        if (!TRAIT_POOL.has(t)) errors.push(`cast ${card.id}: trait "${t}" is not in the shared pool`);
+      }
+    }
+    if (Array.isArray(card.fears)) {
+      if (card.fears.length !== 1) errors.push(`cast ${card.id}: needs exactly 1 starting Fear`);
+      for (const f of card.fears) {
+        if (!FEAR_POOL.has(f)) errors.push(`cast ${card.id}: Fear "${f}" is not in the Fear pool`);
+      }
+    }
+    if (card.accent && !ACCENT_SET.has(card.accent)) {
+      errors.push(`cast ${card.id}: accent "${card.accent}" is not one of the 6 archetypes`);
+    }
     if (Array.isArray(card.aliases) && card.aliases.length !== 2) errors.push(`cast ${card.id}: needs exactly 2 aliases`);
+    if (card.epithet !== undefined && !c.banks.epithets?.[card.epithet]) {
+      errors.push(`cast ${card.id}: starting Epithet "${card.epithet}" is not in the Epithet bank`);
+    }
+  }
+
+  // What castWorld needs to cast a world (D57).
+  if (!castIds.has(KRUG)) errors.push(`cast: the founding Captain "${KRUG}" is missing`);
+  for (const accent of ACCENTS) {
+    const n = c.cast.filter((card) => card.accent === accent).length;
+    if (n < CASTING.activePerAccent) {
+      errors.push(`cast: accent "${accent}" has ${n} Captains; casting needs at least ${CASTING.activePerAccent}`);
+    }
+  }
+  const accusers = c.cast.filter((card) => card.accuser).length;
+  if (accusers !== CASTING.accusers) errors.push(`cast: ${accusers} accusers; there must be exactly ${CASTING.accusers}`);
+  const history = new Set(c.banks.oldHistory ?? []);
+  if (history.size < CASTING.seededGrudges.max) {
+    errors.push(`banks.oldHistory: ${history.size} distinct tags; casting needs at least ${CASTING.seededGrudges.max}`);
   }
 
   const templateIds = new Set<string>();

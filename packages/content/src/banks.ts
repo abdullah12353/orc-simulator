@@ -1,0 +1,40 @@
+import type { Banks } from './types.ts';
+
+// Starter banks for casting (#26). The v1 catalogue (#44) grows them and Mohammed strikes them.
+
+export const banks: Banks = {
+  // Tags for the ~6 Grudges seeded at casting: old history from before day zero (D57).
+  oldHistory: [
+    'still owes him a pie',
+    'sat in his chair at the feast',
+    "laughed at his mum's cooking",
+    'borrowed his helmet and gave back a bucket',
+    'told everyone he cried at a goose',
+    'won his boots in a bet and wears them on his hands',
+    'ate the last pickled egg',
+    'named a rat after him',
+    'sneezed on his breakfast',
+    'pushed him in the moat at a wedding',
+    'drew a moustache on his portrait',
+    'never gave back his favourite spoon',
+    'told the Warlord he snores',
+    "sold him a dragon's egg (a potato)",
+    "kicked his dog (it was the Warlord's cat)",
+  ],
+  // The prerecorded announcer Epithets. Keys are slugs; `text` follows the Captain's name.
+  epithets: {
+    'the-damp': { text: 'the Damp', sayAs: 'the DAMP' },
+    'the-polished': { text: 'the Polished', sayAs: 'the POL-isht' },
+    'the-magnificent': { text: 'the Magnificent', sayAs: 'the mag-NIF-i-sent' },
+    'the-lukewarm': { text: 'the Lukewarm', sayAs: 'the LUKE-warm' },
+    'the-sleepy': { text: 'the Sleepy', sayAs: 'the SLEE-pee' },
+    'the-unwashed': { text: 'the Unwashed', sayAs: 'the un-WOSHT' },
+    'the-concussed': { text: 'the Concussed', sayAs: 'the con-KUST' },
+    'the-pie-bothered': { text: 'the Pie-Bothered', sayAs: 'the PIE-both-erd' },
+    'the-twice-stabbed': { text: 'the Twice-Stabbed', sayAs: 'the TWICE-stabd' },
+    'the-lost': { text: 'the Lost', sayAs: 'the LOST' },
+    'the-barely-awake': { text: 'the Barely Awake', sayAs: 'the BAIR-lee a-WAKE' },
+    'the-bucket': { text: 'the Bucket', sayAs: 'the BUCK-it' },
+    'the-goosed': { text: 'the Goosed', sayAs: 'the GOOST' },
+  },
+};
