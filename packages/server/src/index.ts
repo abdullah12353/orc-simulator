@@ -8,6 +8,7 @@ export {
   buildMasthead,
   HERALD,
   type Edition,
+  type EditionAccusation,
   type EditionStory,
   type Masthead,
   type OpenEditionDeps,
@@ -15,4 +16,5 @@ export {
   type Slot,
   type StopPressLine,
 } from './herald.ts';
+export { registerNameRender, NameRenderError, type NameRenderInput } from './name-renders.ts';
 export { handleTick, handleCreateWorld, handleOpenEdition, supabaseUserResolver } from './http.ts';
