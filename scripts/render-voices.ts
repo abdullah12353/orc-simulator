@@ -3,14 +3,15 @@
 // master lands in voices/takes/; the main take is also trimmed, loudness-matched and converted (ffmpeg)
 // into the PWA's audio bank, replacing that placeholder. `npm run audio:placeholders` without `--missing`
 // would write the placeholders back over them.
-//   npm run voices -- --dry                 count the characters (credits), render nothing
+//   npm run voices:dry                      count the characters (credits), render nothing
 //   npm run voices                          every voice with an ID; skips takes that already exist
-//   npm run voices -- krug announcer        just those voices
-//   npm run voices -- krug-taunt            re-render one take, even if it exists
-//   npm run voices -- --pick krug-shout~2   use an alternative take as the game file (no API call)
+//   npm run voices krug announcer           just those voices
+//   npm run voices krug-taunt               re-render one take, even if it exists
+//   npm run voices:pick krug-shout~2        use an alternative take as the game file (no API call)
 // Designing the voices (prompts in voices/test-cast.ts DESIGNS), instead of the web UI:
-//   npm run voices -- --design krug vorgash three Voice Design previews each, in voices/designs/
-//   npm run voices -- --save krug 2         save preview 2 to your account and write its voice ID
+//   npm run voices:design krug vorgash      three Voice Design previews each, in voices/designs/
+//   npm run voices:save krug 2              save preview 2 to your account and write its voice ID
+// The voices:* scripts carry their flag because PowerShell's npm drops a `--`, and npm then eats the flag.
 // The API key comes from ELEVENLABS_API_KEY, or a git-ignored .env.voices holding ELEVENLABS_API_KEY=….
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -131,13 +132,13 @@ async function design(voices: string[]) {
     });
     writeFileSync(join(DESIGNED, `${v}.json`), JSON.stringify({ description, generated: previews.map((p) => p.generated_voice_id) }, null, 2));
   }
-  console.log(`Listen, then save the best: npm run voices -- --save ${voices[0]} <1-3>`);
+  console.log(`Listen, then save the best: npm run voices:save ${voices[0]} <1-3>`);
 }
 
 /** Saves a preview as a voice in the account, writes its ID, and clears the old voice's takes. */
 async function save(voice: string, n: number) {
   const file = join(DESIGNED, `${voice}.json`);
-  if (!existsSync(file)) fail(`no designs for ${voice} yet: npm run voices -- --design ${voice}`);
+  if (!existsSync(file)) fail(`no designs for ${voice} yet: npm run voices:design ${voice}`);
   const { description, generated }: { description: string; generated: string[] } = JSON.parse(readFileSync(file, 'utf8'));
   const chosen = generated[n - 1] ?? fail(`pick 1 to ${generated.length}`);
   const name = content.cast.find((c) => c.id === voice)?.name ?? 'Announcer';

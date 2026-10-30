@@ -12,8 +12,8 @@ Everything fits the **free tier** (10k credits a month): about 2.7k credits for 
 4. Design, then listen to the three previews in `voices/designs/` and save the best:
 
 ```powershell
-npm run voices -- --design krug vorgash announcer  # three previews each, about 250 credits a voice
-npm run voices -- --save krug 2                     # save krug-2.mp3 as a voice, write its ID to voice-ids.json
+npm run voices:design krug vorgash announcer  # three previews each, about 250 credits a voice
+npm run voices:save krug 2                     # save krug-2.mp3 as a voice, write its ID to voice-ids.json
 ```
 
 The prompts are `DESIGNS` in [`test-cast.ts`](test-cast.ts), all on one template and accent wording, so no accent gets pushed harder than another (the tone bible's swap test). If none of the three lands, change the description and design again. That's the actual test: West Country, Scouse and Indian English aren't in ElevenLabs' docs, so whether a description gets them is unknown. Save soon after designing, as the previews may not be kept for long.
@@ -27,10 +27,10 @@ The web UI works too (Voices → Create a voice → Voice Design, with v3): past
 Run, in PowerShell from the repo:
 
 ```powershell
-npm run voices -- --dry                # what it will render, and the credits
-npm run voices                         # every voice with an ID (existing takes are skipped)
-npm run voices -- krug-taunt           # re-render one line
-npm run voices -- --pick krug-shout~2  # use an alternative name shout in the game
+npm run voices:dry               # what it will render, and the credits
+npm run voices                   # every voice with an ID (existing takes are skipped)
+npm run voices krug-taunt        # re-render one line
+npm run voices:pick krug-shout~2 # use an alternative name shout in the game
 ```
 
 - The masters land in `voices/takes/` (git-ignored). The main take of each line is trimmed, loudness-matched and put in the game, replacing its placeholder.

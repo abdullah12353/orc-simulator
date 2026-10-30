@@ -1,7 +1,7 @@
 // The voice test (#19): the six accusers (one per accent, the tone bible's calibration six) and the
 // announcer. Each line renders to `voices/takes/<voice>-<line>.mp3`, and the main take is converted into
 // the PWA's audio bank, replacing that placeholder. A `~2`/`~3` suffix is an alternative take: it's only
-// rendered into takes/, for `npm run voices -- --pick <take>`. Every Captain also gets his catchphrase as
+// rendered into takes/, for `npm run voices:pick <take>`. Every Captain also gets his catchphrase as
 // `signature` (from the cast, so it stays in sync) and the two swap-audit lines.
 // Lines are hand-written to the tone bible: accent through word choice only, jokes from the Traits.
 
@@ -83,7 +83,7 @@ export const TEST_CAST: Record<string, Record<string, string>> = {
   },
 };
 
-// Voice Design prompts (`npm run voices -- --design <voice>`). Every description uses the same template and
+// Voice Design prompts (`npm run voices:design <voice>`). Every description uses the same template and
 // accent wording, so no accent gets pushed harder than another (the tone bible's swap test). The preview
 // text is what the three designs speak: 100 to 1000 characters.
 const TEMPLATE = (accent: string, age: string, persona: string, pacing: string) =>
