@@ -151,7 +151,7 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   };
   ctx.facts.push(head);
   ctx.diff.meddles.push({ id: meddle.id, status: 'landed', landedFact: no });
-  gainInfamy(ctx, head, target, { botched: INFAMY.dare.botched, pulled_off: INFAMY.dare.pulledOff, refused: INFAMY.dare.refused }[outcome]);
+  gainInfamy(ctx, head, target, INFAMY.dare[outcome]);
 
   // The victim of a Prank that came off (or went wrong on him) now holds it against the target.
   const sting = DARE.sting[outcome];

@@ -15,6 +15,7 @@ import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
+import type { DareOutcome } from './dares.ts';
 import type { CaptainId, Cause, Fact } from './types.ts';
 
 /**
@@ -41,8 +42,8 @@ export const INFAMY = {
   unmasked: 8,
   /** A landed Rumour backfires on its supposed source: everyone thinks he said it. */
   rumourSource: 5,
-  /** Dares (#35 uses these through `gainInfamy`). */
-  dare: { pulledOff: 5, refused: 8, botched: 20 },
+  /** A landed Dare, by outcome. */
+  dare: { pulled_off: 5, refused: 8, botched: 20 } satisfies Record<DareOutcome, number>,
   /** Taking the throne. */
   throne: 20,
   /** Lifetime Infamy that makes a Captain Legendary (D45). */

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content, DARE_TEMPLATES, daresFor } from '@orc/content';
-import { applyDiff, DARE, INFAMY, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
+import { applyDiff, DARE, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
 import { activeIds, addMinutes, dare, freshWorld, SEEDS, step } from './support.ts';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
@@ -154,7 +154,7 @@ test('a Dare that plays on his Fear says so, and goes wrong more often', () => {
 
 test('Infamy for the target: pulled off +5, refused +8, botched +20', () => {
   const { state, target } = planted({ dareKey: 'stunt.torches' });
-  const want = { pulled_off: INFAMY.dare.pulledOff, refused: INFAMY.dare.refused, botched: INFAMY.dare.botched };
+  const want = { pulled_off: 5, refused: 8, botched: 20 };
   for (const outcome of ['botched', 'pulled_off', 'refused'] as const) {
     const { head } = landWith(state, outcome);
     assert.deepEqual(head.infamy, [{ captainId: target, amount: want[outcome] }], outcome);
