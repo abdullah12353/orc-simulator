@@ -229,3 +229,31 @@ test('the 7-day window moves on in memory as the tick reloads it: old gains drop
   );
   assert.deepEqual(next.infamy7d, expected);
 });
+
+test('a crowning also requires what won it: the Facts behind his newest 3 gains of the week that the world still holds', () => {
+  const sample = warlordDies().state;
+  const now = sample.world.now;
+  const king = activeIds(sample, (id) => id !== sample.world.warlordId)[0]!;
+  const P1 = '11111111-1111-4111-8111-111111111111';
+  const blame = (meddleId: string) => [{ meddleId, playerId: P1, verb: 'rumour' as const, landedFact: 1, landedAt: now, hops: 2 }];
+  // He bears two Humiliations. The newer one's gain is among his newest 3 this week; the older one's gain
+  // has dropped out of the window, so it isn't what won him the throne.
+  const humiliation = (no: number, gainedFact: number, meddleId: string) => ({
+    no, captainId: king, cat: 'bandage' as const, key: 'bandage.head', gained: { fact: gainedFact, blame: blame(meddleId) }, expiresAt: null, ended: false,
+  });
+  const { state, seed } = warlordDies((s) => ({
+    ...s,
+    humiliations: [humiliation(900, 600, 'aaaaaaaa-0000-4000-8000-000000000001'), humiliation(901, 700, 'aaaaaaaa-0000-4000-8000-000000000002')],
+    infamy7d: [
+      { captainId: king, fact: 600, at: addMinutes(now, -8 * 1440), amount: 50 },
+      { captainId: king, fact: 700, at: addMinutes(now, -60), amount: 30 },
+      { captainId: king, fact: 650, at: addMinutes(now, -120), amount: 30 },
+    ],
+  }));
+  const { facts } = simulate(state, [], seed);
+  const [fell] = ofKind(facts, 'warlord_fell');
+  const [crowned] = ofKind(facts, 'crowned');
+  assert.equal(crowned?.intro.captainId, king);
+  assert.deepEqual(crowned.causes, [fell!.no, 700].sort((a, b) => a - b), 'the fall, and the Humiliation that gained him Infamy this week');
+  assert.deepEqual(crowned.blame.map((b) => [b.meddleId, b.hops]), [['aaaaaaaa-0000-4000-8000-000000000002', 3]]);
+});

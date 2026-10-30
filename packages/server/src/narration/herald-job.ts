@@ -13,11 +13,11 @@ import { validateHerald } from './validate.ts';
 /** Queues the edition's Herald job (in the edition's transaction). The job is the outbox row and the log. */
 export async function queueHeraldJob(
   tx: Sql | Tx,
-  at: { worldId: string; editionId: string; now: string },
+  edition: { worldId: string; editionId: string; now: string },
 ): Promise<number> {
   const [job] = await tx<{ id: number }[]>`
     insert into narration_jobs (world_id, kind, edition_id, created_at)
-    values (${at.worldId}, 'herald', ${at.editionId}, ${at.now})
+    values (${edition.worldId}, 'herald', ${edition.editionId}, ${edition.now})
     returning id::float8 as id`;
   return job!.id;
 }

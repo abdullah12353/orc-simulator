@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { accusationsFrom, type Accusation, type AccusationFactRow, type NameRenderRow } from './accusation.ts';
 import { nameClip, sting } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { ClashCard } from './ClashCard.tsx';
@@ -9,6 +10,7 @@ import { IntroductionCard } from './IntroductionCard.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { legendaryDeeds } from './legendary.ts';
 import { HintLine } from './HintLine.tsx';
+import { OnStage } from './OnStage.tsx';
 import { YourStableSection } from './Stable.tsx';
 import type { YourStable } from './stable-lines.ts';
 import { supabase } from './supabase.ts';
@@ -49,15 +51,6 @@ interface Story {
   blameLine: string | null;
 }
 
-/** The edition's one Accusation (#39): a pull quote over its story's true Blame line. */
-interface Accusation {
-  factNo: number;
-  storyNo: number;
-  accuser: string;
-  line: string;
-  clipKey: string;
-}
-
 interface Edition {
   id: string;
   no: number;
@@ -66,7 +59,7 @@ interface Edition {
   masthead: { orcDate: string; price: string; weather: string };
   status: 'templated' | 'generated';
   stories: Story[];
-  /** Only the edition open-edition returned carries it; back issues read under RLS don't. */
+  /** The edition's one Accusation (#39): from open-edition, or joined up for a back issue read under RLS. */
   accusation?: Accusation | null;
   /** My private "Your Stable" (#36), frozen when the edition was printed (null before #36). */
   stable: YourStable | null;
@@ -90,6 +83,7 @@ interface EditionRow {
   masthead: Edition['masthead'];
   status: Edition['status'];
   stable: YourStable | null;
+  accusation_fact: number | null;
   edition_stories: {
     rank: number;
     story_no: number;
@@ -103,15 +97,41 @@ interface EditionRow {
 
 const SHOWN_EDITIONS = 7;
 const EDITION_COLUMNS =
-  'id, no, covers_from, covers_to, masthead, status, stable, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)';
+  'id, no, covers_from, covers_to, masthead, status, stable, accusation_fact, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)';
 /** Rereads while the words are being written: the job gives up on the model after about 20 s. */
 const PICKUP = { everyMs: 3_000, tries: 12 } as const;
 /** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
 const playedKey = (editionId: string) => `orc:lead-played:${editionId}`;
-/** A Legendary deed leading the edition gets its fanfare (D52), once per edition on this device. */
-const fanfareKey = (editionId: string) => `orc:fanfare:${editionId}`;
+/**
+ * The lead story gets the announcer (D52), once per edition on this device: the fanfare when a
+ * Legendary deed leads, else the lead stinger.
+ */
+const announcedKey = (editionId: string) => `orc:fanfare:${editionId}`;
 
-function fromRow(r: EditionRow): Edition {
+/**
+ * The Accusations of editions read under RLS (#39): their `accusation_fact`s, shown by the same rule the
+ * Herald printed them by (`accusationsFrom`). Keyed by Fact number.
+ */
+async function loadAccusations(worldId: string, rows: EditionRow[]): Promise<Map<number, Accusation>> {
+  const nos = [...new Set(rows.flatMap((r) => (r.accusation_fact === null ? [] : [Number(r.accusation_fact)])))];
+  if (nos.length === 0) return new Map();
+  const { data: facts } = await supabase
+    .from('facts')
+    .select('no, story_no, line, payload')
+    .eq('world_id', worldId)
+    .eq('kind', 'accusation')
+    .in('no', nos);
+  const found = (facts ?? []) as AccusationFactRow[];
+  const accused = [...new Set(found.flatMap((f) => (f.payload.accused ? [f.payload.accused] : [])))];
+  if (accused.length === 0) return new Map();
+  const [renders, players] = await Promise.all([
+    supabase.from('name_renders').select('player_id, accuser_id, clip_key').in('player_id', accused),
+    supabase.from('players').select('id, removed_at').eq('world_id', worldId).in('id', accused),
+  ]);
+  return accusationsFrom(found, (renders.data ?? []) as NameRenderRow[], (players.data ?? []) as { id: string; removed_at: string | null }[]);
+}
+
+function fromRow(r: EditionRow, accusations: Map<number, Accusation> = new Map()): Edition {
   return {
     id: r.id,
     no: r.no,
@@ -120,6 +140,7 @@ function fromRow(r: EditionRow): Edition {
     masthead: r.masthead,
     status: r.status,
     stable: r.stable,
+    accusation: r.accusation_fact === null ? null : (accusations.get(Number(r.accusation_fact)) ?? null),
     stories: [...r.edition_stories]
       .sort((a, b) => a.rank - b.rank)
       .map((s) => ({
@@ -161,7 +182,10 @@ export function Herald({ worldId }: { worldId: string }) {
         .order('no', { ascending: false })
         .limit(SHOWN_EDITIONS);
       if (!cancelled && past.data) {
-        const editions = (past.data as EditionRow[]).map(fromRow);
+        const rows = past.data as EditionRow[];
+        const accusations = await loadAccusations(worldId, rows);
+        if (cancelled) return;
+        const editions = rows.map((r) => fromRow(r, accusations));
         setArchive(editions);
         const nos = [...new Set(editions.flatMap((e) => e.stories.map((st) => st.storyNo)))];
         const [heads, found] = await Promise.all([setPieceHeads(worldId, nos), legendaryDeeds(worldId, nos)]);
@@ -184,10 +208,11 @@ export function Herald({ worldId }: { worldId: string }) {
       if (cancelled) return;
       learn(heads);
       learnDeeds(found);
-      // A Legendary deed always leads, with a fanfare (D52), before its set piece if it has one.
-      if (found.has(lead.storyNo) && !localStorage.getItem(fanfareKey(edition.id))) {
-        localStorage.setItem(fanfareKey(edition.id), '1');
-        void sting('fanfare');
+      // The announcer introduces the lead (D52), before its set piece if it has one. A Legendary
+      // deed always leads, with a fanfare.
+      if (!localStorage.getItem(announcedKey(edition.id))) {
+        localStorage.setItem(announcedKey(edition.id), '1');
+        void sting(found.has(lead.storyNo) ? 'fanfare' : 'lead');
       }
       const kind = heads.get(lead.storyNo);
       if (!kind || localStorage.getItem(playedKey(edition.id))) return;
@@ -214,7 +239,7 @@ export function Herald({ worldId }: { worldId: string }) {
           ? { ...o, generating: false, edition: fresh ? { ...fresh, accusation: o.edition.accusation } : o.edition }
           : o,
       );
-      if (fresh) setArchive((list) => list.map((e) => (e.id === writing ? fresh : e)));
+      if (fresh) setArchive((list) => list.map((e) => (e.id === writing ? { ...fresh, accusation: e.accusation } : e)));
     };
     const timer = setInterval(async () => {
       if (busy) return;
@@ -253,14 +278,24 @@ export function Herald({ worldId }: { worldId: string }) {
 
   return (
     <section className="herald">
+      {/* One set piece on screen at a time: the lead waits for a live card that's playing (#31). */}
       {playing?.kind === 'clash' && (
-        <ClashCard key={playing.data.clash.no} data={playing.data} reader={opened.reader} onDone={() => setPlaying(null)} />
+        <OnStage key={`clash:${playing.data.clash.no}`} name="herald">
+          <ClashCard data={playing.data} reader={opened.reader} onDone={() => setPlaying(null)} />
+        </OnStage>
       )}
-      {playing?.kind === 'introduction' && <IntroductionCard key={playing.data.no} data={playing.data} onDone={() => setPlaying(null)} />}
+      {playing?.kind === 'introduction' && (
+        <OnStage key={`intro:${playing.data.no}`} name="herald">
+          <IntroductionCard data={playing.data} onDone={() => setPlaying(null)} />
+        </OnStage>
+      )}
       {clipped && !('error' in clipped) && <ClippingCard snapshot={clipped} reader={opened.reader} onClose={() => setClipped(null)} />}
       {clipped && 'error' in clipped && (
-        <p className="error" onClick={() => setClipped(null)}>
-          Couldn't clip that: {clipped.error}
+        <p className="error" role="alert">
+          Couldn't clip that: {clipped.error}{' '}
+          <button className="link" onClick={() => setClipped(null)}>
+            Dismiss
+          </button>
         </p>
       )}
       {isLatest && opened.stopPress.length > 0 && (
@@ -290,8 +325,7 @@ export function Herald({ worldId }: { worldId: string }) {
   );
 }
 
-const when = (iso: string) =>
-  new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+const when = (iso: string) => new Date(iso).toLocaleString('en-GB', { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 function EditionView({
   edition,
@@ -326,8 +360,7 @@ function EditionView({
     </button>
   );
   // At most one Accusation per edition (D53), printed above its story's true Blame line.
-  const accused = (s: Story) =>
-    edition.accusation?.storyNo === s.storyNo && <AccusationQuote accusation={edition.accusation} />;
+  const accused = (s: Story) => edition.accusation?.storyNo === s.storyNo && <AccusationQuote accusation={edition.accusation} />;
   const lead = edition.stories.find((s) => s.slot === 'lead');
   const headlines = edition.stories.filter((s) => s.slot === 'headline');
   const gutter = edition.stories.filter((s) => s.slot === 'gutter');
@@ -381,6 +414,7 @@ function EditionView({
               <li key={s.rank}>
                 {s.headline}
                 {accused(s)}
+                {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
                 {clipButton(s)}
               </li>
             ))}

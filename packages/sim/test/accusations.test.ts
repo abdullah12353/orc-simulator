@@ -41,7 +41,9 @@ const player = (renderedFor: ReturnType<typeof render>[]) => ({ gold: 30, meddle
 
 test('an accuser only ever names a Player whose name was rendered for him', () => {
   const accusations: Accusation[] = [];
-  for (let seed = 1; seed <= SEEDS; seed++) {
+  // P2 can only be named by Krúg, so it takes a fair few brawls before he is: never fewer than 20 worlds.
+  const seeds = Math.max(SEEDS, 20);
+  for (let seed = 1; seed <= seeds; seed++) {
     let state = brawl(seed, {
       [P1]: player(ACCUSERS.map((a) => render(P1, a))),
       [P2]: player([render(P2, 'krug')]),
@@ -53,7 +55,7 @@ test('an accuser only ever names a Player whose name was rendered for him', () =
       accusations.push(...r.facts.filter(isAccusation));
     }
   }
-  assert.ok(accusations.length >= SEEDS, `${accusations.length} Accusations`);
+  assert.ok(accusations.length >= seeds, `${accusations.length} Accusations`);
   for (const a of accusations) {
     assert.ok(ACCUSERS.includes(a.accuser), `${a.accuser} is an accuser`);
     assert.notEqual(a.accused, P3, 'P3 has no render at all');

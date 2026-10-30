@@ -1,6 +1,7 @@
 import { LEGENDARY_LAYER } from './portrait.ts';
-import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
+import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, PARENT_ROLES, TRAITS } from './pools.ts';
 import { allText, forbiddenNameIn, heraldText, swearIn } from './tone.ts';
+import type { ParentKind } from './pools.ts';
 import type { CastCard, ClashOutcome, Content, TemplateDef } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
@@ -143,12 +144,19 @@ const TRIGGER_KINDS: Record<TemplateDef['trigger'], readonly TemplateDef['kind']
   roster: ['return', 'stepped_in', 'unmasked', 'crowned'],
 };
 
-/** The outcomes the sim resolves itself, per parent kind a reaction can follow (incidents: their Templates'). */
-const SIM_OUTCOMES = {
+/**
+ * The outcomes the sim resolves itself, per parent kind a reaction can follow (incidents: their Templates').
+ * Roster heads have none, so a reaction after one can't ask for an outcome.
+ */
+const SIM_OUTCOMES: Record<ParentKind, readonly string[]> = {
   rumour: ['works', 'wrong_orc', 'garbled'],
   clash: ['won', 'defeated', 'fled'],
   dare: ['botched', 'pulled_off', 'refused'],
-} as const;
+  return: [],
+  stepped_in: [],
+  unmasked: [],
+  crowned: [],
+};
 
 /**
  * Templates the sim can actually run (#44): each trigger's kinds, unique outcome keys, real Traits on roles,
@@ -182,7 +190,7 @@ function validateRunnable(c: Content): string[] {
     const where = `template ${t.id}`;
     const wanted = t.after.outcomes;
     if (t.after.kind !== 'incident') {
-      const known: readonly string[] = SIM_OUTCOMES[t.after.kind] ?? [];
+      const known = SIM_OUTCOMES[t.after.kind];
       for (const o of wanted ?? []) if (!known.includes(o)) errors.push(`${where}: follows outcome "${o}", which a ${t.after.kind} never has`);
       continue;
     }
@@ -313,13 +321,6 @@ function validateRoster(c: Content): string[] {
   return errors;
 }
 
-/** The roles a reaction can cast from its parent Fact, per parent kind (incidents offer their Template's roles). */
-export const PARENT_ROLES = {
-  rumour: ['source', 'target', 'reached'],
-  clash: ['a', 'b', 'winner', 'loser', 'saviour'],
-  dare: ['target', 'victim'],
-} as const;
-
 const CLASH_OUTCOMES: ClashOutcome[] = ['won', 'defeated', 'fled'];
 const placeholders = (text: string) => [...String(text).matchAll(/\{([^}]*)\}/g)].map((m) => m[1]!);
 
@@ -412,7 +413,7 @@ function validateReactions(c: Content): string[] {
       if (t.roles?.some((r) => r.from)) errors.push(`${where}: only a reaction Template casts roles "from" a parent`);
       continue;
     }
-    if (!t.after || !['incident', 'rumour', 'clash', 'dare'].includes(t.after.kind)) {
+    if (!t.after || !(t.after.kind === 'incident' || Object.hasOwn(PARENT_ROLES, t.after.kind))) {
       errors.push(`${where}: a reaction Template needs "after" naming the Fact kind it follows`);
       continue;
     }

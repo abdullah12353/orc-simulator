@@ -4,6 +4,8 @@
 // newest first and is never ranked (D55). "Trace it back" is `trace_back(world, fact)`, oldest first.
 // Replays reuse the Clash card's own loader, which reads `clash_dialogue` and never calls a model.
 import { content } from '@orc/content';
+import { captainName } from './captain-names.ts';
+import { nextRange } from './paging.ts';
 import { supabase } from './supabase.ts';
 
 /** One entry on a shelf, the timeline or a rap sheet: a story head, captioned. */
@@ -40,8 +42,7 @@ export interface TraceStep {
   text: string;
 }
 
-const names = new Map(content.cast.map((c) => [c.id, c.name]));
-const nameOf = (id: unknown) => names.get(String(id)) ?? String(id);
+const nameOf = (id: unknown) => captainName(String(id));
 
 type Row = Record<string, unknown>;
 const num = (v: unknown) => Number(v);
@@ -77,18 +78,25 @@ export async function loadLegends(worldId: string): Promise<HallEntry[]> {
   return (await rows(q)).map((r) => entry('legend', r));
 }
 
-export async function loadMoments(worldId: string, limit = 50): Promise<HallEntry[]> {
+/** How many rows a page of the Hall's long lists holds (D55: kept forever, so they page). */
+export const HALL_PAGE = 50;
+
+/** A page of the Infamous moments shelf, `shown` rows in. */
+export async function loadMoments(worldId: string, shown = 0, size = HALL_PAGE): Promise<HallEntry[]> {
+  const { from, to } = nextRange(shown, size);
   const q = supabase
     .from('hall_moments')
     .select(SHELF_COLUMNS)
     .eq('world_id', worldId)
     .order('at', { ascending: false })
     .order('fact_no', { ascending: false })
-    .limit(limit);
+    .range(from, to);
   return (await rows(q)).map((r) => entry('moment', r));
 }
 
-export async function loadTimeline(worldId: string, limit = 100): Promise<HallEntry[]> {
+/** A page of the timeline, `shown` rows in. */
+export async function loadTimeline(worldId: string, shown = 0, size = HALL_PAGE): Promise<HallEntry[]> {
+  const { from, to } = nextRange(shown, size);
   const q = supabase
     .from('hall_timeline')
     .select(`shelf, captain_id, clipping_id, ${SHELF_COLUMNS}`)
@@ -96,7 +104,9 @@ export async function loadTimeline(worldId: string, limit = 100): Promise<HallEn
     .order('at', { ascending: false })
     .order('fact_no', { ascending: false })
     .order('shelf')
-    .limit(limit);
+    .order('captain_id')
+    .order('clipping_id')
+    .range(from, to);
   return (await rows(q)).map((r) => entry(str(r.shelf) as HallEntry['shelf'], r));
 }
 

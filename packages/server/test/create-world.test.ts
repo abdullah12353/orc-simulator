@@ -66,3 +66,23 @@ test('the create-world endpoint needs a signed-in user and a name', async () => 
   const [w] = await db()`select name from worlds where id = ${worldId}`;
   assert.equal(w!.name, 'Gutterholm');
 });
+
+test("no member can read the world's seed: the sim is open source, so it would tell them every roll ahead", async () => {
+  const clock = fakeClock();
+  const seed = 424242;
+  const { worldId, userId } = await freshWorld({ clock, seed });
+
+  // The tick still has it (service role).
+  const [s] = await db()`select seed::int from world_seeds where world_id = ${worldId}`;
+  assert.equal(s!.seed, seed);
+
+  await asUser(userId, async (tx) => {
+    // Everything a member can read of the world row, and not the seed among it.
+    const [w] = await tx`select to_jsonb(w) as row from worlds w where id = ${worldId}`;
+    assert.ok(w, 'the member reads the world');
+    assert.ok(!('seed' in w.row), 'worlds has no seed column');
+    assert.ok(!Object.values(w.row).includes(seed), 'nor the seed under another name');
+  });
+  await assert.rejects(asUser(userId, (tx) => tx`select seed from world_seeds where world_id = ${worldId}`), /permission denied/);
+  await assert.rejects(asUser(userId, (tx) => tx`select seed from worlds where id = ${worldId}`), /seed/);
+});

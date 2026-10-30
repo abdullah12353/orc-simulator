@@ -3,8 +3,10 @@
 // Cascades emerge from this; nothing scripts them (D14).
 //
 // The seam: anything that writes a story head calls `followUp(ctx, head, depth)` once the head and its
-// consequences are in. A Fact kind joins in by offering roles in `parentRoles`.
-import type { TemplateDef } from '@orc/content';
+// consequences are in. A Fact kind joins in by offering roles in `parentRoles` (named in `PARENT_ROLES`).
+// A head that isn't itself a reaction (a Return, a death's stepping in) takes the depth of whatever set it off.
+import { compareCodeUnits, type ParentKind, type PARENT_ROLES, type TemplateDef } from '@orc/content';
+import { causeOf } from './blame.ts';
 import { resolveClash } from './clash.ts';
 import type { TickContext } from './context.ts';
 import { outcomeInfamy } from './infamy.ts';
@@ -21,20 +23,40 @@ export const REACTIONS = {
   fuse: { min: 5, max: 30 },
 } as const;
 
+interface Parent {
+  roles: Record<string, CaptainId>;
+  /** What a reaction's `after.outcomes` matches; null for a head without outcomes (a Return, a crowning). */
+  outcome: string | null;
+}
+
+/** Every role `PARENT_ROLES` names for this kind, and only those (one the Fact doesn't fill is left out). */
+type Offered<K extends ParentKind> = { [R in (typeof PARENT_ROLES)[K][number]]: CaptainId | null | undefined };
+
+function offer<K extends ParentKind>(roles: Offered<K>, outcome: string | null): Parent {
+  const filled: Record<string, CaptainId> = {};
+  for (const [name, id] of Object.entries(roles) as [string, CaptainId | null | undefined][]) if (id) filled[name] = id;
+  return { roles: filled, outcome };
+}
+
 /** The roles a Fact offers its reactions, and its outcome; null for kinds nothing reacts to. */
-export function parentRoles(f: Fact): { roles: Record<string, CaptainId>; outcome: string } | null {
+export function parentRoles(f: Fact): Parent | null {
   switch (f.kind) {
     case 'incident':
       return { roles: f.roles, outcome: f.outcomeKey };
     case 'rumour':
-      return { roles: { source: f.source, target: f.intended, reached: f.reached }, outcome: f.outcome };
+      return offer<'rumour'>({ source: f.source, target: f.intended, reached: f.reached }, f.outcome);
     case 'clash':
-      return {
-        roles: { a: f.a, b: f.b, winner: f.winner, loser: f.loser, ...(f.saviour ? { saviour: f.saviour } : {}) },
-        outcome: f.outcome,
-      };
+      return offer<'clash'>({ a: f.a, b: f.b, winner: f.winner, loser: f.loser, saviour: f.saviour }, f.outcome);
     case 'dare':
-      return { roles: { target: f.target, ...(f.victim !== undefined ? { victim: f.victim } : {}) }, outcome: f.outcome };
+      return offer<'dare'>({ target: f.target, victim: f.victim }, f.outcome);
+    case 'return':
+      return offer<'return'>({ returner: f.intro.captainId }, null);
+    case 'stepped_in':
+      return offer<'stepped_in'>({ newcomer: f.intro.captainId, dead: f.replacing }, null);
+    case 'unmasked':
+      return offer<'unmasked'>({ captain: f.captainId }, f.by);
+    case 'crowned':
+      return offer<'crowned'>({ warlord: f.intro.captainId, previous: f.previous }, null);
     default:
       return null;
   }
@@ -50,12 +72,12 @@ export function followUp(ctx: TickContext, head: Fact, depth: number): void {
   if (!parent) return;
   const templates = ctx.state.content.templates
     .filter((t) => t.trigger === 'reaction' && t.after?.kind === head.kind)
-    .filter((t) => !t.after!.outcomes || t.after!.outcomes.includes(parent.outcome))
-    .sort((x, y) => (x.id < y.id ? -1 : 1));
+    .filter((t) => !t.after!.outcomes || (parent.outcome !== null && t.after!.outcomes.includes(parent.outcome)))
+    .sort((x, y) => compareCodeUnits(x.id, y.id));
   for (const t of templates) {
     const cast = castRoles(ctx, t, parent.roles);
     if (!cast || !ctx.rng.chance(t.after!.chance)) continue;
-    const cause: Cause = { fact: head.no, blame: head.blame };
+    const cause: Cause = causeOf(head);
     if (depth + 1 > REACTIONS.maxDepth) {
       const { min, max } = REACTIONS.fuse;
       const fuse: Fuse = {
@@ -109,6 +131,6 @@ function react(ctx: TickContext, t: TemplateDef, cast: Record<string, CaptainId>
   };
   ctx.facts.push(fact);
   outcomeInfamy(ctx, fact, outcome, cast);
-  if (outcome.death) disaster(ctx, fact, cast[outcome.death.role]!, outcome.death.tag);
+  if (outcome.death) disaster(ctx, fact, cast[outcome.death.role]!, outcome.death.tag, depth);
   followUp(ctx, fact, depth);
 }

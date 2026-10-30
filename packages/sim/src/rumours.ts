@@ -1,8 +1,9 @@
 // Rumours (#28, Meddle verbs #7): Intents become secret Meddles on a Fuse; a due Fuse lands the Rumour,
 // which works, reaches the wrong orc or gets Garbled, and leaves a directed Grudge behind.
-import { CLAIMS, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
+import { CLAIMS, compareCodeUnits, RUMOUR_TEMPLATES, subjectText, type Claim } from '@orc/content';
 import type { TickContext } from './context.ts';
 import { consumeDare, fireDare } from './dares.ts';
+import { holdGrudge } from './grudge.ts';
 import { gainInfamy, INFAMY } from './infamy.ts';
 import { fireReactionFuse, followUp } from './reactions.ts';
 import { maybeUnmask, UNMASK } from './roster.ts';
@@ -67,19 +68,12 @@ function consumeMeddle(ctx: TickContext, intent: Intent): void {
 }
 
 function invalidRumour(ctx: TickContext, r: Intent & RumourIntent): string | null {
-  const { captains, trophies } = ctx.state;
-  const source = captains[r.source];
-  const target = captains[r.target];
-  if (!source || !target) return 'unknown_captain';
+  if (!ctx.state.captains[r.source] || !ctx.state.captains[r.target]) return 'unknown_captain';
   if (r.source === r.target) return 'same_captain';
   if (ctx.rosterOf(r.source) === 'reserve' || ctx.rosterOf(r.target) === 'reserve') return 'benched_captain';
   if (!isClaim(r.claim)) return 'bad_claim';
   const s = r.subject as Subject | undefined;
-  const ok =
-    (s?.from === 'trait' && target.traits.includes(s.key)) ||
-    (s?.from === 'fear' && target.fears.some((f) => f.fear === s.key)) ||
-    (s?.from === 'trophy' && trophies.some((t) => t.holder === r.target && t.key === s.key));
-  if (!ok) return 'bad_subject';
+  if (!s || !hasSubject(ctx, r.target, s)) return 'bad_subject';
   if (r.freeText !== undefined && (typeof r.freeText !== 'string' || r.freeText.length > MAX_FREE_TEXT)) {
     return 'bad_free_text';
   }
@@ -144,7 +138,10 @@ function fire(ctx: TickContext, fuse: Fuse): void {
 
 function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   const { state, rng } = ctx;
-  const odds = Object.entries(outcomeOdds(ctx, r)).filter(([, w]) => w > 0);
+  // In key order, so the draw never depends on how the odds object happens to be written.
+  const odds = Object.entries(outcomeOdds(ctx, r))
+    .filter(([, w]) => w > 0)
+    .sort(([a], [b]) => compareCodeUnits(a, b));
   const outcome = rng.weighted(odds, ([, w]) => w)[0] as RumourOutcome;
 
   let reached = r.target;
@@ -198,36 +195,8 @@ function landRumour(ctx: TickContext, meddle: Meddle, r: RumourIntent): void {
   // It backfires on its supposed source: the fortress now believes he said it (D42, notable).
   gainInfamy(ctx, head, r.source, INFAMY.rumourSource);
 
-  // Whoever heard it now holds a Grudge against the supposed source: affinity down, a permanent tag.
-  const before = ctx.getAffinity(reached, r.source);
-  const after = ctx.setAffinity(reached, r.source, before - RUMOUR.sting[claim]);
-  const tag = said;
-  const grudgeNo = ctx.allocNo();
-  const landing = { fact: no, blame };
-  ctx.facts.push({
-    no: grudgeNo,
-    at: state.world.now,
-    storyNo: no,
-    line: '',
-    tier: 'silent',
-    cast: [reached, r.source],
-    // The Grudge follows from the landing; the same Meddle keeps it at hop 0.
-    ...ctx.link(grudgeNo, { requires: [landing], own }),
-    infamy: [],
-    kind: 'grudge',
-    holder: reached,
-    toward: r.source,
-    tag,
-    delta: after - before,
-  });
-  ctx.diff.grudgeTags.push({
-    no: ctx.allocNo(),
-    holder: reached,
-    toward: r.source,
-    tag,
-    at: state.world.now,
-    cause: landing,
-  });
+  // Whoever heard it now holds a Grudge against the supposed source; the same Meddle keeps it at hop 0.
+  holdGrudge(ctx, head, { holder: reached, toward: r.source, sting: RUMOUR.sting[claim], tag: said, own });
   // A Rumour about a disguised Captain may blow his cover.
   maybeUnmask(ctx, head, r.target, 'rumour', UNMASK.rumour);
   // Now the hearer reacts (a Hothead goes straight for the source, #7).
@@ -252,14 +221,14 @@ function outcomeOdds(ctx: TickContext, r: RumourIntent): Record<RumourOutcome, n
 function wrongOrc(ctx: TickContext, r: RumourIntent): CaptainId | null {
   const candidates = ctx.activeCaptains().filter((id) => id !== r.source && id !== r.target);
   if (candidates.length === 0) return null;
-  const shares = (id: CaptainId) => {
-    const c = ctx.state.captains[id]!;
-    const { from, key } = r.subject;
-    if (from === 'trait') return c.traits.includes(key);
-    if (from === 'fear') return c.fears.some((f) => f.fear === key);
-    return ctx.state.trophies.some((t) => t.holder === id && t.key === key);
-  };
-  return ctx.rng.weighted(candidates, (id) => (shares(id) ? RUMOUR.sharerWeight : 1));
+  return ctx.rng.weighted(candidates, (id) => (hasSubject(ctx, id, r.subject) ? RUMOUR.sharerWeight : 1));
+}
+
+/** Does he have this Trait, Fear or Trophy right now? (A Return earlier in the tick may have given him a Fear.) */
+function hasSubject(ctx: TickContext, id: CaptainId, { from, key }: Subject): boolean {
+  if (from === 'trait') return ctx.captain(id).traits.includes(key);
+  if (from === 'fear') return ctx.fears(id).some((f) => f.fear === key);
+  return from === 'trophy' && ctx.trophies().some((t) => t.holder === id && t.key === key);
 }
 
 /** Fills `{role}` with Captain names and `{slot}` with text. */

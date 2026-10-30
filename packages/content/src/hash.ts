@@ -1,5 +1,11 @@
 // Pure, portable hashing (Node, Deno, browsers): no `crypto`, so the sim can use it too.
 
+/**
+ * Orders strings by UTF-16 code units, like `.sort()` with no comparator and Postgres `collate "C"`
+ * (never `localeCompare`): the one comparator for every deterministic order.
+ */
+export const compareCodeUnits = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
 /** JSON with object keys sorted, so equal values always serialise identically. */
 export function stableStringify(value: unknown): string {
   if (value === null || typeof value !== 'object') {

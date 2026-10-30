@@ -395,6 +395,9 @@ ORC_DB_URL = "postgresql://postgres:postgres@db:5432/postgres"
 # Narration providers (#37), deliberately unset here and in production until the accounts exist:
 # CF_ACCOUNT_ID + CF_AI_TOKEN (Workers AI) and GROQ_API_KEY (turn on Zero Data Retention first). Set with
 # `supabase secrets set`. Without them every Clash keeps its fallback script and no call is made.
+# Web Push (#42), also unset until the operator makes a VAPID key pair (`npx web-push generate-vapid-keys`):
+# VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT (mailto:...). The PWA needs the same public key as
+# VITE_VAPID_PUBLIC_KEY. Without them push_jobs are still written (the cap's audit trail) but never sent.
 
 [analytics]
 enabled = false

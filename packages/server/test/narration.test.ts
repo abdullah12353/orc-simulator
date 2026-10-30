@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
-import { drainJobs, handleTick, tickWorld, type NarrationDeps } from '@orc/server';
+import { drainJobs, handleTick, NARRATION, openEdition, tickWorld, type NarrationDeps } from '@orc/server';
 import { db, fakeClock, freshWorld } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
@@ -387,4 +387,106 @@ test('a drain only takes the given worlds’ jobs', async () => {
   await drainJobs(deps(one.clock, fakeProviders({}).fetch), { worldIds: [one.worldId] });
   assert.ok((await jobRows(one.worldId)).every((j) => j.status === 'done'));
   assert.ok((await jobRows(two.worldId)).every((j) => j.status === 'queued'));
+});
+
+// ---- a drain that dies part-way (the runtime is killed inside waitUntil) ----
+
+const claimMinutes = NARRATION.claimTimeoutMs / 60_000;
+
+test('a Clash job left claimed by a drain that died is logged as a fallback once its claim is stale, with no call', async () => {
+  const day = '2031-01-17';
+  const { worldId, clock, jobs } = await worldWithJobs(day);
+  assert.ok(jobs.length >= 3);
+  const [dead, dying] = jobs;
+  // One drain claimed a job and was killed; a later one claimed another and was killed too.
+  await db()`update narration_jobs set claimed_at = ${clock.iso()} where world_id = ${worldId} and fact_no = ${dead!.fact_no}`;
+  clock.advance(claimMinutes - 1);
+  await db()`update narration_jobs set claimed_at = ${clock.iso()} where world_id = ${worldId} and fact_no = ${dying!.fact_no}`;
+  clock.advance(2); // the first claim is now stale; the second is not, yet
+
+  const providers = fakeProviders({});
+  const report = await drainJobs(deps(clock, providers.fetch), { worldIds: [worldId] });
+  assert.equal(providers.calls.length, jobs.length - 2, 'no call for either claimed job');
+  assert.deepEqual(report, { done: jobs.length - 2, fallback: 1 });
+  const rows = new Map((await jobRows(worldId)).map((j) => [j.fact_no, j]));
+  assert.deepEqual(
+    { status: rows.get(dead!.fact_no)!.status, failure: rows.get(dead!.fact_no)!.failure },
+    { status: 'fallback', failure: 'timeout' },
+    'the stale claim is logged as a fallback',
+  );
+  assert.match(rows.get(dead!.fact_no)!.excerpt ?? '', /claim/);
+  assert.equal(rows.get(dying!.fact_no)!.status, 'queued', 'a claim younger than the timeout may still be running');
+  const fallback = (await dialogueRows(worldId)).find((d) => d.fact_no === dead!.fact_no)!;
+  assert.equal(fallback.source, 'fallback', 'its Clash keeps the fallback script');
+
+  clock.advance(claimMinutes);
+  const later = fakeProviders({});
+  assert.deepEqual(await drainJobs(deps(clock, later.fetch), { worldIds: [worldId] }), { done: 0, fallback: 1 });
+  assert.equal(later.calls.length, 0);
+  assert.equal((await jobRows(worldId)).find((j) => j.fact_no === dying!.fact_no)!.status, 'fallback');
+  assert.ok((await jobRows(worldId)).every((j) => j.status !== 'queued'), 'nothing is stuck');
+});
+
+test('a Herald job left claimed (or never run) when its runtime died is logged as a fallback by a later drain', async () => {
+  const day = '2031-01-18';
+  const clock = fakeClock(`${day}T12:00:00.000Z`);
+  const world = await freshWorld({ clock, seed: 404 });
+  const { edition } = await openEdition({ sql: db(), now: clock.now }, world);
+  const second = await freshWorld({ clock, seed: 404 });
+  const { edition: other } = await openEdition({ sql: db(), now: clock.now }, second);
+  // Two Herald jobs whose runtimes were killed: one after claiming, one before it ever ran.
+  await db()`
+    insert into narration_jobs (world_id, kind, edition_id, created_at, claimed_at)
+    values (${world.worldId}, 'herald', ${edition.id}, ${clock.iso()}, ${clock.iso()}),
+           (${second.worldId}, 'herald', ${other.id}, ${clock.iso()}, null)`;
+  const herald = (worldId: string) =>
+    db()<{ status: string; failure: string | null; excerpt: string | null }[]>`
+      select status::text, failure, excerpt from narration_jobs where world_id = ${worldId} and kind = 'herald'`;
+
+  clock.advance(claimMinutes - 1);
+  await drainJobs(deps(clock, fakeProviders({}).fetch), { worldIds: [world.worldId, second.worldId] });
+  assert.equal((await herald(world.worldId))[0]!.status, 'queued', 'not stale yet');
+
+  clock.advance(2);
+  const providers = fakeProviders({});
+  await drainJobs(deps(clock, providers.fetch), { worldIds: [world.worldId, second.worldId] });
+  for (const w of [world, second]) {
+    const [job] = await herald(w.worldId);
+    assert.equal(job!.status, 'fallback');
+    assert.equal(job!.failure, 'timeout');
+  }
+  assert.ok(providers.calls.every((c) => c.input.task === 'clash'), 'the Herald jobs are never called late');
+  const [e] = await db()`select status::text from editions where id = ${edition.id}`;
+  assert.equal(e!.status, 'templated', 'the edition keeps its templated words');
+});
+
+// ---- the voice cards ----
+
+test("a speaker's voice card carries his Epithet as of the Clash, from his Epithet Humiliation, not the cast card's", async () => {
+  const day = '2031-01-19';
+  const { worldId, clock, jobs } = await worldWithJobs(day);
+  const last = jobs.at(-1)!;
+  const [clash] = await db()<{ payload: { winner: string; loser: string; line: string } }[]>`
+    select payload from facts where world_id = ${worldId} and no = ${last.fact_no}`;
+  const winner = clash!.payload.winner;
+  const card = content.cast.find((c) => c.id === winner)!;
+  const [key, def] = Object.entries(content.banks.humiliations).find(
+    ([, h]) => h.cat === 'epithet' && h.epithet !== card.epithet && !!h.epithet,
+  )!;
+  const [first] = await db()<{ no: number }[]>`select min(no)::int as no from facts where world_id = ${worldId}`;
+  const firstFact = first!.no;
+  // Put an Epithet Humiliation on him before this Clash (replacing whatever Epithet he had then).
+  await db()`delete from humiliations where world_id = ${worldId} and captain_id = ${winner} and cat = 'epithet'`;
+  const [w] = await db()`update worlds set next_no = next_no + 1 where id = ${worldId} returning next_no::int - 1 as no`;
+  await db()`
+    insert into humiliations (world_id, no, captain_id, cat, kind, gained_fact, gained_at)
+    values (${worldId}, ${w!.no}, ${winner}, 'epithet', ${key}, ${firstFact}, ${clock.iso()})`;
+
+  const providers = fakeProviders({});
+  await drainJobs(deps(clock, providers.fetch), { worldIds: [worldId] });
+  type Card = { id: string; epithet?: string };
+  const call = providers.calls.find((c) => c.input.winner === winner && (c.input as unknown as { headline: string }).headline === clash!.payload.line);
+  assert.ok(call, 'the Clash was narrated');
+  const voice = (call.input as unknown as { captains: Card[] }).captains.find((c) => c.id === winner)!;
+  assert.equal(voice.epithet, content.banks.epithets[def.epithet!]!.text);
 });

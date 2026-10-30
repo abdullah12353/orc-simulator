@@ -43,6 +43,7 @@ const REASON_TEXT: Record<string, string> = {
   display_name_taken: 'Another Player in this world already goes by that name.',
   not_signed_in: 'Sign in first.',
   not_a_player: 'Only Players in this world can do that.',
+  bad_subscription: 'This browser handed over a push subscription the server could not use.',
   // submit_intent (#28)
   no_meddles_left: "You're out of Meddles. Three more arrive at midnight.",
   bad_rumour: 'That Rumour is missing a piece: pick a source, a target, a Claim and a subject.',

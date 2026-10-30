@@ -32,6 +32,7 @@ import {
 import { commitBacking } from './backing.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 import { broadcast } from './realtime.ts';
+import { queuePushes } from './pushes.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
 export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
@@ -133,10 +134,11 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
   try {
     return await deps.sql.begin(async (tx) => {
       const [world] = await tx<WorldRow[]>`
-        select id, seed::float8 as seed, tick_seq::int, to_json(last_tick_at)#>>'{}' as last_tick_at,
-               next_no::int, warlord_id, day::text, deaths_today
-        from worlds where id = ${worldId}
-        for update nowait`;
+        select w.id, s.seed::float8 as seed, w.tick_seq::int, to_json(w.last_tick_at)#>>'{}' as last_tick_at,
+               w.next_no::int, w.warlord_id, w.day::text, w.deaths_today
+        from worlds w join world_seeds s on s.world_id = w.id
+        where w.id = ${worldId}
+        for update of w nowait`;
       if (!world) return { status: 'not_found', worldId } as const;
 
       const tickSeq = world.tick_seq + 1;
@@ -172,6 +174,8 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       await deps.onCommitStep?.('facts', info);
 
       await commitDiff(tx, worldId, stateDiff, { tickSeq, now, facts });
+      // The push outbox (data-model §3 step 6): picked here, after the diff, so Stakes are as this tick left them.
+      await queuePushes(tx, worldId, facts, now, content);
       await tx`
         update worlds set tick_seq = ${tickSeq}, last_tick_at = ${now}, content_version = ${state.world.contentVersion}
         where id = ${worldId}`;
@@ -453,7 +457,7 @@ async function commitDiff(
   tx: Tx,
   worldId: string,
   diff: StateDiff,
-  at: { tickSeq: number; now: string; facts: Fact[] },
+  tick: { tickSeq: number; now: string; facts: Fact[] },
 ): Promise<void> {
   const w = diff.world;
   if (Object.keys(w).length > 0) {
@@ -467,9 +471,9 @@ async function commitDiff(
   }
 
   // Deaths, Returns, benchings and the marks Humiliations leave (#32).
-  await updateCaptains(tx, worldId, diff.captains, at.now);
-  await applyFears(tx, worldId, diff.fears, at.now);
-  await upsertHumiliations(tx, worldId, diff.humiliations.upsert, at.facts, at.now);
+  await updateCaptains(tx, worldId, diff.captains, tick.now);
+  await applyFears(tx, worldId, diff.fears, tick.now);
+  await upsertHumiliations(tx, worldId, diff.humiliations.upsert, tick.facts, tick.now);
 
   // Affinity is absolute; 0 deletes the row.
   const zero = diff.affinity.filter((a) => a.value === 0);
@@ -482,7 +486,7 @@ async function commitDiff(
   if (set.length > 0) {
     await tx`
       insert into affinity (world_id, holder_id, toward_id, value, updated_at)
-      select ${worldId}, a->>'holder', a->>'toward', (a->>'value')::smallint, ${at.now}
+      select ${worldId}, a->>'holder', a->>'toward', (a->>'value')::smallint, ${tick.now}
       from jsonb_array_elements(${jsonb(tx, set)}) as a
       on conflict (world_id, holder_id, toward_id) do update set value = excluded.value, updated_at = excluded.updated_at`;
   }
@@ -499,7 +503,7 @@ async function commitDiff(
   if (diff.intents.length > 0) {
     await tx`
       update intents i
-      set status = (x->>'status')::intent_status, consumed_tick = ${at.tickSeq}, reject_reason = x->>'reason'
+      set status = (x->>'status')::intent_status, consumed_tick = ${tick.tickSeq}, reject_reason = x->>'reason'
       from jsonb_array_elements(${jsonb(tx, diff.intents)}) as x
       where i.id = (x->>'id')::uuid and i.world_id = ${worldId}`;
   }
@@ -524,8 +528,8 @@ async function commitDiff(
   if (diff.fuses.remove.length > 0) {
     await tx`delete from fuses where world_id = ${worldId} and no = any(${diff.fuses.remove}::bigint[])`;
   }
-  await insertFuses(tx, worldId, diff.fuses.add, at.tickSeq);
-  await upsertTrophies(tx, worldId, diff.trophies.upsert, at.now);
+  await insertFuses(tx, worldId, diff.fuses.add, tick.tickSeq);
+  await upsertTrophies(tx, worldId, diff.trophies.upsert, tick.now);
 
   // Deltas on the loaded values (the tick holds these rows, so nothing else moved them), capped at 0–6.
   if (diff.playerDeltas.length > 0) {
@@ -536,7 +540,7 @@ async function commitDiff(
       from jsonb_array_elements(${jsonb(tx, diff.playerDeltas)}) as d
       where pp.player_id = (d->>'playerId')::uuid`;
   }
-  await commitBacking(tx, worldId, diff, at.now);
+  await commitBacking(tx, worldId, diff, tick.now);
 }
 
 /** Queued Intents, oldest first. SKIP LOCKED: an Intent still being written is left for the next tick. */

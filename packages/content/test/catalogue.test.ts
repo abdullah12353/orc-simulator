@@ -102,6 +102,12 @@ test('a reaction must be able to fire: it follows outcomes its parent kind can h
   has(errors, 'reaction.sulk', '"drew"');
 });
 
+test('a reaction after a roster head (no outcomes of its own) cannot ask for one', () => {
+  const c = clone();
+  c.templates.push({ ...c.templates.find((t) => t.id === 'reaction.sulk')!, id: 'reaction.after-return', after: { kind: 'return', outcomes: ['won'], chance: 0.5 }, roles: [{ name: 'returner', from: 'returner' }] });
+  has(errorsOf(c), 'reaction.after-return', '"won"');
+});
+
 test('any role may need a Trait, and it must be a real one', () => {
   const c = clone();
   c.templates.find((t) => t.id === 'accident.battlements')!.roles[0]!.trait = 'Accountant';

@@ -7,8 +7,9 @@
 // deaths and Humiliations call it too). The Accusations are made once, at the end of the tick, on their
 // own random stream and with Fact numbers taken after everything else, so with or without them every
 // other Fact and the whole diff come out the same (bar the Fact counter).
-import { createRng, type Rng } from './rng.ts';
+import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
+import { createRng, type Rng } from './rng.ts';
 import { renderLine } from './rumours.ts';
 import type { CaptainId, Fact, NameRender, PlayerId } from './types.ts';
 
@@ -61,7 +62,7 @@ export function makeAccusations(ctx: TickContext, rng: Rng): void {
       tier: 'templated',
       cast: [victim],
       // He is reacting to what happened to him, so it carries that misfortune's Blame one hop on.
-      ...ctx.link(no, { requires: [{ fact: fact.no, blame: fact.blame }] }),
+      ...ctx.link(no, { requires: [causeOf(fact)] }),
       infamy: [],
       kind: 'accusation',
       accuser: victim,

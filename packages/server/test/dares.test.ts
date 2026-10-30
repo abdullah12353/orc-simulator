@@ -120,7 +120,9 @@ test('a landed Dare is a story in my next edition, with its Blame line', async (
 test('Dares (a Prank and a surprise) commit and reload exactly like the sim in memory', async () => {
   const clock = fakeClock();
   const createdAt = clock.iso();
-  const seed = 3558; // the Prank lands here with the v1 catalogue (with 3535 a death held it)
+  // The first seed from 3535 where all three Dares land (the Prank not refused, so its Grudge tag is checked);
+  // with the v1 catalogue 3535 kills the target first. 3536 also plays all three outcomes.
+  const seed = 3536;
   const { worldId, playerId, userId } = await freshWorld({ clock, seed });
   let { state } = dayZero(content, seed, createdAt, worldId);
   state = { ...state, players: { [playerId]: { gold: STARTING.gold, meddles: STARTING.meddles, firstMeddleDone: false, renderedFor: [] } } };

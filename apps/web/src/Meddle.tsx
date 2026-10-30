@@ -1,89 +1,71 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CLAIMS, content, subjectText, type Claim } from '@orc/content';
-import { displayName } from './Captains.tsx';
 import { DarePicker } from './DarePicker.tsx';
+import { loadMeddle, meddleLabel, type MeddleData, type Subject } from './meddle-data.ts';
 import { suggestRumour } from './first-open.ts';
 import { reasonText } from './invite-link.ts';
 import { supabase } from './supabase.ts';
+import { isLoaded, useWorldLoad } from './world-load.ts';
 
 // The Rumour composer (#28): pick who supposedly said it, who it's about, one of the 5 Claims and a
 // subject from the target's own Traits, Fears or Trophies, plus optional words of your own. Submitting
 // debits a Meddle at once (submit_intent), so the count is always honest. The Meddle stays secret
 // until it lands; the tick refunds it if the sim rejects it.
-// On a first open (#43) the composer is guided: the picks come filled in (`suggestRumour`), and a Player's
-// first Meddle is sent with `firstMeddle`, so it lands in 2–5 minutes (submit_intent only honours it once).
+// On a first open (#43, D58) the composer is guided: the picks come filled in (`suggestRumour`), and a
+// Player's first Meddle is sent with `firstMeddle`, so it lands in 2–5 minutes (submit_intent only honours
+// it once). The guided Rumour comes first; Dares are one tap away ("Set a Dare instead"), which ends the
+// guided step, so they're never out of reach.
 
-const names = new Map(content.cast.map((c) => [c.id, c.name]));
 const POLL_MS = 15_000;
 const MAX_FREE_TEXT = 200;
 
-interface CaptainRow {
-  id: string;
-  roster: 'active' | 'reserve' | 'dead';
-  traits: string[];
-  epithet: string | null;
-}
-
-interface Subject {
-  from: 'trait' | 'fear' | 'trophy';
-  key: string;
-}
-
-interface Loaded {
-  meddlesLeft: number;
-  /** The Player has sent a Meddle before (#43): the next one doesn't get the short first Fuse. */
-  firstMeddleDone: boolean;
-  captains: CaptainRow[];
-  fears: Map<string, string[]>;
-  pending: number;
-  /** The Warlord, marked wherever Captains are picked (#34). */
-  warlordId: string | null;
-}
-
-export function Meddle({ worldId, guided = false, onSent }: { worldId: string; guided?: boolean; onSent?: () => void }) {
-  const [data, setData] = useState<Loaded | { error: string } | null>(null);
-
-  async function load() {
-    const { data: me } = await supabase.rpc('my_player', { w: worldId });
-    const [priv, captains, fears, meddles, queued, world] = await Promise.all([
-      supabase.from('player_private').select('meddles_available, first_meddle_done').eq('player_id', me).single(),
-      supabase.from('captains').select('id, roster, traits, epithet').eq('world_id', worldId),
-      supabase.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
-      supabase.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
-      supabase.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued').in('kind', ['rumour', 'dare']),
-      supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
-    ]);
-    const error = priv.error ?? captains.error ?? fears.error ?? meddles.error ?? queued.error;
-    if (error) return setData({ error: error.message });
-    const byCaptain = new Map<string, string[]>();
-    for (const f of fears.data ?? []) byCaptain.set(f.captain_id, [...(byCaptain.get(f.captain_id) ?? []), f.fear]);
-    setData({
-      meddlesLeft: priv.data?.meddles_available ?? 0,
-      firstMeddleDone: priv.data?.first_meddle_done ?? true,
-      captains: (captains.data ?? []).sort((a, b) => (names.get(a.id) ?? a.id).localeCompare(names.get(b.id) ?? b.id)),
-      fears: byCaptain,
-      pending: (meddles.count ?? 0) + (queued.count ?? 0),
-      warlordId: world.data?.warlord_id ?? null,
-    });
-  }
-
+export function Meddle({
+  worldId,
+  guided = false,
+  onSent,
+  onSkipGuide,
+}: {
+  worldId: string;
+  /** The first open's guided Rumour (#43). */
+  guided?: boolean;
+  /** The (guided) Rumour went off. */
+  onSent?: () => void;
+  /** The Player would rather set a Dare: ends the guided step. */
+  onSkipGuide?: () => void;
+}) {
+  const { state: data, reload, patch } = useWorldLoad(worldId, loadMeddle, { pollMs: POLL_MS });
+  // A first Meddle already sent (from another device, say) leaves nothing to guide.
+  const sentBefore = isLoaded(data) && data.firstMeddleDone;
   useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [worldId]);
+    if (guided && sentBefore) onSkipGuide?.();
+  }, [guided, sentBefore]);
 
   if (data === null) return <p className="quiet">…</p>;
   if ('error' in data) return <p className="error">{data.error}</p>;
-  const onSubmitted = (left: number) => {
-    setData({ ...data, meddlesLeft: left, firstMeddleDone: true, pending: data.pending + 1 });
-    onSent?.();
-    void load();
+  const submitted = (left: number) => {
+    patch((d) => ({ ...d, meddlesLeft: left, firstMeddleDone: true, pending: d.pending + 1 }));
+    reload();
   };
   return (
     <>
-      <RumourComposer worldId={worldId} data={data} guided={guided} onSubmitted={onSubmitted} />
-      {!guided && <DarePicker worldId={worldId} data={data} onSubmitted={onSubmitted} />}
+      <RumourComposer
+        worldId={worldId}
+        data={data}
+        guided={guided}
+        onSubmitted={(left) => {
+          submitted(left);
+          onSent?.();
+        }}
+      />
+      {guided ? (
+        <p className="quiet">
+          <button className="link" onClick={onSkipGuide}>
+            Set a Dare instead
+          </button>
+        </p>
+      ) : (
+        <DarePicker worldId={worldId} data={data} onSubmitted={submitted} />
+      )}
     </>
   );
 }
@@ -95,7 +77,7 @@ function RumourComposer({
   onSubmitted,
 }: {
   worldId: string;
-  data: Loaded;
+  data: MeddleData;
   guided: boolean;
   onSubmitted: (meddlesLeft: number) => void;
 }) {
@@ -111,21 +93,20 @@ function RumourComposer({
   const [state, setState] = useState<'idle' | 'sending' | { sent: string } | { error: string }>('idle');
 
   const targetRow = active.find((c) => c.id === target);
+  // US34: drawn from the target's Traits, Fears or Trophies.
   const subjects: Subject[] = useMemo(
     () =>
       targetRow
         ? [
             ...targetRow.traits.map((key) => ({ from: 'trait' as const, key })),
             ...(data.fears.get(targetRow.id) ?? []).map((key) => ({ from: 'fear' as const, key })),
+            ...[...new Set(data.trophies.get(targetRow.id) ?? [])].map((key) => ({ from: 'trophy' as const, key })),
           ]
         : [],
-    [targetRow, data.fears],
+    [targetRow, data.fears, data.trophies],
   );
   const subject = subjects.find((s) => `${s.from}:${s.key}` === subjectKey) ?? subjects[0];
-  const label = (id: string) => {
-    const row = active.find((c) => c.id === id);
-    return displayName(names.get(id) ?? id, row?.epithet ?? null) + (id === data.warlordId ? ' (Warlord)' : '') + (row?.roster === 'dead' ? ' (dead)' : '');
-  };
+  const label = meddleLabel(data);
   const preview =
     source && target && subject
       ? `${label(source)} ${content.banks.claims[claim].phrasings[0].replace('{subject}', subjectText(content, subject))}.`
@@ -204,24 +185,17 @@ function RumourComposer({
           <select value={subject ? `${subject.from}:${subject.key}` : ''} onChange={(e) => setSubjectKey(e.target.value)} disabled={!targetRow}>
             {subjects.map((s) => (
               <option key={`${s.from}:${s.key}`} value={`${s.from}:${s.key}`}>
-                {subjectText(content, s)} ({s.from === 'trait' ? 'Trait' : s.from === 'fear' ? 'Fear' : 'Trophy'}: {s.key})
+                {subjectText(content, s)} ({s.from === 'trait' ? `Trait: ${s.key}` : s.from === 'fear' ? `Fear: ${s.key}` : 'Trophy'})
               </option>
             ))}
           </select>
         </label>
         <label>
           In your own words (optional)
-          <input
-            maxLength={MAX_FREE_TEXT}
-            value={freeText}
-            onChange={(e) => setFreeText(e.target.value)}
-            placeholder="his helmet is a bucket"
-          />
+          <input maxLength={MAX_FREE_TEXT} value={freeText} onChange={(e) => setFreeText(e.target.value)} placeholder="his helmet is a bucket" />
         </label>
         {preview && <p className="preview">“{preview}”</p>}
-        <button disabled={!ready || state === 'sending'}>
-          {data.meddlesLeft > 0 ? 'Plant it (1 Meddle)' : 'No Meddles left today'}
-        </button>
+        <button disabled={!ready || state === 'sending'}>{data.meddlesLeft > 0 ? 'Plant it (1 Meddle)' : 'No Meddles left today'}</button>
         {typeof state === 'object' && 'sent' in state && <p className="quiet">{state.sent}</p>}
         {typeof state === 'object' && 'error' in state && <p className="error">{state.error}</p>}
       </form>

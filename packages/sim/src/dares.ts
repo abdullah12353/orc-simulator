@@ -3,8 +3,9 @@
 // botches it (about 60%), pulls it off or refuses. A botched Dare can kill him (death cap and grace apply),
 // humiliate him, and topple him if he is the Warlord; a Prank that comes off, or goes wrong, leaves the
 // victim a Grudge against him.
-import { dareFits, DARE_TEMPLATES, daresFor, playsOnFear, SURPRISE, subjectText, type DareDef } from '@orc/content';
+import { compareCodeUnits, dareFits, DARE_TEMPLATES, daresFor, playsOnFear, SURPRISE, subjectText, type DareDef } from '@orc/content';
 import type { TickContext } from './context.ts';
+import { holdGrudge } from './grudge.ts';
 import { gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
 import { disaster, humiliate } from './roster.ts';
@@ -76,12 +77,14 @@ function invalidDare(ctx: TickContext, d: Intent & DareIntent): string | null {
   return null;
 }
 
-/** A Dare's Fuse came due. Held (no Fact: still secret) while the target, or a Prank's victim, is dead. */
+/**
+ * A Dare's Fuse came due. Held (no Fact: still secret) while the target is dead. A dead Prank victim
+ * holds nothing, like a Rumour's dead source: only a dead target holds a Meddle (data-model decision 16).
+ */
 export function fireDare(ctx: TickContext, meddle: Meddle & { intent: DareIntent }): void {
   const d = meddle.intent;
-  const deadOne = [d.target, d.victim].find((id) => id !== undefined && ctx.rosterOf(id) === 'dead');
-  if (deadOne) {
-    ctx.diff.meddles.push({ id: meddle.id, status: 'held', heldOn: deadOne });
+  if (ctx.rosterOf(d.target) === 'dead') {
+    ctx.diff.meddles.push({ id: meddle.id, status: 'held', heldOn: d.target });
     return;
   }
   const pick = pickDare(ctx, d);
@@ -108,7 +111,11 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   const target = (meddle.intent as DareIntent).target;
   const fears = ctx.fears(target).map((f) => f.fear);
   const onFear = playsOnFear(def, fears);
-  const odds = Object.entries(onFear ? DARE.fearOdds : DARE.odds).filter(([, w]) => w > 0);
+  const fear = onFear ? fears.find((f) => def.tags.includes(f))! : null;
+  // In key order, so the draw never depends on how the odds object happens to be written.
+  const odds = Object.entries(onFear ? DARE.fearOdds : DARE.odds)
+    .filter(([, w]) => w > 0)
+    .sort(([a], [b]) => compareCodeUnits(a, b));
   const outcome = rng.weighted(odds, ([, w]) => w)[0] as DareOutcome;
 
   const template = state.content.templates.find((t) => t.id === DARE_TEMPLATES[def.kind][outcome]);
@@ -116,16 +123,16 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   const roles: Record<string, CaptainId> = { target, ...(victim !== undefined ? { victim } : {}) };
   const text = renderLine(ctx, def.text, roles);
   let line = template ? renderLine(ctx, template.lines[variant], roles, { dare: text }) : '';
-  if (onFear && line) {
-    const fear = fears.find((f) => def.tags.includes(f))!;
+  if (fear && line) {
     const bank = state.content.banks.dareFear;
     line += ` ${bank[variant % bank.length]!.replace('{fear}', subjectText(state.content, { from: 'fear', key: fear }))}`;
   }
 
   const no = ctx.allocNo();
   const own: BlameEntry[] = [{ meddleId: meddle.id, playerId: meddle.playerId, verb: 'dare', landedFact: no, landedAt: now, hops: 0 }];
-  // A landing requires nothing in the world: its only Blame is its own Meddle.
-  const { causes, blame } = ctx.link(no, { own });
+  // A landing requires nothing in the world: its only Blame is its own Meddle. Playing on a Fear the
+  // world already knows him for (it is on his card) is a Callback (D50).
+  const { causes, blame } = ctx.link(no, { own, callbacks: fear ? [fear] : [] });
   const head: Fact = {
     no,
     at: now,
@@ -147,31 +154,12 @@ function landDare(ctx: TickContext, meddle: Meddle, key: string, victim: Captain
   };
   ctx.facts.push(head);
   ctx.diff.meddles.push({ id: meddle.id, status: 'landed', landedFact: no });
-  gainInfamy(ctx, head, target, { botched: INFAMY.dare.botched, pulled_off: INFAMY.dare.pulledOff, refused: INFAMY.dare.refused }[outcome]);
+  gainInfamy(ctx, head, target, INFAMY.dare[outcome]);
 
   // The victim of a Prank that came off (or went wrong on him) now holds it against the target.
   const sting = DARE.sting[outcome];
   if (victim !== undefined && sting !== undefined && def.grudge) {
-    const before = ctx.getAffinity(victim, target);
-    const after = ctx.setAffinity(victim, target, before - sting);
-    const landing = { fact: no, blame };
-    const grudgeNo = ctx.allocNo();
-    ctx.facts.push({
-      no: grudgeNo,
-      at: now,
-      storyNo: no,
-      line: '',
-      tier: 'silent',
-      cast: [victim, target],
-      ...ctx.link(grudgeNo, { requires: [landing], own }),
-      infamy: [],
-      kind: 'grudge',
-      holder: victim,
-      toward: target,
-      tag: def.grudge,
-      delta: after - before,
-    });
-    ctx.diff.grudgeTags.push({ no: ctx.allocNo(), holder: victim, toward: target, tag: def.grudge, at: now, cause: landing });
+    holdGrudge(ctx, head, { holder: victim, toward: target, sting, tag: def.grudge, own });
     if (outcome === 'pulled_off') ctx.misfortune(victim, head);
   }
 

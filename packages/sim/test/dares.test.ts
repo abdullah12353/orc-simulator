@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content, DARE_TEMPLATES, daresFor } from '@orc/content';
-import { applyDiff, DARE, INFAMY, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
+import { applyDiff, DARE, simulate, type CaptainId, type Fact, type WorldState } from '@orc/sim';
 import { activeIds, addMinutes, dare, freshWorld, SEEDS, step } from './support.ts';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
@@ -154,7 +154,7 @@ test('a Dare that plays on his Fear says so, and goes wrong more often', () => {
 
 test('Infamy for the target: pulled off +5, refused +8, botched +20', () => {
   const { state, target } = planted({ dareKey: 'stunt.torches' });
-  const want = { pulled_off: INFAMY.dare.pulledOff, refused: INFAMY.dare.refused, botched: INFAMY.dare.botched };
+  const want = { pulled_off: 5, refused: 8, botched: 20 };
   for (const outcome of ['botched', 'pulled_off', 'refused'] as const) {
     const { head } = landWith(state, outcome);
     assert.deepEqual(head.infamy, [{ captainId: target, amount: want[outcome] }], outcome);
@@ -214,7 +214,10 @@ test('a botched Dare by the Warlord makes him fall, and succession runs', () => 
   assert.ok(crowned, 'a successor is crowned');
   assert.equal(crowned.previous, warlord);
   assert.notEqual(crowned.intro.captainId, warlord);
-  assert.deepEqual(crowned.causes, [fell.no]);
+  assert.ok(crowned.causes.includes(fell.no), 'the crowning requires the fall');
+  for (const no of crowned.causes.filter((n) => n !== fell.no)) {
+    assert.ok(facts.find((f) => f.no === no)?.infamy.some((g) => g.captainId === crowned.intro.captainId), 'and what won him the throne this week');
+  }
   assert.equal(crowned.blame[0]?.meddleId, head.meddleId, 'the crowning is on the Dare too');
   assert.equal(diff.world.warlordId, crowned.intro.captainId);
 
@@ -287,7 +290,7 @@ test('a surprise Dare lands as a real Dare that fits him; a surprise Prank picks
   assert.deepEqual([...kinds].sort(), ['prank', 'stunt']);
 });
 
-test('a Dare on a dead target is held until he Returns; a Prank on a dead victim waits for the victim', () => {
+test('a Dare on a dead target is held until he Returns; a dead Prank victim holds nothing (data-model decision 16)', () => {
   const dead = (s: WorldState, id: CaptainId): WorldState => ({
     ...s,
     captains: { ...s.captains, [id]: { ...s.captains[id]!, roster: 'dead', returnsAt: addMinutes(s.world.now, 600) } },
@@ -300,6 +303,21 @@ test('a Dare on a dead target is held until he Returns; a Prank on a dead victim
   const s = setup();
   const prank = planted({ dareKey: 'prank.frog-helmet', victim: s.victim }, (st) => dead(st, s.victim));
   const p = simulate(prank.state, [], 3);
-  assert.equal(ofKind(p.facts, 'dare').length, 0);
-  assert.deepEqual(p.stateDiff.meddles, [{ id: prank.intent.id, status: 'held', heldOn: s.victim }]);
+  const [head] = ofKind(p.facts, 'dare');
+  assert.ok(head, 'only a dead target holds a Meddle: the Prank lands');
+  assert.equal(head.victim, s.victim);
+  assert.deepEqual(p.stateDiff.meddles, [{ id: prank.intent.id, status: 'landed', landedFact: head.no }]);
+});
+
+test('a Dare that plays on a Fear he is known for is a Callback: 3 more comedy weight (D50)', () => {
+  const onFear = planted({ dareKey: 'stunt.moat-swim' }, (s, t) => plain(s, t, { fears: [{ fear: 'Water', added: false, since: s.world.now }] }));
+  const offFear = planted({ dareKey: 'stunt.moat-swim' });
+  for (const outcome of ['pulled_off', 'refused'] as const) {
+    const a = landWith(onFear.state, outcome);
+    const b = landWith(offFear.state, outcome);
+    assert.equal(a.head.playsOnFear, true);
+    assert.equal(b.head.playsOnFear, false);
+    assert.deepEqual(a.head.blame.map((e) => [e.playerId, e.hops]), [[P1, 0]], 'a Callback adds no Blame');
+    assert.equal(a.head.comedyWeight, b.head.comedyWeight! + 3, outcome);
+  }
 });

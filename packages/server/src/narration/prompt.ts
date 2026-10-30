@@ -45,6 +45,11 @@ export interface ChatMessage {
 export interface ClashStory {
   clash: ClashFact;
   trophy: { key: string; from: string; to: string } | null;
+  /**
+   * Each speaker's Epithet (a `banks.epithets` key) as the Clash began, where an Epithet Humiliation
+   * gave him one; a speaker not in it goes by his cast card's starting Epithet.
+   */
+  epithets?: Record<string, string | null>;
 }
 
 /** The model's input for one Clash. The shape fields (`lines`, `speakers`, `loser`) are `clashShape`'s. */
@@ -65,15 +70,19 @@ export function clashInput(content: Content, story: ClashStory) {
     ...(story.trophy
       ? { trophyTaken: { what: content.banks.trophies[story.trophy.key]?.text ?? story.trophy.key, from: story.trophy.from, by: story.trophy.to } }
       : {}),
-    captains: shape.speakers.map((id) => voiceCard(content, id)),
+    captains: shape.speakers.map((id) => voiceCard(content, id, story.epithets)),
   };
 }
 
-/** A speaker's voice card, from the cast card (the bundle's, so the prompt is Facts and content only). */
-function voiceCard(content: Content, id: string) {
+/**
+ * A speaker's voice card, from the cast card (the bundle's, so the prompt is Facts and content only),
+ * with the Epithet he carried into the Clash (an Epithet Humiliation replaces the card's).
+ */
+function voiceCard(content: Content, id: string, epithets: ClashStory['epithets']) {
   const c = content.cast.find((x) => x.id === id);
   if (!c) return { id };
-  const epithet = c.epithet ? content.banks.epithets[c.epithet]?.text : undefined;
+  const key = epithets && id in epithets ? epithets[id] : c.epithet;
+  const epithet = key ? content.banks.epithets[key]?.text : undefined;
   return {
     id: c.id,
     name: c.name,

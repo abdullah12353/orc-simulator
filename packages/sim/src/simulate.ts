@@ -1,4 +1,4 @@
-import type { TemplateDef } from '@orc/content';
+import { compareCodeUnits, type TemplateDef } from '@orc/content';
 import { accusationRng, makeAccusations } from './accusations.ts';
 import { consumeBacking, settleBacking } from './backing.ts';
 import { rollGrudgeClashes } from './clash.ts';
@@ -53,7 +53,7 @@ function rollAmbient(ctx: TickContext): void {
 
   const templates = ctx.state.content.templates
     .filter((t) => t.trigger === 'ambient')
-    .sort((a, b) => (a.id < b.id ? -1 : 1));
+    .sort((a, b) => compareCodeUnits(a.id, b.id));
   const castable = templates.filter((t) => canCast(ctx, t));
   if (castable.length === 0) return;
 

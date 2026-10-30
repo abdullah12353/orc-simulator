@@ -1,5 +1,5 @@
 // Thin Deno entrypoint. All logic lives in packages/server (tested in-process from Node).
-import { connect, handleTick, providerKeysFromEnv } from '@orc/server';
+import { connect, handleTick, providerKeysFromEnv, vapidFromEnv } from '@orc/server';
 
 // ORC_DB_URL: in production the Supavisor transaction-mode URL (port 6543); the pool is created with
 // `prepare: false` for that. Locally it's set in supabase/config.toml.
@@ -10,6 +10,10 @@ const secret = Deno.env.get('TICK_SECRET') ?? '';
 // is skipped; with none, every Clash keeps its fallback script and no call is made.
 const providers = providerKeysFromEnv((name) => Deno.env.get(name));
 
+// Web Push (#42): VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY (+ VAPID_SUBJECT), set by the operator. Unset, no
+// push is ever sent: they stay queued and go stale.
+const vapid = vapidFromEnv((name) => Deno.env.get(name));
+
 declare const EdgeRuntime: { waitUntil(work: Promise<unknown>): void };
 
 Deno.serve((req) =>
@@ -18,6 +22,7 @@ Deno.serve((req) =>
     now: () => new Date(),
     secret,
     narration: { fetch, providers },
+    pushes: { fetch, vapid },
     waitUntil: (work) => EdgeRuntime.waitUntil(work),
   }),
 );
