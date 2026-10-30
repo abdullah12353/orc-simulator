@@ -3,12 +3,13 @@
 // each side's Backing edge. Outcomes are won, defeated or, for a Coward, fled. A wrong saviour crashes in
 // about 1 Clash in 5, and the winner takes a Trophy in about half of defeats.
 //
-// The seam for later tickets: `resolveClash` writes the head, then its consequences in order. Deaths
-// (#32), Infamy and Warlord falls (#34) and payouts (#36) join `consequences`; the Backing edge (#36)
+// The seam for later tickets: `resolveClash` writes the head, then its consequences in order (the death
+// roll last). Infamy and Warlord falls (#34) and payouts (#36) join `consequences`; the Backing edge (#36)
 // fills in `backingEdge`.
 import type { ClashOutcome, TemplateDef } from '@orc/content';
 import { pairOf, type TickContext } from './context.ts';
 import { followUp } from './reactions.ts';
+import { disaster, maybeUnmask, UNMASK } from './roster.ts';
 import { renderLine } from './rumours.ts';
 import type { CaptainId, Cause, ClashFact, GrudgeTag, Trophy } from './types.ts';
 
@@ -44,6 +45,8 @@ export const CLASH = {
   saviourSting: 10,
   /** How many of the pair's newest Grudge tags the Fact carries for narration. */
   topTags: 3,
+  /** A Clash defeat kills about 1 time in 3 (D40); a loser who fled lives. */
+  death: 1 / 3,
 } as const;
 
 export interface ClashStart {
@@ -75,6 +78,8 @@ export function rollGrudgeClashes(ctx: TickContext): void {
   for (const key of [...pairs.keys()].sort()) {
     if (ctx.clashedPairs.has(key)) continue;
     const [x, y] = pairs.get(key)!;
+    // An earlier Clash this tick may have killed one of them.
+    if (ctx.rosterOf(x) !== 'active' || ctx.rosterOf(y) !== 'active') continue;
     const [a, b] = ctx.getAffinity(y, x) < ctx.getAffinity(x, y) ? [y, x] : [x, y];
     // An earlier Clash this tick (or what it set off) may have vented this pair since the list was made.
     if (ctx.getAffinity(a, b) >= CLASH.threshold) continue;
@@ -196,6 +201,10 @@ function consequences(ctx: TickContext, head: ClashFact): void {
       : rng.pick(head.outcome === 'fled' ? bank.tags.fled : bank.tags.beaten);
   grudge(ctx, head, headCause, loser, winner, CLASH.sting, tag);
   if (head.saviour) grudge(ctx, head, headCause, loser, head.saviour, CLASH.saviourSting, bank.tags.saviour.replace('{magnet}', head.saviourMagnet ?? bank.anyMagnet));
+
+  // The loser may die (or be Humiliated instead, at the cap or in grace); a disguised survivor may be Unmasked.
+  if (head.outcome !== 'fled' && rng.chance(CLASH.death)) disaster(ctx, head, loser, 'beaten');
+  else maybeUnmask(ctx, head, loser, 'clash', UNMASK.clash);
 }
 
 /** The winner takes one of the loser's Trophies, or a new one from the bank. Returns its text. */

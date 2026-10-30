@@ -3,7 +3,20 @@
 import { chain, pairCauses, type Links } from './blame.ts';
 import type { Rng } from './rng.ts';
 import { isoToMs } from './time.ts';
-import type { BlameEntry, CaptainId, Cause, Fact, FactNo, PlayerId, StateDiff, TemplateId, Trophy, WorldState } from './types.ts';
+import type {
+  BlameEntry,
+  CaptainId,
+  CaptainState,
+  Cause,
+  Fact,
+  FactNo,
+  Humiliation,
+  PlayerId,
+  StateDiff,
+  TemplateId,
+  Trophy,
+  WorldState,
+} from './types.ts';
 
 /** Player allowance caps (Meddle verbs #7). */
 export const MEDDLE_CAP = 6;
@@ -50,6 +63,8 @@ export class TickContext {
   private readonly affinity = new Map<string, number>();
   private readonly meddles = new Map<PlayerId, number>();
   private readonly firstMeddles = new Set<PlayerId>();
+  /** Changes to Captains this tick, merged per Captain (flushed into the diff by `finish`). */
+  private readonly captainPatches = new Map<CaptainId, Partial<Omit<CaptainState, 'id'>>>();
 
   constructor(state: WorldState, rng: Rng) {
     this.state = state;
@@ -108,11 +123,58 @@ export class TickContext {
     else this.diff.trophies.upsert.push(t);
   }
 
-  /** Living active Captains, in slug order (the determinism rule). */
+  /** Living active Captains as they stand at this point in the tick, in slug order (the determinism rule). */
   activeCaptains(): CaptainId[] {
     return Object.keys(this.state.captains)
-      .filter((id) => this.state.captains[id]!.roster === 'active')
+      .filter((id) => this.rosterOf(id) === 'active')
       .sort();
+  }
+
+  /** A Captain as he stands at this point in the tick (deaths, Returns and Humiliations included). */
+  captain(id: CaptainId): CaptainState {
+    const base = this.state.captains[id];
+    if (!base) throw new Error(`unknown Captain ${id}`);
+    const patch = this.captainPatches.get(id);
+    return patch ? { ...base, ...patch, fears: this.fears(id) } : { ...base, fears: this.fears(id) };
+  }
+
+  rosterOf(id: CaptainId): CaptainState['roster'] | undefined {
+    return this.captainPatches.get(id)?.roster ?? this.state.captains[id]?.roster;
+  }
+
+  /** Changes a Captain. Fears go through `diff.fears`, never here. */
+  patchCaptain(id: CaptainId, patch: Partial<Omit<CaptainState, 'id' | 'fears'>>): void {
+    this.captainPatches.set(id, { ...this.captainPatches.get(id), ...patch });
+  }
+
+  /** His Fears at this point in the tick, oldest first. */
+  fears(id: CaptainId): CaptainState['fears'] {
+    let fears = this.state.captains[id]?.fears ?? [];
+    for (const f of this.diff.fears) {
+      if (f.captainId !== id) continue;
+      if (f.remove !== undefined) fears = fears.filter((x) => x.fear !== f.remove);
+      if (f.add !== undefined) fears = [...fears, { fear: f.add, added: true, since: this.state.world.now }];
+    }
+    return fears;
+  }
+
+  /** Deaths so far today, this tick's included (the death cap, D47). */
+  deathsToday(): number {
+    return this.diff.world.deathsToday ?? this.state.world.deathsToday;
+  }
+
+  /** Current Humiliations at this point in the tick, by number. */
+  humiliations(): Humiliation[] {
+    const byNo = new Map(this.state.humiliations.map((h) => [h.no, h]));
+    for (const h of this.diff.humiliations.upsert) byNo.set(h.no, h);
+    return [...byNo.values()].filter((h) => !h.ended).sort((a, b) => a.no - b.no);
+  }
+
+  /** Records a new Humiliation, or a change to one (ending it). */
+  upsertHumiliation(h: Humiliation): void {
+    const i = this.diff.humiliations.upsert.findIndex((x) => x.no === h.no);
+    if (i >= 0) this.diff.humiliations.upsert[i] = h;
+    else this.diff.humiliations.upsert.push(h);
   }
 
   /** Affinity as it stands at this point in the tick. */
@@ -156,6 +218,9 @@ export class TickContext {
 
   /** Writes the running values into the diff. Call once, at the end of the tick. */
   finish(): void {
+    for (const [id, patch] of [...this.captainPatches].sort(([a], [b]) => (a < b ? -1 : 1))) {
+      this.diff.captains.push({ id, ...patch });
+    }
     for (const f of this.facts) {
       if (!f.templateId) continue;
       this.diff.recent.templates[f.templateId] = f.at;

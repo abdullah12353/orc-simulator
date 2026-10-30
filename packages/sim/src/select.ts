@@ -29,7 +29,7 @@ function fixedRoles(ctx: TickContext, t: TemplateDef, parent: Record<string, Cap
 }
 
 const fits = (ctx: TickContext, id: CaptainId, trait?: string) =>
-  ctx.state.captains[id]?.roster === 'active' && (!trait || ctx.state.captains[id]!.traits.includes(trait));
+  ctx.rosterOf(id) === 'active' && (!trait || ctx.state.captains[id]!.traits.includes(trait));
 
 const freeRoles = (t: TemplateDef) => t.roles.filter((r) => r.captain === undefined && r.from === undefined);
 

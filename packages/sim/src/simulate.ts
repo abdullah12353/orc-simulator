@@ -6,6 +6,7 @@ import { rollDay } from './day.ts';
 import { followUp } from './reactions.ts';
 import { createRng } from './rng.ts';
 import { consumeIntents, fireDueFuses, renderLine } from './rumours.ts';
+import { disaster, processReturns } from './roster.ts';
 import { canCast, castRoles, templateWeight } from './select.ts';
 import type { CaptainId, Intent, SimResult } from './types.ts';
 import type { WorldState } from './types.ts';
@@ -19,13 +20,14 @@ export const AMBIENT_CHANCE = { watched: 1 / 3, unwatched: 1 / 10 } as const;
  * One simulation step. Pure: the same state, intents and seed always give the same result.
  * Never touches `Date`, `Math.random` or `crypto`; time comes in only through `state.world.now`.
  *
- * Order: the day roll, Players' Intents, due Fuses, one ambient roll, then the Grudge Clash roll. Each
+ * Order: the day roll, due Returns (and healed bandages), Players' Intents, due Fuses, one ambient roll, then the Grudge Clash roll. Each
  * story head sets off its reactions (up to 3 deep) as soon as it's written. Only one ambient roll per
  * call, however long the world was down: missed ticks are never back-filled.
  */
 export function simulate(state: WorldState, intents: Intent[], seed: number): SimResult {
   const ctx = new TickContext(state, createRng(seed));
   rollDay(ctx);
+  processReturns(ctx);
   consumeIntents(ctx, intents);
   fireDueFuses(ctx);
   rollAmbient(ctx);
@@ -68,5 +70,6 @@ function rollAmbient(ctx: TickContext): void {
     outcomeKey: outcome.key,
   };
   ctx.facts.push(fact);
+  if (outcome.death) disaster(ctx, fact, cast[outcome.death.role]!, outcome.death.tag);
   followUp(ctx, fact, 0);
 }
