@@ -74,7 +74,8 @@ export interface GrudgeTag {
   toward: CaptainId;
   tag: string;
   at: Iso;
-  cause: Cause;
+  /** null only for old history seeded at casting: it predates the log, so no Fact caused it. */
+  cause: Cause | null;
 }
 export interface Trophy {
   no: RowNo;
