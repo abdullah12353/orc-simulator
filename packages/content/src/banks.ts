@@ -36,6 +36,8 @@ export const banks: Banks = {
     'the-barely-awake': { text: 'the Barely Awake', sayAs: 'the BAIR-lee a-WAKE' },
     'the-bucket': { text: 'the Bucket', sayAs: 'the BUCK-it' },
     'the-goosed': { text: 'the Goosed', sayAs: 'the GOOST' },
+    'the-flattened': { text: 'the Flattened', sayAs: 'the FLAT-und' },
+    'the-soggy': { text: 'the Soggy', sayAs: 'the SOG-ee' },
   },
   // The Gutter Herald's masthead (#27). Clean and deadpan: the Herald never swears.
   masthead: {
@@ -103,6 +105,9 @@ export const banks: Banks = {
     'Being Laughed At': 'fear of being laughed at',
     'Small Dogs': 'fear of small dogs',
     'His Mum': 'fear of his mum',
+    // Fears only a Humiliation adds (#32).
+    Puddles: 'fear of puddles',
+    Stairs: 'fear of stairs',
   },
   // Only Garbles swap these in. The v1 catalogue (#44) grows the bank to about 20.
   absurdSubjects: {
@@ -318,6 +323,73 @@ export const banks: Banks = {
       trophy: 'took his {trophy}',
       saviour: 'barged into his Clash after the {magnet}',
     },
+  },
+  // Humiliations (#32, D41): one per Return, fitting how he died. Placeholders until the v1 catalogue (#44).
+  // Overlay slots (#18): 2 tusks, 3 lost bits, 4 moustache, 5 face wraps, 6 head bandage, 7 wig, 8 bucket.
+  humiliations: {
+    'bandage.head': { cat: 'bandage', label: 'Head bandage', text: 'with his head wrapped in grey bandages', causes: ['beaten', 'fell'], overlay: { slot: 6 } },
+    'bandage.mouth': {
+      cat: 'bandage', label: 'Mouth bandage (muffled)',
+      text: 'with his mouth bandaged shut, which nobody minds',
+      causes: ['beaten', 'drowned'],
+      overlay: { slot: 5, pinned: true },
+      muffled: true,
+    },
+    'bandage.eyepatch': { cat: 'bandage', label: 'Eyepatch, wrong eye', text: 'wearing an eyepatch over the wrong eye', causes: ['beaten', 'fell'], overlay: { slot: 5 } },
+    'bandage.mummy': { cat: 'bandage', label: 'Bandaged head to toe', text: 'wrapped head to toe like a badly posted parcel', causes: ['drowned', 'fell'], overlay: { slot: 6 } },
+    'lost.tusk': { cat: 'lost_bit', label: 'Missing tusk', text: 'missing a tusk', causes: ['beaten', 'fell'], overlay: { slot: 2, outsideLimit: true } },
+    'lost.ear': { cat: 'lost_bit', label: 'Missing ear', text: 'one ear lighter than when he left', causes: ['beaten'], overlay: { slot: 3 } },
+    'lost.peg-leg': { cat: 'lost_bit', label: 'Peg leg', text: 'on a peg leg he insists is the original', causes: ['fell', 'drowned'], overlay: { slot: 3 } },
+    'lost.hook': { cat: 'lost_bit', label: 'Hook hand', text: 'with a hook where his hand used to be. He keeps waving', causes: ['beaten', 'drowned'], overlay: { slot: 3 } },
+    'disguise.bucket': {
+      cat: 'disguise', label: 'Bucket disguise',
+      text: 'wearing a bucket and calling himself {alias}',
+      causes: ['beaten', 'drowned', 'fell'],
+      overlay: { slot: 8, pinned: true },
+    },
+    'disguise.moustache': {
+      cat: 'disguise', label: 'Stick-on moustache',
+      text: 'in a stick-on moustache, insisting he is {alias}',
+      causes: ['beaten', 'fell'],
+      overlay: { slot: 4, pinned: true },
+    },
+    'disguise.wig': { cat: 'disguise', label: 'Wig', text: 'in a wig, answering only to {alias}', causes: ['drowned'], overlay: { slot: 7, pinned: true } },
+    'epithet.the-damp': { cat: 'epithet', label: 'Renamed: the Damp', text: 'and is to be known as {name} {epithet}', causes: ['drowned'], epithet: 'the-damp' },
+    'epithet.the-soggy': { cat: 'epithet', label: 'Renamed: the Soggy', text: 'and has been renamed {name} {epithet}', causes: ['drowned'], epithet: 'the-soggy' },
+    'epithet.the-concussed': { cat: 'epithet', label: 'Renamed: the Concussed', text: 'and is now {name} {epithet}', causes: ['fell'], epithet: 'the-concussed' },
+    'epithet.the-flattened': { cat: 'epithet', label: 'Renamed: the Flattened', text: 'and must be called {name} {epithet}', causes: ['fell', 'beaten'], epithet: 'the-flattened' },
+    'epithet.the-twice-stabbed': {
+      cat: 'epithet', label: 'Renamed: the Twice-Stabbed',
+      text: 'and is now, officially, {name} {epithet}',
+      causes: ['beaten'],
+      epithet: 'the-twice-stabbed',
+    },
+    'fear.puddles': { cat: 'fear', label: 'New Fear: puddles', text: 'and now screams at puddles', causes: ['drowned'], fear: 'Puddles' },
+    'fear.water': { cat: 'fear', label: 'New Fear: water', text: 'with a brand new fear of water', causes: ['drowned'], fear: 'Water' },
+    'fear.stairs': { cat: 'fear', label: 'New Fear: stairs', text: 'and now refuses to go near stairs', causes: ['fell'], fear: 'Stairs' },
+    'fear.heights': { cat: 'fear', label: 'New Fear: heights', text: 'and now gets dizzy on a doorstep', causes: ['fell'], fear: 'Heights' },
+    'fear.laughed-at': { cat: 'fear', label: 'New Fear: being laughed at', text: 'and now flinches whenever anyone laughs', causes: ['beaten'], fear: 'Being Laughed At' },
+    'fear.doctors': { cat: 'fear', label: 'New Fear: doctors', text: 'with a new fear of doctors, having met several', causes: ['beaten', 'fell'], fear: 'Doctors' },
+  },
+  death: {
+    died: ['{captain} did not survive it.', '{captain} is dead. For now.', 'It was the end of {captain}, for the time being.'],
+    averted: {
+      grace: [
+        '{captain} should have died, but had only just come back and refused on principle.',
+        'It would have killed {captain}, but he is still under warranty from his last death.',
+        '{captain} died briefly, then remembered he had only just Returned, and stopped.',
+      ],
+      daily_cap: [
+        '{captain} would have died, but the fortress had run out of funerals for the day.',
+        'It should have killed {captain}. The undertaker had already gone home.',
+        '{captain} was turned away at the gates of death: they were full today.',
+      ],
+    },
+    benched: [
+      '{captain} has been sent to the reserve to make room.',
+      '{captain} has been sacked to make room, and is taking it badly.',
+      '{captain} has been moved to the reserve. His chair has already been sat in.',
+    ],
   },
   // Accusations (D20, #39): hand-written, spoken by the accuser over his prerecorded clip of the Player's
   // mangled name. They blame the Player's meddling, never the Player as a person (tone bible §2).

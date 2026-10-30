@@ -17,3 +17,4 @@ export { REACTIONS, parentRoles } from './reactions.ts';
 export { SELECTION } from './select.ts';
 export { VARIETY } from './context.ts';
 export { clashShape, shapeProblem, fallbackDialogue, type ClashLine, type ClashShape } from './dialogue.ts';
+export { ROSTER, UNMASK } from './roster.ts';

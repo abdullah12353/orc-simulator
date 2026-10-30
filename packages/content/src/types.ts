@@ -1,8 +1,8 @@
 // The content bundle's shapes (D46, data-model decision 6). Content ships as TS modules in the repo,
 // is bundled into the Edge Functions and the PWA, and is referenced from the DB only by text slugs.
-import type { Accent, Claim } from './pools.ts';
+import type { Accent, CauseTag, Claim } from './pools.ts';
 
-export type { Accent, Claim };
+export type { Accent, CauseTag, Claim };
 
 export type CaptainId = string;
 export type TemplateId = string;
@@ -60,6 +60,11 @@ export interface OutcomeDef {
   key: string;
   /** Relative weight in the outcome table (> 0). */
   weight: number;
+  /**
+   * An accident (#32): this outcome kills the Captain cast in `role`, tagged `tag` (one of CAUSE_TAGS, which
+   * picks his Return's Humiliation). The death cap and grace can still turn it into a Humiliation instead.
+   */
+  death?: { role: string; tag: CauseTag };
 }
 
 /**
@@ -71,13 +76,15 @@ export interface TemplateDef {
   /**
    * `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). `clash` Templates start
    * a Clash and voice its headline: their lines get the `{tag}` and `{result}` slots (see `ClashBanks`).
+   * `return`, `stepped_in` and `unmasked` voice the roster's story heads (#32, see ROSTER_TEMPLATES).
    */
-  kind: 'incident' | 'rumour' | 'clash';
+  kind: 'incident' | 'rumour' | 'clash' | 'return' | 'stepped_in' | 'unmasked';
   /**
    * `ambient`: rolled on a tick. `meddle`: a Meddle landing. `grudge`: the Grudge Clash roll (one Template,
-   * roles `a` and `b`). `reaction`: follows another Fact (see `after`), up to 3 deep in a tick.
+   * roles `a` and `b`). `reaction`: follows another Fact (see `after`), up to 3 deep in a tick. `roster`:
+   * written by the sim when a Captain Returns, steps in or is Unmasked.
    */
-  trigger: 'ambient' | 'meddle' | 'grudge' | 'reaction';
+  trigger: 'ambient' | 'meddle' | 'grudge' | 'reaction' | 'roster';
   roles: RoleDef[];
   /** Reaction Templates only: what they follow. */
   after?: AfterDef;
@@ -126,6 +133,46 @@ export interface Banks {
    * in the accuser's prerecorded clip.
    */
   accusations: string[];
+  /**
+   * Humiliations (#32, D41): what a Return (or a death averted) leaves on a Captain. Keys are the
+   * `humiliations.kind` stored in the DB; the portrait overlay is keyed by them too (#33).
+   */
+  humiliations: Record<BankKey, HumiliationDef>;
+  /** Sentences for deaths, averted deaths and benchings (#32). */
+  death: DeathBank;
+}
+
+export type HumiliationCat = 'bandage' | 'lost_bit' | 'disguise' | 'epithet' | 'fear';
+
+export interface HumiliationDef {
+  cat: HumiliationCat;
+  /** Short, for the Captain card: "Head bandage". */
+  label: string;
+  /**
+   * How he comes back, completing "{name} is back from the dead, …": "wrapped head to toe in bandages".
+   * May use `{alias}` (a disguise's alias) and `{epithet}` (an Epithet Humiliation's new Epithet).
+   */
+  text: string;
+  /** The death cause tags (CAUSE_TAGS) it fits. A Return picks only from Humiliations that fit his death. */
+  causes: CauseTag[];
+  /** Bandages, lost bits and disguises sit on the portrait (#18): slot 3–8, bottom first. */
+  overlay?: { slot: number; pinned?: boolean; outsideLimit?: boolean };
+  /** A mouth bandage: his barks are muffled while it lasts. */
+  muffled?: boolean;
+  /** `epithet` only: the Epithet (a key into `banks.epithets`) he gets. */
+  epithet?: BankKey;
+  /** `fear` only: the Fear he gains (needs a `banks.subjects` phrase, since Rumours can use it). */
+  fear?: string;
+}
+
+/** Sentences for the roster's consequences. Each uses `{captain}`. */
+export interface DeathBank {
+  /** Appended to a story's line when someone dies in it. */
+  died: string[];
+  /** Appended when a death is averted, by why. */
+  averted: { grace: string[]; daily_cap: string[] };
+  /** A Returner's arrival sends someone to the reserve. */
+  benched: string[];
 }
 
 export interface TrophyDef {

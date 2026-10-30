@@ -52,17 +52,13 @@ export async function createWorld(
     const playerId = player!.id;
 
     const started = performance.now();
-    const { state, steps, grudgeTags } = dayZero(content, seed, now, worldId);
+    const { state, steps, grudgeTags, humiliations } = dayZero(content, seed, now, worldId);
     const cpuMs = Math.round((performance.now() - started) / steps.length);
 
-    // Facts first: Trophies point at the Fact that gave them.
-    await insertFacts(
-      tx,
-      worldId,
-      steps.flatMap((s) => s.facts.map((fact) => ({ tickSeq: s.tickSeq, fact }))),
-      content,
-    );
-    await insertWorldState(tx, worldId, { ...state, grudgeTags });
+    // Facts first: Trophies, Humiliations and deaths point at the Facts that made them.
+    const facts = steps.flatMap((s) => s.facts.map((fact) => ({ tickSeq: s.tickSeq, fact })));
+    await insertFacts(tx, worldId, facts, content);
+    await insertWorldState(tx, worldId, { ...state, grudgeTags }, { humiliations, facts: facts.map((f) => f.fact) });
     await insertTicks(
       tx,
       worldId,

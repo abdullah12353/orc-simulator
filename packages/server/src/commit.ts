@@ -1,7 +1,17 @@
 // Shared commit writers: the tick and create_world (day zero) write Facts, ticks rows and world state
 // the same way. Everything is bulk-inserted through jsonb_array_elements (one statement per table).
 import type { Content } from '@orc/content';
-import { fallbackDialogue, type BlameEntry, type Cause, type Fact, type Fuse, type Trophy, type WorldState } from '@orc/sim';
+import {
+  fallbackDialogue,
+  type BlameEntry,
+  type Cause,
+  type Fact,
+  type Fuse,
+  type Humiliation,
+  type StateDiff,
+  type Trophy,
+  type WorldState,
+} from '@orc/sim';
 import { jsonb, type Tx } from './db.ts';
 
 /**
@@ -62,6 +72,87 @@ export async function upsertTrophies(tx: Tx, worldId: string, trophies: Trophy[]
     on conflict (world_id, no) do update set
       holder_id = excluded.holder_id, taken_from_id = excluded.taken_from_id,
       origin_fact = excluded.origin_fact, acquired_at = excluded.acquired_at`;
+}
+
+/** The Captain fields a tick can change so far (#32). Power, Infamy and Legendary arrive with #34. */
+const CAPTAIN_FIELDS = new Set(['id', 'roster', 'epithet', 'aliasIdx', 'returnsAt', 'graceUntil', 'death']);
+
+/**
+ * Applies Captain patches (merged per Captain, in order). A death stamps `died_at` with `now` and records
+ * the death Fact and cause tag; a Return (`death: null`) clears them.
+ */
+export async function updateCaptains(tx: Tx, worldId: string, patches: StateDiff['captains'], now: string): Promise<void> {
+  if (patches.length === 0) return;
+  const merged = new Map<string, Record<string, unknown>>();
+  for (const p of patches) {
+    const unknown = Object.keys(p).filter((k) => !CAPTAIN_FIELDS.has(k));
+    if (unknown.length > 0) throw new Error(`commitDiff: unsupported Captain fields: ${unknown.join(', ')}`);
+    merged.set(p.id, { ...merged.get(p.id), ...p });
+  }
+  await tx`
+    update captains c set
+      roster = case when p ? 'roster' then (p->>'roster')::roster else c.roster end,
+      epithet = case when p ? 'epithet' then p->>'epithet' else c.epithet end,
+      alias_idx = case when p ? 'aliasIdx' then (p->>'aliasIdx')::smallint else c.alias_idx end,
+      returns_at = case when p ? 'returnsAt' then (p->>'returnsAt')::timestamptz else c.returns_at end,
+      grace_until = case when p ? 'graceUntil' then (p->>'graceUntil')::timestamptz else c.grace_until end,
+      death_fact = case when p ? 'death' then (p#>>'{death,cause,fact}')::bigint else c.death_fact end,
+      death_cause_tag = case when p ? 'death' then p#>>'{death,causeTag}' else c.death_cause_tag end,
+      died_at = case when p ? 'death' then case when jsonb_typeof(p->'death') = 'null' then null else ${now}::timestamptz end
+                     else c.died_at end
+    from jsonb_array_elements(${jsonb(tx, [...merged.values()])}) as p
+    where c.world_id = ${worldId} and c.id = p->>'id'`;
+}
+
+/** Fears a Humiliation added (since `now`), and the oldest added Fear it replaced. */
+export async function applyFears(tx: Tx, worldId: string, fears: StateDiff['fears'], now: string): Promise<void> {
+  const removed = fears.filter((f) => f.remove !== undefined);
+  const added = fears.filter((f) => f.add !== undefined);
+  if (removed.length > 0) {
+    await tx`
+      delete from captain_fears cf using jsonb_array_elements(${jsonb(tx, removed)}) as f
+      where cf.world_id = ${worldId} and cf.captain_id = f->>'captainId' and cf.fear = f->>'remove' and cf.added`;
+  }
+  if (added.length > 0) {
+    await tx`
+      insert into captain_fears (world_id, captain_id, fear, added, since)
+      select ${worldId}, f->>'captainId', f->>'add', true, ${now}
+      from jsonb_array_elements(${jsonb(tx, added)}) as f`;
+  }
+}
+
+/**
+ * Writes Humiliations, new or changed. When each was gained, and the Fact and time that ended it, are read
+ * off `facts` (the batch that made them: one tick's, or all of day zero's). Ended rows stay as history.
+ */
+export async function upsertHumiliations(tx: Tx, worldId: string, humiliations: Humiliation[], facts: Fact[], now: string): Promise<void> {
+  if (humiliations.length === 0) return;
+  const at = new Map(facts.map((f) => [f.no, f.at]));
+  const endedBy = new Map<number, Fact>();
+  for (const f of facts) if (f.kind === 'humiliation_ended') endedBy.set(f.humiliation, f);
+  const rows = humiliations.map((h) => {
+    const ended = h.ended ? endedBy.get(h.no) : undefined;
+    if (h.ended && !ended) throw new Error(`commit: Humiliation ${h.no} ended without a humiliation_ended Fact`);
+    return {
+      no: h.no,
+      captainId: h.captainId,
+      cat: h.cat,
+      kind: h.key,
+      gainedFact: h.gained.fact,
+      gainedAt: at.get(h.gained.fact) ?? now,
+      expiresAt: h.expiresAt,
+      endedFact: ended?.no ?? null,
+      endedAt: ended?.at ?? null,
+    };
+  });
+  await tx`
+    insert into humiliations (world_id, no, captain_id, cat, kind, gained_fact, gained_at, expires_at, ended_at, ended_fact)
+    select ${worldId}, (h->>'no')::bigint, h->>'captainId', (h->>'cat')::humiliation_cat, h->>'kind',
+           (h->>'gainedFact')::bigint, (h->>'gainedAt')::timestamptz, (h->>'expiresAt')::timestamptz,
+           (h->>'endedAt')::timestamptz, (h->>'endedFact')::bigint
+    from jsonb_array_elements(${jsonb(tx, rows)}) as h
+    on conflict (world_id, no) do update set
+      expires_at = excluded.expires_at, ended_at = excluded.ended_at, ended_fact = excluded.ended_fact`;
 }
 
 /** Queues Fuses: a Meddle's, or a reaction that chained past 3 deep (with its cast and parent Fact). */
@@ -130,10 +221,17 @@ export async function insertTicks(tx: Tx, worldId: string, rows: TickRow[]): Pro
 }
 
 /**
- * Writes a whole world's Captains, Fears, affinity, Grudge tags, Trophies and reaction Fuses. Used once,
- * by create_world, for the state day zero ends in (after its Facts); ticks write changes through the diff.
+ * Writes a whole world's Captains (deaths and grace included), Fears, affinity, Grudge tags, Trophies,
+ * Humiliations and reaction Fuses. Used once, by create_world, for the state day zero ends in (after its
+ * Facts); ticks write changes through the diff. `history` adds the Humiliations day zero already ended,
+ * and the Facts that say when.
  */
-export async function insertWorldState(tx: Tx, worldId: string, state: WorldState): Promise<void> {
+export async function insertWorldState(
+  tx: Tx,
+  worldId: string,
+  state: WorldState,
+  history: { humiliations: Humiliation[]; facts: Fact[] } = { humiliations: state.humiliations, facts: [] },
+): Promise<void> {
   const captains = Object.values(state.captains).map((c) => ({
     id: c.id,
     roster: c.roster,
@@ -142,12 +240,20 @@ export async function insertWorldState(tx: Tx, worldId: string, state: WorldStat
     traits: c.traits,
     epithet: c.epithet,
     aliasIdx: c.aliasIdx,
+    returnsAt: c.returnsAt,
+    graceUntil: c.graceUntil,
+    deathFact: c.death?.cause.fact ?? null,
+    deathCauseTag: c.death?.causeTag ?? null,
   }));
   await tx`
-    insert into captains (world_id, id, roster, power, infamy, traits, epithet, alias_idx)
+    insert into captains (world_id, id, roster, power, infamy, traits, epithet, alias_idx, returns_at, grace_until,
+                          death_fact, death_cause_tag, died_at)
     select ${worldId}, c->>'id', (c->>'roster')::roster, (c->>'power')::smallint, (c->>'infamy')::int,
-           array(select jsonb_array_elements_text(c->'traits')), c->>'epithet', (c->>'aliasIdx')::smallint
+           array(select jsonb_array_elements_text(c->'traits')), c->>'epithet', (c->>'aliasIdx')::smallint,
+           (c->>'returnsAt')::timestamptz, (c->>'graceUntil')::timestamptz, (c->>'deathFact')::bigint, c->>'deathCauseTag',
+           (select f.at from facts f where f.world_id = ${worldId} and f.no = (c->>'deathFact')::bigint)
     from jsonb_array_elements(${jsonb(tx, captains)}) as c`;
+  await upsertHumiliations(tx, worldId, history.humiliations, history.facts, state.world.now);
 
   const fears = Object.values(state.captains).flatMap((c) =>
     c.fears.map((f) => ({ captainId: c.id, fear: f.fear, added: f.added, since: f.since })),
