@@ -46,6 +46,10 @@ export const FEARS = [
   'His Mum',
 ] as const;
 
+/** The five Claim kinds a Rumour can assert (Meddle verbs #7). */
+export const CLAIMS = ['insult', 'fear', 'theft', 'mum', 'coup'] as const;
+export type Claim = (typeof CLAIMS)[number];
+
 /** The founding Captain: always in the active 12, never the starting Warlord, never benched. */
 export const KRUG = 'krug';
 

@@ -1,4 +1,4 @@
-import { ACCENTS, CASTING, FEARS, KRUG, TRAITS } from './pools.ts';
+import { ACCENTS, CASTING, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 import type { CastCard, Content } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
@@ -107,12 +107,52 @@ export function validateContent(c: Content): string[] {
         errors.push(`${where}: role "${role.name}" names unknown Captain slug "${role.captain}"`);
       }
     }
+    const slots = new Set(t.slots ?? []);
     for (const line of t.lines ?? []) {
       for (const m of String(line).matchAll(/\{([^}]*)\}/g)) {
-        if (!roleNames.has(m[1]!)) errors.push(`${where}: line uses {${m[1]}} but the Template casts no such role`);
+        if (!roleNames.has(m[1]!) && !slots.has(m[1]!)) {
+          errors.push(`${where}: line uses {${m[1]}} but the Template casts no such role or slot`);
+        }
       }
     }
   }
 
+  errors.push(...validateRumours(c, templateIds));
+  return errors;
+}
+
+/** One Template per Rumour outcome; the sim looks them up by these slugs. */
+export const RUMOUR_TEMPLATES = {
+  works: 'rumour.works',
+  wrong_orc: 'rumour.wrong-orc',
+  garbled: 'rumour.garbled',
+} as const;
+
+/** What Rumours need: subject phrases, Claim phrasings, the Garble ladder and absurd subjects (#28). */
+function validateRumours(c: Content, templateIds: Set<string>): string[] {
+  const errors: string[] = [];
+  for (const id of Object.values(RUMOUR_TEMPLATES)) {
+    if (!templateIds.has(id)) errors.push(`templates: the Rumour Template "${id}" is missing`);
+  }
+  const { subjects, absurdSubjects, claims, garbleLadder } = c.banks;
+  for (const key of [...TRAITS, ...FEARS]) {
+    if (!subjects?.[key]?.trim()) errors.push(`banks.subjects: no Rumour subject phrase for "${key}"`);
+  }
+  if (Object.keys(absurdSubjects ?? {}).length === 0) errors.push('banks.absurdSubjects: Garbles need at least 1 absurd subject');
+  for (const claim of CLAIMS) {
+    const def = claims?.[claim];
+    if (!def?.label?.trim()) errors.push(`banks.claims.${claim}: needs a label`);
+    if (!Array.isArray(def?.phrasings) || def.phrasings.length !== 3) {
+      errors.push(`banks.claims.${claim}: needs exactly 3 phrasings`);
+      continue;
+    }
+    for (const p of def.phrasings) {
+      if (!String(p).includes('{subject}')) errors.push(`banks.claims.${claim}: phrasing "${p}" has no {subject}`);
+    }
+  }
+  const ladder = garbleLadder ?? [];
+  if (ladder.length !== 4 || new Set(ladder).size !== 4 || ladder.some((x) => !(CLAIMS as readonly string[]).includes(x))) {
+    errors.push('banks.garbleLadder: needs 4 distinct Claims, bottom to top');
+  }
   return errors;
 }

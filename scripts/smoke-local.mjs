@@ -107,3 +107,26 @@ const refused = await fetch(`${api}/rest/v1/rpc/join_world`, {
 const reason = (await refused.json()).message;
 if (refused.ok || reason !== 'invite_revoked') throw new Error(`revoked invite: ${refused.status} ${reason}`);
 console.log(`a revoked invite is refused (${refused.status} ${reason}): ok`);
+
+// 6. A Rumour, the way the PWA plants one: submit_intent debits a Meddle at once, the friend can't see
+// it, and the next tick consumes it into a pending Meddle.
+const [source, target] = await call(
+  `/rest/v1/captains?world_id=eq.${worldId}&roster=eq.active&select=id,traits&order=id&limit=2`,
+  { token },
+);
+const intentId = crypto.randomUUID();
+const rumour = {
+  id: intentId,
+  world_id: worldId,
+  kind: 'rumour',
+  payload: { source: source.id, target: target.id, claim: 'insult', subject: { from: 'trait', key: target.traits[0] } },
+};
+const [submitted] = await call('/rest/v1/rpc/submit_intent', { method: 'POST', token, body: rumour });
+const [again] = await call('/rest/v1/rpc/submit_intent', { method: 'POST', token, body: rumour });
+if (submitted.meddles_left !== 2 || again.meddles_left !== 2) throw new Error(`submit_intent: ${JSON.stringify([submitted, again])}`);
+await call('/functions/v1/tick', { method: 'POST', token: 'local-tick-secret', body: { worldId } });
+const [mine] = await call(`/rest/v1/meddles?id=eq.${intentId}&select=status`, { token });
+if (mine?.status !== 'pending') throw new Error(`the creator's Meddle after a tick: ${JSON.stringify(mine)}`);
+const theirs = await call(`/rest/v1/meddles?id=eq.${intentId}&select=status`, { token: friend });
+if (theirs.length !== 0) throw new Error('the friend can see a pending Meddle');
+console.log('a Rumour was planted (2 Meddles left), consumed by the tick, and is secret from the friend: ok');

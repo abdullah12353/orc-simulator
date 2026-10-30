@@ -8,12 +8,16 @@ import {
   stateHash,
   tickSeed,
   type CaptainState,
+  type Claim,
+  type Fuse,
   type GrudgeTag,
+  type Intent,
+  type Meddle,
   type StateDiff,
   type WorldState,
 } from '@orc/sim';
 import { insertFacts, insertTicks } from './commit.ts';
-import { isLockNotAvailable, type Sql, type Tx } from './db.ts';
+import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
 export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
@@ -56,6 +60,39 @@ interface CaptainRow {
   legendary_fact: number | null;
 }
 
+interface MeddleRow {
+  id: string;
+  player_id: string;
+  verb: 'rumour' | 'dare';
+  source_id: string | null;
+  target_id: string;
+  claim: Claim;
+  subject: { from: 'trait' | 'fear' | 'trophy'; key: string } | null;
+  free_text: string | null;
+  status: 'pending' | 'held';
+  held_on: string | null;
+}
+
+/** A Meddle row as the sim holds it: exactly what the sim stored (`firstMeddle` did its job at fusing). */
+function toMeddle(m: MeddleRow): Meddle {
+  if (m.verb !== 'rumour') throw new Error(`loadState: ${m.verb} Meddles are not loaded yet`);
+  return {
+    id: m.id,
+    playerId: m.player_id,
+    intent: {
+      kind: 'rumour',
+      source: m.source_id!,
+      target: m.target_id,
+      claim: m.claim,
+      subject: { from: m.subject!.from, key: m.subject!.key },
+      ...(m.free_text ? { freeText: m.free_text } : {}),
+      firstMeddle: false,
+    },
+    status: m.status,
+    heldOn: m.held_on,
+  };
+}
+
 /** Ticks one world. Returns `busy` without stepping if another tick holds the world's row lock. */
 export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOutcome> {
   const content = deps.content ?? shippedContent;
@@ -73,9 +110,11 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
 
       const now = deps.now().toISOString();
       const state = await loadState(tx, world, content, now, tickSeq);
+      // After the Player rows are locked (loadState), so no submit_intent is half-way through.
+      const intents = await loadIntents(tx, worldId);
 
       const started = performance.now();
-      const { facts, stateDiff } = simulate(state, [], tickSeed(world.seed, tickSeq));
+      const { facts, stateDiff } = simulate(state, intents, tickSeed(world.seed, tickSeq));
       const next = applyDiff(state, stateDiff);
       const hash = stateHash(next);
       const cpuMs = Math.round(performance.now() - started);
@@ -84,7 +123,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       await insertFacts(tx, worldId, facts.map((fact) => ({ tickSeq, fact })));
       await deps.onCommitStep?.('facts', info);
 
-      await commitDiff(tx, worldId, stateDiff);
+      await commitDiff(tx, worldId, stateDiff, { tickSeq, now });
       await tx`
         update worlds set tick_seq = ${tickSeq}, last_tick_at = ${now}, content_version = ${state.world.contentVersion}
         where id = ${worldId}`;
@@ -97,6 +136,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
           seed: tickSeed(world.seed, tickSeq),
           watched: state.world.watched,
           contentVersion: state.world.contentVersion,
+          intentIds: stateDiff.intents.map((i) => i.id),
           factCount: facts.length,
           cpuMs,
           stateHash: hash,
@@ -149,6 +189,22 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     ) t
     where rank <= 3
     order by no`;
+
+  // FOR UPDATE: blocks submit_intent until this tick commits (data-model decision 2).
+  const playerRows = await tx<{ id: string; gold: number; meddles_available: number; first_meddle_done: boolean }[]>`
+    select p.id, pp.gold, pp.meddles_available, pp.first_meddle_done
+    from player_private pp join players p on p.id = pp.player_id
+    where p.world_id = ${world.id} and p.removed_at is null
+    order by p.id
+    for update of pp`;
+  const meddleRows = await tx<MeddleRow[]>`
+    select id, player_id, verb, source_id, target_id, claim, subject, free_text, status, held_on
+    from meddles where world_id = ${world.id} and status in ('pending', 'held') order by id`;
+  // Only the Fuses due by now; the sim fires them in (dueAt, no) order.
+  const fuseRows = await tx<{ no: number; due_at: string; meddle_id: string }[]>`
+    select no::float8 as no, to_json(due_at)#>>'{}' as due_at, meddle_id
+    from fuses where world_id = ${world.id} and due_at <= ${now} and kind = 'meddle'
+    order by due_at, no`;
 
   const fears = new Map<string, CaptainState['fears']>();
   for (const f of fearRows) {
@@ -205,9 +261,14 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
     trophies: [],
     humiliations: [],
     stakes: [],
-    players: {},
-    meddles: {},
-    fuses: [],
+    players: Object.fromEntries(
+      playerRows.map((p) => [
+        p.id,
+        { gold: p.gold, meddles: p.meddles_available, firstMeddleDone: p.first_meddle_done, renderedFor: [] },
+      ]),
+    ),
+    meddles: Object.fromEntries(meddleRows.map((m) => [m.id, toMeddle(m)])),
+    fuses: fuseRows.map((f): Fuse => ({ no: f.no, dueAt: new Date(f.due_at).toISOString(), meddleId: f.meddle_id })),
     infamy7d: [],
     recent: { templates: {}, pairs: {} },
   };
@@ -217,15 +278,110 @@ async function loadState(tx: Tx, world: WorldRow, content: Content, now: string,
  * Writes a StateDiff to the tables. Extend this alongside the sim: a diff section the commit can't
  * write must fail loudly, never be dropped (applyDiff guards the same list in memory).
  */
-async function commitDiff(tx: Tx, worldId: string, diff: StateDiff): Promise<void> {
-  if (diff.captains.length > 0) throw new Error('commitDiff: captain patches are not committed yet');
+async function commitDiff(tx: Tx, worldId: string, diff: StateDiff, at: { tickSeq: number; now: string }): Promise<void> {
+  const unsupported = (
+    [
+      ['captains', diff.captains],
+      ['trophies', diff.trophies.upsert],
+      ['fears', diff.fears],
+      ['humiliations', diff.humiliations.upsert],
+      ['stakes', diff.stakes],
+      ['ledger', diff.ledger],
+    ] as [string, unknown[]][]
+  ).filter(([, list]) => list.length > 0);
+  if (unsupported.length > 0) {
+    throw new Error(`commitDiff: unsupported diff sections: ${unsupported.map(([n]) => n).join(', ')}`);
+  }
+
   const w = diff.world;
-  if (Object.keys(w).length === 0) return;
-  await tx`
-    update worlds set
-      next_no = coalesce(${w.nextNo ?? null}::bigint, next_no),
-      deaths_today = coalesce(${w.deathsToday ?? null}::smallint, deaths_today),
-      day = coalesce(${w.day ?? null}::date, day),
-      warlord_id = case when ${'warlordId' in w} then ${w.warlordId ?? null}::text else warlord_id end
-    where id = ${worldId}`;
+  if (Object.keys(w).length > 0) {
+    await tx`
+      update worlds set
+        next_no = coalesce(${w.nextNo ?? null}::bigint, next_no),
+        deaths_today = coalesce(${w.deathsToday ?? null}::smallint, deaths_today),
+        day = coalesce(${w.day ?? null}::date, day),
+        warlord_id = case when ${'warlordId' in w} then ${w.warlordId ?? null}::text else warlord_id end
+      where id = ${worldId}`;
+  }
+
+  // Affinity is absolute; 0 deletes the row.
+  const zero = diff.affinity.filter((a) => a.value === 0);
+  const set = diff.affinity.filter((a) => a.value !== 0);
+  if (zero.length > 0) {
+    await tx`
+      delete from affinity a using jsonb_array_elements(${jsonb(tx, zero)}) as z
+      where a.world_id = ${worldId} and a.holder_id = z->>'holder' and a.toward_id = z->>'toward'`;
+  }
+  if (set.length > 0) {
+    await tx`
+      insert into affinity (world_id, holder_id, toward_id, value, updated_at)
+      select ${worldId}, a->>'holder', a->>'toward', (a->>'value')::smallint, ${at.now}
+      from jsonb_array_elements(${jsonb(tx, set)}) as a
+      on conflict (world_id, holder_id, toward_id) do update set value = excluded.value, updated_at = excluded.updated_at`;
+  }
+
+  if (diff.grudgeTags.length > 0) {
+    await tx`
+      insert into grudge_tags (world_id, no, holder_id, toward_id, tag, cause_fact, created_at)
+      select ${worldId}, (g->>'no')::bigint, g->>'holder', g->>'toward', g->>'tag', (g#>>'{cause,fact}')::bigint,
+             (g->>'at')::timestamptz
+      from jsonb_array_elements(${jsonb(tx, diff.grudgeTags)}) as g`;
+  }
+
+  // Intents first, then the Meddles they became, then those Meddles' Fuses (FK order).
+  if (diff.intents.length > 0) {
+    await tx`
+      update intents i
+      set status = (x->>'status')::intent_status, consumed_tick = ${at.tickSeq}, reject_reason = x->>'reason'
+      from jsonb_array_elements(${jsonb(tx, diff.intents)}) as x
+      where i.id = (x->>'id')::uuid and i.world_id = ${worldId}`;
+  }
+  if (diff.newMeddles.length > 0) {
+    await tx`
+      insert into meddles (id, world_id, player_id, verb, target_id, source_id, victim_id, claim, subject, free_text,
+                           dare_key, created_at, status, held_on)
+      select (m->>'id')::uuid, ${worldId}, (m->>'playerId')::uuid, (m#>>'{intent,kind}')::meddle_verb,
+             m#>>'{intent,target}', m#>>'{intent,source}', m#>>'{intent,victim}', (m#>>'{intent,claim}')::claim,
+             m#>'{intent,subject}', m#>>'{intent,freeText}', m#>>'{intent,dareKey}', i.created_at,
+             (m->>'status')::meddle_status, m->>'heldOn'
+      from jsonb_array_elements(${jsonb(tx, diff.newMeddles)}) as m
+      join intents i on i.id = (m->>'id')::uuid`;
+  }
+  if (diff.meddles.length > 0) {
+    await tx`
+      update meddles d
+      set status = (m->>'status')::meddle_status, held_on = m->>'heldOn', landed_fact = (m->>'landedFact')::bigint
+      from jsonb_array_elements(${jsonb(tx, diff.meddles)}) as m
+      where d.id = (m->>'id')::uuid and d.world_id = ${worldId}`;
+  }
+  if (diff.fuses.remove.length > 0) {
+    await tx`delete from fuses where world_id = ${worldId} and no = any(${diff.fuses.remove}::bigint[])`;
+  }
+  if (diff.fuses.add.length > 0) {
+    if (diff.fuses.add.some((f) => f.reaction)) throw new Error('commitDiff: reaction Fuses are not committed yet');
+    await tx`
+      insert into fuses (world_id, no, due_at, kind, meddle_id, created_tick)
+      select ${worldId}, (f->>'no')::bigint, (f->>'dueAt')::timestamptz, 'meddle', (f->>'meddleId')::uuid, ${at.tickSeq}
+      from jsonb_array_elements(${jsonb(tx, diff.fuses.add)}) as f`;
+  }
+
+  // Deltas on the loaded values (the tick holds these rows, so nothing else moved them), capped at 0–6.
+  if (diff.playerDeltas.length > 0) {
+    await tx`
+      update player_private pp
+      set meddles_available = least(6, greatest(0, pp.meddles_available + coalesce((d->>'meddles')::int, 0))),
+          first_meddle_done = pp.first_meddle_done or coalesce((d->>'firstMeddleDone')::boolean, false)
+      from jsonb_array_elements(${jsonb(tx, diff.playerDeltas)}) as d
+      where pp.player_id = (d->>'playerId')::uuid`;
+  }
+}
+
+/** Queued Intents, oldest first. SKIP LOCKED: an Intent still being written is left for the next tick. */
+async function loadIntents(tx: Tx, worldId: string): Promise<Intent[]> {
+  const rows = await tx<{ id: string; player_id: string; created_at: string; payload: Record<string, unknown> }[]>`
+    select id, player_id, to_json(created_at)#>>'{}' as created_at, payload
+    from intents where world_id = ${worldId} and status = 'queued'
+    order by created_at, id
+    for update skip locked`;
+  return rows.map((r) => ({ ...r.payload, id: r.id, playerId: r.player_id, at: new Date(r.created_at).toISOString() }) as Intent);
 }

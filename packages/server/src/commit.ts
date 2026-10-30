@@ -21,6 +21,8 @@ export interface TickRow {
   seed: number;
   watched: boolean;
   contentVersion: string;
+  /** Intents this tick consumed or rejected. */
+  intentIds?: string[];
   factCount: number;
   cpuMs: number;
   stateHash: string;
@@ -31,7 +33,8 @@ export async function insertTicks(tx: Tx, worldId: string, rows: TickRow[]): Pro
   await tx`
     insert into ticks (world_id, seq, at, seed, watched, content_version, intent_ids, fact_count, cpu_ms, state_hash)
     select ${worldId}, (t->>'seq')::bigint, (t->>'at')::timestamptz, (t->>'seed')::bigint, (t->>'watched')::boolean,
-           t->>'contentVersion', '{}', (t->>'factCount')::smallint, (t->>'cpuMs')::int, t->>'stateHash'
+           t->>'contentVersion', array(select jsonb_array_elements_text(coalesce(t->'intentIds', '[]')))::uuid[],
+           (t->>'factCount')::smallint, (t->>'cpuMs')::int, t->>'stateHash'
     from jsonb_array_elements(${jsonb(tx, rows)}) as t`;
 }
 

@@ -1,22 +1,16 @@
 import { hashValue } from '@orc/content';
+import { MEDDLE_CAP } from './context.ts';
 import type { StateDiff, WorldState } from './types.ts';
 
 /** Diff sections applyDiff (and the tick's commit) can apply so far. Others must stay empty. */
 function assertSupported(diff: StateDiff): void {
   const unsupported: string[] = [];
   const nonEmpty = (name: string, list: unknown[]) => list.length > 0 && unsupported.push(name);
-  nonEmpty('affinity', diff.affinity);
-  nonEmpty('grudgeTags', diff.grudgeTags);
   nonEmpty('trophies', diff.trophies.upsert);
   nonEmpty('fears', diff.fears);
   nonEmpty('humiliations', diff.humiliations.upsert);
-  nonEmpty('meddles', diff.meddles);
-  nonEmpty('newMeddles', diff.newMeddles);
-  nonEmpty('fuses', [...diff.fuses.add, ...diff.fuses.remove]);
   nonEmpty('stakes', diff.stakes);
   nonEmpty('ledger', diff.ledger);
-  nonEmpty('playerDeltas', diff.playerDeltas);
-  nonEmpty('intents', diff.intents);
   if (unsupported.length > 0) throw new Error(`applyDiff: unsupported diff sections: ${unsupported.join(', ')}`);
 }
 
@@ -29,7 +23,46 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     if (!current) throw new Error(`applyDiff: unknown Captain ${patch.id}`);
     captains[patch.id] = { ...current, ...patch };
   }
-  return { ...state, world: { ...state.world, ...diff.world }, captains };
+
+  const affinity = { ...state.affinity };
+  for (const a of diff.affinity) {
+    if (a.value === 0) delete affinity[`${a.holder}>${a.toward}`];
+    else affinity[`${a.holder}>${a.toward}`] = a.value;
+  }
+
+  const players = { ...state.players };
+  for (const d of diff.playerDeltas) {
+    const p = players[d.playerId];
+    if (!p) throw new Error(`applyDiff: unknown Player ${d.playerId}`);
+    players[d.playerId] = {
+      ...p,
+      meddles: Math.max(0, Math.min(MEDDLE_CAP, p.meddles + (d.meddles ?? 0))),
+      ...(d.firstMeddleDone ? { firstMeddleDone: true } : {}),
+    };
+  }
+
+  const meddles = { ...state.meddles };
+  for (const m of diff.newMeddles) meddles[m.id] = m;
+  for (const m of diff.meddles) {
+    const current = meddles[m.id];
+    if (!current) throw new Error(`applyDiff: unknown Meddle ${m.id}`);
+    if (m.status === 'landed') delete meddles[m.id];
+    else meddles[m.id] = { ...current, status: m.status, heldOn: m.heldOn ?? null };
+  }
+
+  const removed = new Set(diff.fuses.remove);
+  const fuses = [...state.fuses.filter((f) => !removed.has(f.no)), ...diff.fuses.add];
+
+  return {
+    ...state,
+    world: { ...state.world, ...diff.world },
+    captains,
+    affinity,
+    grudgeTags: [...state.grudgeTags, ...diff.grudgeTags],
+    players,
+    meddles,
+    fuses,
+  };
 }
 
 /** A hash of everything in the state except the content bundle (represented by its version). */
