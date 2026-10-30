@@ -8,6 +8,7 @@ import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { legendaryDeeds } from './legendary.ts';
+import { HintLine } from './HintLine.tsx';
 import { YourStableSection } from './Stable.tsx';
 import type { YourStable } from './stable-lines.ts';
 import { supabase } from './supabase.ts';
@@ -274,6 +275,7 @@ export function Herald({ worldId }: { worldId: string }) {
       )}
       {isLatest && opened.generating && <p className="quiet">The subs are still at it. Fresh ink shortly.</p>}
       <EditionView edition={edition} reader={opened.reader} pieces={pieces} deeds={deeds} onWatch={watch} onClip={(s) => void clip(s)} />
+      {edition.stable && <HintLine worldId={worldId} hint="stable" />}
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>

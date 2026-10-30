@@ -155,6 +155,12 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       state.world.watched = watched;
       // After the Player rows are locked (loadState), so no submit_intent is half-way through.
       const intents = await loadIntents(tx, worldId);
+      // #43: submit_intent sets `first_meddle_done` the moment a first Meddle is sent, and leaves its
+      // `firstMeddle` flag on only then. For the sim, that Player hasn't had it until this batch is consumed.
+      for (const i of intents) {
+        const player = state.players[i.playerId];
+        if ((i.kind === 'rumour' || i.kind === 'dare') && i.firstMeddle && player) player.firstMeddleDone = false;
+      }
 
       const started = performance.now();
       const { facts, stateDiff } = simulate(state, intents, tickSeed(world.seed, tickSeq));

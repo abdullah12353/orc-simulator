@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { CLAIMS, content, subjectText, type Claim } from '@orc/content';
 import { displayName } from './Captains.tsx';
 import { DarePicker } from './DarePicker.tsx';
+import { suggestRumour } from './first-open.ts';
 import { reasonText } from './invite-link.ts';
 import { supabase } from './supabase.ts';
 
@@ -9,6 +10,8 @@ import { supabase } from './supabase.ts';
 // subject from the target's own Traits, Fears or Trophies, plus optional words of your own. Submitting
 // debits a Meddle at once (submit_intent), so the count is always honest. The Meddle stays secret
 // until it lands; the tick refunds it if the sim rejects it.
+// On a first open (#43) the composer is guided: the picks come filled in (`suggestRumour`), and a Player's
+// first Meddle is sent with `firstMeddle`, so it lands in 2–5 minutes (submit_intent only honours it once).
 
 const names = new Map(content.cast.map((c) => [c.id, c.name]));
 const POLL_MS = 15_000;
@@ -28,6 +31,8 @@ interface Subject {
 
 interface Loaded {
   meddlesLeft: number;
+  /** The Player has sent a Meddle before (#43): the next one doesn't get the short first Fuse. */
+  firstMeddleDone: boolean;
   captains: CaptainRow[];
   fears: Map<string, string[]>;
   pending: number;
@@ -35,13 +40,13 @@ interface Loaded {
   warlordId: string | null;
 }
 
-export function Meddle({ worldId }: { worldId: string }) {
+export function Meddle({ worldId, guided = false, onSent }: { worldId: string; guided?: boolean; onSent?: () => void }) {
   const [data, setData] = useState<Loaded | { error: string } | null>(null);
 
   async function load() {
     const { data: me } = await supabase.rpc('my_player', { w: worldId });
     const [priv, captains, fears, meddles, queued, world] = await Promise.all([
-      supabase.from('player_private').select('meddles_available').eq('player_id', me).single(),
+      supabase.from('player_private').select('meddles_available, first_meddle_done').eq('player_id', me).single(),
       supabase.from('captains').select('id, roster, traits, epithet').eq('world_id', worldId),
       supabase.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
       supabase.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
@@ -54,6 +59,7 @@ export function Meddle({ worldId }: { worldId: string }) {
     for (const f of fears.data ?? []) byCaptain.set(f.captain_id, [...(byCaptain.get(f.captain_id) ?? []), f.fear]);
     setData({
       meddlesLeft: priv.data?.meddles_available ?? 0,
+      firstMeddleDone: priv.data?.first_meddle_done ?? true,
       captains: (captains.data ?? []).sort((a, b) => (names.get(a.id) ?? a.id).localeCompare(names.get(b.id) ?? b.id)),
       fears: byCaptain,
       pending: (meddles.count ?? 0) + (queued.count ?? 0),
@@ -70,13 +76,14 @@ export function Meddle({ worldId }: { worldId: string }) {
   if (data === null) return <p className="quiet">…</p>;
   if ('error' in data) return <p className="error">{data.error}</p>;
   const onSubmitted = (left: number) => {
-    setData({ ...data, meddlesLeft: left, pending: data.pending + 1 });
+    setData({ ...data, meddlesLeft: left, firstMeddleDone: true, pending: data.pending + 1 });
+    onSent?.();
     void load();
   };
   return (
     <>
-      <RumourComposer worldId={worldId} data={data} onSubmitted={onSubmitted} />
-      <DarePicker worldId={worldId} data={data} onSubmitted={onSubmitted} />
+      <RumourComposer worldId={worldId} data={data} guided={guided} onSubmitted={onSubmitted} />
+      {!guided && <DarePicker worldId={worldId} data={data} onSubmitted={onSubmitted} />}
     </>
   );
 }
@@ -84,17 +91,20 @@ export function Meddle({ worldId }: { worldId: string }) {
 function RumourComposer({
   worldId,
   data,
+  guided,
   onSubmitted,
 }: {
   worldId: string;
   data: Loaded;
+  guided: boolean;
   onSubmitted: (meddlesLeft: number) => void;
 }) {
   const active = data.captains.filter((c) => c.roster !== 'reserve');
-  const [source, setSource] = useState('');
-  const [target, setTarget] = useState('');
-  const [claim, setClaim] = useState<Claim>('insult');
-  const [subjectKey, setSubjectKey] = useState('');
+  const [suggested] = useState(() => (guided ? suggestRumour(data.captains, data.warlordId) : null));
+  const [source, setSource] = useState(suggested?.source ?? '');
+  const [target, setTarget] = useState(suggested?.target ?? '');
+  const [claim, setClaim] = useState<Claim>(suggested?.claim ?? 'insult');
+  const [subjectKey, setSubjectKey] = useState(suggested ? `${suggested.subject.from}:${suggested.subject.key}` : '');
   const [freeText, setFreeText] = useState('');
   // One id per draft: a retry after a network blip resubmits the same id and can't double-debit.
   const [draftId, setDraftId] = useState(() => crypto.randomUUID());
@@ -131,11 +141,12 @@ function RumourComposer({
       id: draftId,
       world_id: worldId,
       kind: 'rumour',
-      payload: { source, target, claim, subject, ...(text ? { freeText: text } : {}) },
+      payload: { source, target, claim, subject, firstMeddle: !data.firstMeddleDone, ...(text ? { freeText: text } : {}) },
     });
     if (error) return setState({ error: reasonText(error) });
     const left = (rows as { meddles_left: number }[])[0]?.meddles_left ?? data.meddlesLeft - 1;
-    setState({ sent: `Planted. It will reach ${label(target)} in a while. Nobody knows it was you, yet.` });
+    const when = data.firstMeddleDone ? 'in a while' : 'in a few minutes';
+    setState({ sent: `Planted. It will reach ${label(target)} ${when}. Nobody knows it was you, yet.` });
     setDraftId(crypto.randomUUID());
     setFreeText('');
     onSubmitted(left);
@@ -143,7 +154,8 @@ function RumourComposer({
 
   return (
     <section>
-      <h2>Plant a Rumour</h2>
+      <h2>{guided ? 'Plant your first Rumour' : 'Plant a Rumour'}</h2>
+      {guided && <p className="hint">We've picked a juicy one for you. Change anything you like, then plant it.</p>}
       <p className="meddles-left">
         <strong>{data.meddlesLeft}</strong> {data.meddlesLeft === 1 ? 'Meddle' : 'Meddles'} left
         {data.pending > 0 && <span className="quiet"> · {data.pending} on the way</span>}
