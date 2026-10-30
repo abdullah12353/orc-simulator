@@ -36,6 +36,7 @@ const isClaim = (c: unknown): c is Claim => (CLAIMS as readonly unknown[]).inclu
  */
 export function consumeIntents(ctx: TickContext, intents: Intent[]): void {
   for (const intent of intents) {
+    if (intent.kind === 'back' || intent.kind === 'withdraw') continue; // backing.ts consumes these
     if (!ctx.state.players[intent.playerId]) {
       // A Player who has left: nothing to refund.
       ctx.diff.intents.push({ id: intent.id, status: 'rejected', reason: 'unknown_player' });

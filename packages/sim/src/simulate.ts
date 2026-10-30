@@ -1,5 +1,6 @@
 import type { TemplateDef } from '@orc/content';
 import { accusationRng, makeAccusations } from './accusations.ts';
+import { consumeBacking, settleBacking } from './backing.ts';
 import { rollGrudgeClashes } from './clash.ts';
 import { weighStories } from './comedy.ts';
 import { TickContext } from './context.ts';
@@ -32,12 +33,14 @@ export function simulate(state: WorldState, intents: Intent[], seed: number): Si
   const ctx = new TickContext(state, createRng(seed));
   rollDay(ctx);
   processReturns(ctx);
+  consumeBacking(ctx, intents);
   consumeIntents(ctx, intents);
   fireDueFuses(ctx);
   rollAmbient(ctx);
   rollGrudgeClashes(ctx);
   crownSuccessor(ctx);
   makeAccusations(ctx, accusationRng(seed));
+  settleBacking(ctx);
   ctx.finish();
   weighStories(state, ctx.facts, ctx.callbacks);
   return { facts: ctx.facts, stateDiff: ctx.diff };

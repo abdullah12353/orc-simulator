@@ -7,6 +7,7 @@
 // roll last). The loser's Infamy and a Warlord's fall (#34) go on the head; payouts (#36) join
 // `consequences`; the Backing edge (#36) fills in `backingEdge`.
 import type { ClashOutcome, TemplateDef } from '@orc/content';
+import { backersOf, edgeFor } from './backing.ts';
 import { pairOf, type TickContext } from './context.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
 import { followUp } from './reactions.ts';
@@ -103,9 +104,9 @@ export function powerOdds(ctx: TickContext, a: CaptainId, b: CaptainId): number 
   return round3(clamp(p));
 }
 
-/** A Captain's Backing edge in a Clash. Backing arrives with #36 (+5% per backer, at most +10%). */
-export function backingEdge(_ctx: TickContext, _captainId: CaptainId): number {
-  return 0;
+/** A Captain's Backing edge in a Clash (#36): +5% per backer, at most +10%, whatever the Stakes. */
+export function backingEdge(ctx: TickContext, captainId: CaptainId): number {
+  return edgeFor(backersOf(ctx, captainId).length);
 }
 
 /** Resolves one Clash: the head, its consequences, and then whatever reacts to it. Returns the head. */
