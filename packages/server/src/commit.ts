@@ -40,7 +40,7 @@ export async function insertFacts(
       from jsonb_array_elements(${jsonb(tx, blame)}) as b`;
   }
 
-  // Every Clash gets its fallback script now, in this transaction; narration (#37) upgrades it later.
+  // Every Clash gets its fallback script now, in this transaction; narration upgrades it later.
   const dialogue = rows.flatMap(({ fact }) =>
     fact.kind === 'clash' ? [{ fact: fact.no, at: fact.at, key: fact.fallbackKey, lines: fallbackDialogue(content, fact) }] : [],
   );
@@ -48,6 +48,11 @@ export async function insertFacts(
     await tx`
       insert into clash_dialogue (world_id, fact_no, lines, source, fallback_key, updated_at)
       select ${worldId}, (d->>'fact')::bigint, d->'lines', 'fallback', d->>'key', (d->>'at')::timestamptz
+      from jsonb_array_elements(${jsonb(tx, dialogue)}) as d`;
+    // The outbox: one narration job per Clash, drained after commit (narration/drain.ts).
+    await tx`
+      insert into narration_jobs (world_id, kind, fact_no, created_at)
+      select ${worldId}, 'clash', (d->>'fact')::bigint, (d->>'at')::timestamptz
       from jsonb_array_elements(${jsonb(tx, dialogue)}) as d`;
   }
 }
