@@ -134,10 +134,11 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
   try {
     return await deps.sql.begin(async (tx) => {
       const [world] = await tx<WorldRow[]>`
-        select id, seed::float8 as seed, tick_seq::int, to_json(last_tick_at)#>>'{}' as last_tick_at,
-               next_no::int, warlord_id, day::text, deaths_today
-        from worlds where id = ${worldId}
-        for update nowait`;
+        select w.id, s.seed::float8 as seed, w.tick_seq::int, to_json(w.last_tick_at)#>>'{}' as last_tick_at,
+               w.next_no::int, w.warlord_id, w.day::text, w.deaths_today
+        from worlds w join world_seeds s on s.world_id = w.id
+        where w.id = ${worldId}
+        for update of w nowait`;
       if (!world) return { status: 'not_found', worldId } as const;
 
       const tickSeq = world.tick_seq + 1;
