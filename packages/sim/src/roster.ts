@@ -187,14 +187,14 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
 
 /**
  * A Returner makes 13: the active Captain with the least Infamy in the last 7 days goes to the reserve (slug
- * breaks a tie), never Krúg or the Warlord.
+ * breaks a tie), never Krúg, the Warlord or a Legendary Captain (D45: permanent, he keeps playing).
  */
 function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
   const active = ctx.activeCaptains();
   if (active.length <= ROSTER.activeSize) return;
   const warlord = ctx.warlord();
   const [id] = active
-    .filter((x) => x !== returner && x !== KRUG && x !== warlord)
+    .filter((x) => x !== returner && x !== KRUG && x !== warlord && ctx.captain(x).legendaryFact === null)
     .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || (a < b ? -1 : 1));
   if (!id) return;
   ctx.patchCaptain(id, { roster: 'reserve' });

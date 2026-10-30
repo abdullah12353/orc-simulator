@@ -413,3 +413,15 @@ test('a Rumour can be about a Fear he came back with earlier in the same tick', 
     return;
   }
 });
+
+test('a Legendary Captain is never benched, however quiet his week (D45: he keeps playing)', () => {
+  const { state: base, lowest } = dueBack('beaten');
+  const state: WorldState = { ...base, captains: { ...base.captains, [lowest]: { ...base.captains[lowest]!, infamy: 160, legendaryFact: 600 } } };
+  const { facts, stateDiff } = simulate(state, [], 3);
+  const [benched] = ofKind(facts, 'benched');
+  assert.ok(benched);
+  assert.notEqual(benched.captainId, lowest, 'the Legendary one stays');
+  const next = applyDiff(state, stateDiff);
+  assert.equal(next.captains[lowest]!.roster, 'active');
+  assert.equal(activeIds(next).length, 12);
+});
