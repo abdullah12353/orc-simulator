@@ -95,3 +95,32 @@ create view hall_timeline with (security_invoker = true) as
 
 revoke all on hall_legends, hall_moments, captain_story, hall_timeline from anon, authenticated;
 grant select on hall_legends, hall_moments, captain_story, hall_timeline to authenticated;
+
+-- ---------------------------------------------------------------- trace it back (§4.5)
+
+-- "The story of how": walks up the causal DAG (fact_causes) from a Fact, at most 6 hops (the hop cap,
+-- BLAME.hopCap in @orc/sim, decision 8c), and returns each step once, at its nearest hop, in causal order
+-- (oldest first, ending at the Fact itself). Silent steps have no line, so each brings its story's line.
+-- Who is to blame is never recomputed here: that is fact_blame. Members only, through RLS on facts.
+create function trace_back(p_world uuid, p_fact bigint)
+returns table (fact_no bigint, hops int, at timestamptz, kind text, line text, story_no bigint, story_line text,
+               "cast" text[], payload jsonb)
+language sql stable security invoker set search_path = public
+as $$
+  with recursive up (no, hops) as (
+    select f.no, 0 from facts f where f.world_id = p_world and f.no = p_fact
+    union
+    select c.cause_no, up.hops + 1
+    from up join fact_causes c on c.world_id = p_world and c.fact_no = up.no
+    where up.hops < 6
+  ), steps as (
+    select no, min(hops) as hops from up group by no
+  )
+  select f.no, s.hops, f.at, f.kind, f.line, f.story_no, h.line, f."cast", f.payload
+  from steps s
+  join facts f on f.world_id = p_world and f.no = s.no
+  join facts h on h.world_id = p_world and h.no = f.story_no
+  order by f.at, f.no;
+$$;
+revoke all on function trace_back(uuid, bigint) from public, anon;
+grant execute on function trace_back(uuid, bigint) to authenticated, service_role;

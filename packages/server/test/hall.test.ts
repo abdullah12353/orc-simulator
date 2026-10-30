@@ -84,13 +84,20 @@ async function write(world: World, from: string, specs: Spec[]): Promise<Fact[]>
 /** Prints a story in some Player's edition with this headline (what the rap sheet's caption prefers). */
 async function printHeadline(world: World, playerId: string, storyNo: number, headline: string, createdAt: string, slot = 'lead') {
   const sql = db();
-  const [{ n }] = await sql`select coalesce(max(no), 0)::int + 1 as n from editions where player_id = ${playerId}`;
+  const [next] = await sql`select coalesce(max(no), 0)::int + 1 as n from editions where player_id = ${playerId}`;
   const [ed] = await sql`
     insert into editions (world_id, player_id, no, covers_from, covers_to, created_at, masthead)
-    values (${world.worldId}, ${playerId}, ${n}, ${createdAt}, ${createdAt}, ${createdAt}, '{}') returning id`;
+    values (${world.worldId}, ${playerId}, ${next!.n}, ${createdAt}, ${createdAt}, ${createdAt}, '{}') returning id`;
   const rank = slot === 'lead' ? 1 : slot === 'headline' ? 2 : 9;
   await sql`insert into edition_stories (edition_id, rank, story_no, slot, headline)
             values (${ed!.id}, ${rank}, ${storyNo}, ${slot}, ${headline})`;
+}
+
+/** A Clash's own fields, with a two-Captain fallback script (so `insertFacts` writes its dialogue). */
+function clashPayload(winner: string, loser: string): Record<string, unknown> {
+  const scripts = content.banks.clash.scripts;
+  const key = Object.keys(scripts).find((k) => scripts[k]!.lines.every((l) => l.speaker !== 'saviour'))!;
+  return { a: winner, b: loser, trigger: 'grudge', pA: 0.5, edgeA: 0, edgeB: 0, outcome: 'won', winner, loser, topTags: [], fallbackKey: key };
 }
 
 const rapSheet = (userId: string, playerId: string) =>
@@ -239,4 +246,58 @@ test('every Hall view is ordered by time, never by weight', async () => {
     const rows = await asUser(outsider, (tx) => tx`select 1 from ${tx(view)} where world_id = ${world.worldId}`);
     assert.equal(rows.length, 0, `${view} is members only`);
   }
+});
+
+const traceBack = (userId: string, worldId: string, factNo: number) =>
+  asUser(userId, (tx) => tx<{ fact_no: number; hops: number; kind: string; line: string; story_line: string }[]>`
+    select fact_no::int, hops, kind, line, story_line from trace_back(${worldId}, ${factNo})`);
+
+test('trace it back from a coup gives the chain in causal order and stops at the hop cap', async () => {
+  const clock = fakeClock();
+  const world = await freshWorld({ clock }); // Mo
+  const t0 = clock.iso();
+
+  // The GDD's chain: Rumour → Clash → death → Return → Clash → the Warlord falls → a new one is crowned.
+  // Something older lies behind the Rumour, 7 hops from the crowning: past the cap.
+  const [ancient] = await write(world, t0, [{ minute: 0, line: 'Long ago, a pie went missing.' }]);
+  const [rumour] = await write(world, t0, [{ minute: 10, kind: 'rumour', requires: [ancient!], meddleBy: world.playerId, line: 'Mo whispers.' }]);
+  const [clash] = await write(world, t0, [{ minute: 20, kind: 'clash', requires: [rumour!], line: 'Krúg and Vrakk clash.', payload: clashPayload('vrakk', 'krug') }]);
+  const [death] = await write(world, t0, [{ minute: 21, kind: 'death', storyOf: clash!, requires: [clash!], line: 'Krúg died.', tier: 'silent' }]);
+  // A side branch off the Clash that the coup never needed.
+  await write(world, t0, [{ minute: 22, kind: 'grudge', storyOf: clash!, requires: [clash!], line: '' }]);
+  const [ret] = await write(world, t0, [{ minute: 60, kind: 'return', requires: [death!], line: 'Krúg is back.' }]);
+  const [rematch] = await write(world, t0, [{ minute: 90, kind: 'clash', requires: [ret!], line: 'Krúg beats the Warlord.', payload: clashPayload('krug', 'vrakk') }]);
+  const [fell] = await write(world, t0, [{ minute: 90, kind: 'warlord_fell', storyOf: rematch!, requires: [rematch!], line: '', tier: 'silent' }]);
+  const [crowned] = await write(world, t0, [{ minute: 90, kind: 'crowned', requires: [fell!], line: 'Krúg is crowned.' }]);
+
+  const steps = await traceBack(world.userId, world.worldId, crowned!.no);
+  assert.equal(BLAME.hopCap, 6);
+  assert.deepEqual(
+    steps.map((s) => [s.kind, s.hops]),
+    [
+      ['rumour', 6],
+      ['clash', 5],
+      ['death', 4],
+      ['return', 3],
+      ['clash', 2],
+      ['warlord_fell', 1],
+      ['crowned', 0],
+    ],
+  );
+  assert.deepEqual(steps.map((s) => s.fact_no), [rumour, clash, death, ret, rematch, fell, crowned].map((f) => f!.no));
+  // Each step renders from its line; a silent step brings its story's line.
+  assert.equal(steps[0]!.line, 'Mo whispers.');
+  assert.equal(steps[5]!.line, '');
+  assert.equal(steps[5]!.story_line, 'Krúg beats the Warlord.');
+
+  // From nearer the start, the cap isn't reached and the old pie is in.
+  assert.deepEqual((await traceBack(world.userId, world.worldId, ret!.no)).map((s) => s.fact_no), [ancient, rumour, clash, death, ret].map((f) => f!.no));
+
+  // A Fact reached two ways comes once, at its nearest hop.
+  const [both] = await write(world, t0, [{ minute: 95, requires: [rematch!, rumour!], line: 'Everyone remembers.' }]);
+  const two = await traceBack(world.userId, world.worldId, both!.no);
+  assert.deepEqual(two.filter((s) => s.fact_no === rumour!.no).map((s) => s.hops), [1]);
+
+  const outsider = await newUser();
+  assert.equal((await traceBack(outsider, world.worldId, crowned!.no)).length, 0);
 });
