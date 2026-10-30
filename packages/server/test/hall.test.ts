@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
-import { insertFacts } from '@orc/server';
+import { drainJobs, insertFacts } from '@orc/server';
 import { BLAME, chain, type Cause, type Fact } from '@orc/sim';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
 
@@ -300,4 +300,74 @@ test('trace it back from a coup gives the chain in causal order and stops at the
 
   const outsider = await newUser();
   assert.equal((await traceBack(outsider, world.worldId, crowned!.no)).length, 0);
+});
+
+/** A fake Workers AI that writes good Clash lines and counts its calls. */
+function countingProvider() {
+  let calls = 0;
+  const fetch = (async (_url: string | URL, init?: RequestInit) => {
+    calls++;
+    const body = JSON.parse(String(init!.body)) as { messages: { content: string }[] };
+    const input = JSON.parse(body.messages.at(-1)!.content) as { lines: number; speakers: string[]; loser: string };
+    const others = input.speakers.filter((s) => s !== input.loser);
+    const speakers = [...others, ...Array(input.lines).fill(others[0])].slice(0, input.lines - 1);
+    const lines = [...speakers, input.loser].map((speaker, i) => ({ speaker, text: `Generated line ${i + 1}.` }));
+    const usage = { prompt_tokens: 2500, completion_tokens: 120 };
+    return new Response(JSON.stringify({ success: true, errors: [], result: { response: JSON.stringify({ lines }), usage } }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof globalThis.fetch;
+  return { fetch, calls: () => calls };
+}
+
+/** A Hall replay, read the way the PWA's Clash card reads it: the story's Facts and the stored dialogue. */
+const replay = (userId: string, worldId: string, factNo: number) =>
+  asUser(userId, async (tx) => {
+    const story = await tx`select no::int, kind from facts where world_id = ${worldId} and story_no = ${factNo}`;
+    const [dialogue] = await tx<{ lines: { speaker: string; text: string }[]; source: string }[]>`
+      select lines, source from clash_dialogue where world_id = ${worldId} and fact_no = ${factNo}`;
+    assert.ok(story.some((f) => f.no === factNo && f.kind === 'clash'));
+    return dialogue!;
+  });
+
+test('a Clash replay reads its stored dialogue and makes no provider call', async () => {
+  const day = '2031-05-01';
+  const clock = fakeClock(`${day}T12:00:00.000Z`);
+  await db()`delete from llm_usage where day = ${day}`;
+  const world = await freshWorld({ clock, seed: 404 });
+  const outbox = () => db()`select fact_no::int, status::text, claimed_at from narration_jobs where world_id = ${world.worldId} order by id`;
+  const usage = () => db()`select provider, neurons, requests, tokens from llm_usage where day = ${day} order by provider`;
+  const clashes = await db()`select fact_no::int from clash_dialogue where world_id = ${world.worldId} order by fact_no`;
+  assert.ok(clashes.length >= 2, 'day zero had Clashes');
+  const [first, second] = [clashes[0]!.fact_no as number, clashes[1]!.fact_no as number];
+
+  // Before narration: the replay plays the fallback script and leaves the outbox alone.
+  const before = await outbox();
+  const fallback = await replay(world.userId, world.worldId, first);
+  assert.equal(fallback.source, 'fallback');
+  assert.ok(fallback.lines.length >= 3);
+  assert.deepEqual(await outbox(), before, 'a replay queues and claims nothing');
+
+  // Narration upgrades every Clash once.
+  const provider = countingProvider();
+  const narration = { sql: db(), now: clock.now, fetch: provider.fetch, providers: { workersAi: { accountId: 'a', apiToken: 't' } } };
+  await drainJobs(narration, { worldIds: [world.worldId] });
+  const made = provider.calls();
+  assert.equal(made, clashes.length);
+  const spent = await usage();
+  const done = await outbox();
+
+  // Replays now play the generated lines, as often as anyone likes, and nothing calls a model again.
+  for (let i = 0; i < 3; i++) {
+    for (const no of [first, second]) {
+      const r = await replay(world.userId, world.worldId, no);
+      assert.equal(r.source, 'generated');
+      assert.equal(r.lines.at(-1)!.text.startsWith('Generated line'), true);
+    }
+  }
+  await drainJobs(narration, { worldIds: [world.worldId] });
+  assert.equal(provider.calls(), made, 'no provider call after the replays');
+  assert.deepEqual(await outbox(), done);
+  assert.deepEqual(await usage(), spent);
 });
