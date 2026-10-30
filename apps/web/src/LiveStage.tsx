@@ -3,10 +3,10 @@
 // time (Introductions for Returns and step-ins, #33), queued so they never overlap.
 import { useEffect, useRef, useState } from 'react';
 import { ClashCard } from './ClashCard.tsx';
-import { loadClashCard, type ClashCardData } from './clash-card-data.ts';
+import { loadClashCard, loadClashDialogue, type ClashCardData } from './clash-card-data.ts';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
-import { useLive } from './live.ts';
+import { useDialogue, useLive } from './live.ts';
 import { enqueue, liveItems, type LiveFact, type LiveItem } from './live-queue.ts';
 import { supabase } from './supabase.ts';
 
@@ -86,12 +86,29 @@ function LiveIntroduction({ worldId, no, onDone }: { worldId: string; no: number
 
 function LiveClash({ worldId, no, reader, onDone }: { worldId: string; no: number; reader: string; onDone: () => void }) {
   const [data, setData] = useState<ClashCardData | null>(null);
+  /** The generated lines were announced (possibly before the card itself loaded). */
+  const landed = useRef(false);
+
+  // A live Clash starts on its fallback script; when narration lands, the generated lines swap in and
+  // the card plays them from the next beat on (ClashCard reads `data.lines` per beat).
+  const swapIn = async () => {
+    const dialogue = await loadClashDialogue(worldId, no);
+    if (dialogue?.source === 'generated') setData((d) => (d ? { ...d, ...dialogue } : d));
+  };
+  useDialogue(worldId, (factNo) => {
+    if (factNo !== no) return;
+    landed.current = true;
+    void swapIn();
+  });
+
   useEffect(() => {
     let cancelled = false;
+    landed.current = false;
     void loadClashCard(worldId, no).then((card) => {
       if (cancelled) return;
-      if (card) setData(card);
-      else onDone(); // not readable (yet): skip rather than stall the queue
+      if (!card) return onDone(); // not readable (yet): skip rather than stall the queue
+      setData(card);
+      if (landed.current && card.source === 'fallback') void swapIn();
     });
     return () => {
       cancelled = true;

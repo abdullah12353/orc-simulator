@@ -50,6 +50,13 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
   };
 }
 
+/** A Clash's stored dialogue alone: what a live card refetches when its generated lines land (#37). */
+export async function loadClashDialogue(worldId: string, factNo: number): Promise<Pick<ClashCardData, 'lines' | 'source'> | null> {
+  const { data } = await supabase.from('clash_dialogue').select('lines, source').eq('world_id', worldId).eq('fact_no', factNo).maybeSingle();
+  if (!data) return null;
+  return { lines: data.lines as ClashLine[], source: data.source as ClashCardData['source'] };
+}
+
 async function loadBlameLine(worldId: string, factNo: number): Promise<string | null> {
   const { data } = await supabase
     .from('fact_blame')

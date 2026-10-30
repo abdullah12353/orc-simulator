@@ -2,6 +2,7 @@
 // Deno entrypoints stay one-liners and tests can call these in-process from Node.
 import { createWorld, CreateWorldError, type CreateWorldDeps } from './create-world.ts';
 import { openEdition, OpenEditionError, type OpenEditionDeps } from './herald.ts';
+import { drainJobs, type NarrationDeps } from './narration/index.ts';
 import { tickAllWorlds, tickWorld, type TickDeps } from './tick.ts';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -15,11 +16,20 @@ function sameSecret(a: string, b: string): boolean {
   return diff === 0;
 }
 
+export interface TickHandlerDeps extends TickDeps {
+  secret: string;
+  /** Narration's providers. Without it, Clash jobs stay queued (a later drain picks them up). */
+  narration?: Pick<NarrationDeps, 'fetch' | 'providers' | 'timeoutMs'>;
+  /** Keeps background work alive after the response (`EdgeRuntime.waitUntil`). */
+  waitUntil?: (work: Promise<unknown>) => void;
+}
+
 /**
  * POST /tick with `Authorization: Bearer <TICK_SECRET>`. Body `{ "worldId": "..." }` ticks one world;
- * no body ticks every world (what the clock Worker sends).
+ * no body ticks every world (what the clock Worker sends). After the ticks commit it answers, and
+ * drains the stepped worlds' narration jobs in the background (data-model §3 step 7).
  */
-export async function handleTick(req: Request, deps: TickDeps & { secret: string }): Promise<Response> {
+export async function handleTick(req: Request, deps: TickHandlerDeps): Promise<Response> {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const auth = req.headers.get('authorization') ?? '';
   if (!deps.secret || !sameSecret(auth, `Bearer ${deps.secret}`)) return json({ error: 'unauthorized' }, 401);
@@ -34,6 +44,13 @@ export async function handleTick(req: Request, deps: TickDeps & { secret: string
     }
   }
   const outcomes = worldId ? [await tickWorld(deps, worldId)] : await tickAllWorlds(deps);
+  const stepped = outcomes.flatMap((o) => (o.status === 'stepped' ? [o.worldId] : []));
+  if (deps.narration && stepped.length > 0) {
+    const drain = drainJobs({ ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content }, { worldIds: stepped }).catch(
+      (e: unknown) => console.error('drainJobs failed', e),
+    );
+    deps.waitUntil?.(drain);
+  }
   return json({ outcomes });
 }
 

@@ -34,6 +34,7 @@ export {
 } from './portrait.ts';
 export { validateContent, RUMOUR_TEMPLATES, PARENT_ROLES, ROSTER_TEMPLATES } from './validate.ts';
 export { hashString, hashValue, stableStringify } from './hash.ts';
+export { TONE_BIBLE } from './tone-bible.ts';
 
 const versions = new WeakMap<Content, string>();
 

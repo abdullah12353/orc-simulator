@@ -6,8 +6,13 @@ import { jsonb, type Sql, type Tx } from './db.ts';
 /** The private channel a world's live events go out on. */
 export const worldTopic = (worldId: string) => `world:${worldId}`;
 
-/** What goes out on `world:<id>`: `tick` after a productive watched tick (#37 adds `dialogue`). */
-export type WorldBroadcast = { event: 'tick'; payload: { tick_seq: number } };
+/**
+ * What goes out on `world:<id>`: `tick` after a productive watched tick, and `dialogue` when a Clash's
+ * generated lines replace its fallback script (sent by drainJobs, only while the world is watched).
+ */
+export type WorldBroadcast =
+  | { event: 'tick'; payload: { tick_seq: number } }
+  | { event: 'dialogue'; payload: { fact_no: number } };
 
 /**
  * Sends one broadcast through `realtime.send`, which writes it to realtime.messages for Realtime to
