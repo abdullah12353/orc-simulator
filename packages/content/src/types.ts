@@ -1,6 +1,6 @@
 // The content bundle's shapes (D46, data-model decision 6). Content ships as TS modules in the repo,
 // is bundled into the Edge Functions and the PWA, and is referenced from the DB only by text slugs.
-import type { Accent, CauseTag, Claim } from './pools.ts';
+import type { Accent, CauseTag, Claim, ParentKind } from './pools.ts';
 
 export type { Accent, CauseTag, Claim };
 
@@ -53,9 +53,12 @@ export interface RoleDef {
 
 /** What a reaction Template follows (D46 trigger `reaction`), and how likely it is to. */
 export interface AfterDef {
-  /** The parent Fact's kind: `incident`, `rumour`, `clash` or `dare`. */
-  kind: 'incident' | 'rumour' | 'clash' | 'dare';
-  /** Only after these outcomes (an incident's outcome key, a Rumour's, a Clash's or a Dare's outcome). Omit for any. */
+  /** The parent Fact's kind: `incident`, or a kind in `PARENT_ROLES` (a Rumour, Clash, Dare or roster head). */
+  kind: 'incident' | ParentKind;
+  /**
+   * Only after these outcomes (an incident's outcome key, a Rumour's, a Clash's or a Dare's outcome, how an
+   * Unmasking came about). Omit for any; roster heads other than an Unmasking have no outcome.
+   */
   outcomes?: string[];
   /** Chance it follows a matching parent, 0–1. Halved if the Template ran in the last 24 h. */
   chance: number;

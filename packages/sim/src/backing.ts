@@ -6,6 +6,7 @@
 // Gold is private (decision 7): it lives only in the diff's `ledger` and `stakes`, never on a Fact, and no
 // random draw ever depends on an amount. Debits (a new Stake or a top-up) happen at submit_intent; the
 // sim only ever credits (Stipend, withdrawals, payouts and refunds), through `credit`.
+import { compareCodeUnits } from '@orc/content';
 import type { TickContext } from './context.ts';
 import type { Intent } from './types.ts';
 
@@ -66,7 +67,7 @@ export function grantStipends(ctx: TickContext): void {
 }
 
 const stakeKey = (playerId: string, captainId: string) => `${playerId}|${captainId}`;
-const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => (a < b ? -1 : a > b ? 1 : 0);
+const byKey = ([a]: [string, unknown], [b]: [string, unknown]) => compareCodeUnits(a, b);
 
 /** A Player's Stake on a Captain at this point in the tick (0 for none). */
 export function stakeOf(ctx: TickContext, playerId: string, captainId: string): number {

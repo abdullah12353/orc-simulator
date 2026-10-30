@@ -1,6 +1,6 @@
 // The Dare picker's rules (#35, user stories 42–45), shared by the PWA (what to offer) and the sim (what a
 // Dare intent may name). Pure: no randomness, so the same target and round always offer the same 3.
-import { hashString } from './hash.ts';
+import { compareCodeUnits, hashString } from './hash.ts';
 import type { BankKey, Content, DareDef } from './types.ts';
 
 /** The picker's fourth option: the sim picks a Dare that fits the target when it lands. */
@@ -37,7 +37,7 @@ export function dareOffers(
 ): BankKey[] {
   const ranked = daresFor(content, target)
     .map((k) => ({ k, h: hashString(`${target.id}:${round}:${k}`) }))
-    .sort((a, b) => (a.h < b.h ? -1 : a.h > b.h ? 1 : 0))
+    .sort((a, b) => compareCodeUnits(a.h, b.h))
     .map((x) => x.k);
   const kind = (k: BankKey) => content.banks.dares[k]!.kind;
   const picked = new Set<BankKey>();

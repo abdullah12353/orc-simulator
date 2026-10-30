@@ -6,9 +6,11 @@
 // The seams: anything that can kill calls `disaster(ctx, head, victim, causeTag)` once its story head is
 // written; anything that can expose a disguise calls `maybeUnmask`. `processReturns` runs once a tick,
 // straight after the day roll.
-import { KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
+import { compareCodeUnits, KRUG, ROSTER_TEMPLATES, type CauseTag, type HumiliationDef } from '@orc/content';
+import { causeOf } from './blame.ts';
 import type { TickContext } from './context.ts';
 import { drift, gainInfamy, INFAMY, warlordFalls } from './infamy.ts';
+import { followUp } from './reactions.ts';
 import { renderLine } from './rumours.ts';
 import { addMinutes, isoToMs } from './time.ts';
 import type { CaptainId, Cause, Fact, FactNo, Humiliation, Introduction } from './types.ts';
@@ -36,15 +38,16 @@ export const UNMASK = { clash: 0.5, rumour: 0.3 } as const;
 /**
  * A disaster in the story headed by `head` would kill `victim` (if he's still active). At the day's death
  * cap, or inside his grace, it becomes `death_averted` plus one Humiliation fitting `tag`. Otherwise he
- * dies: he Returns 2–12 h later, his disguise falls off, and a reserve Captain steps in.
+ * dies: he Returns 2–12 h later, his disguise falls off, and a reserve Captain steps in. `depth` is the
+ * reaction depth of `head`: the stepping in reacts on from there.
  */
-export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag): void {
+export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag, depth = 0): void {
   if (ctx.rosterOf(victim) !== 'active') return;
   const { state, rng } = ctx;
   const now = state.world.now;
   const c = ctx.captain(victim);
   const bank = state.content.banks.death;
-  const headCause: Cause = { fact: head.no, blame: head.blame };
+  const headCause: Cause = causeOf(head);
 
   const why =
     c.graceUntil !== null && isoToMs(c.graceUntil) > isoToMs(now)
@@ -76,7 +79,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   gainInfamy(ctx, deathFact, victim, INFAMY.death);
   drift(ctx, deathFact, victim, -1);
   warlordFalls(ctx, deathFact, victim, 'death');
-  const death: Cause = { fact: no, blame };
+  const death = causeOf(deathFact);
   ctx.patchCaptain(victim, { roster: 'dead', returnsAt, death: { cause: death, causeTag: tag } });
   ctx.diff.world.deathsToday = ctx.deathsToday() + 1;
 
@@ -84,7 +87,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
   for (const h of ctx.humiliations().filter((x) => x.captainId === victim && x.cat === 'disguise')) {
     endHumiliation(ctx, h, 'died', head.no, [death]);
   }
-  stepIn(ctx, victim, death);
+  stepIn(ctx, victim, death, depth);
 }
 
 /**
@@ -94,7 +97,7 @@ export function disaster(ctx: TickContext, head: Fact, victim: CaptainId, tag: C
 export function humiliate(ctx: TickContext, head: Fact, victim: CaptainId, tag: CauseTag): void {
   if (ctx.rosterOf(victim) !== 'active') return;
   const choice = chooseHumiliation(ctx, victim, tag);
-  if (choice) applyHumiliation(ctx, victim, choice, head.no, [{ fact: head.no, blame: head.blame }]);
+  if (choice) applyHumiliation(ctx, victim, choice, head.no, [causeOf(head)]);
 }
 
 /** Bandages that are due heal, then every Captain whose Return is due comes back, in (returnsAt, slug) order. */
@@ -106,21 +109,22 @@ export function processReturns(ctx: TickContext): void {
   const due = Object.keys(ctx.state.captains)
     .map((id) => ctx.captain(id))
     .filter((c) => c.roster === 'dead' && c.returnsAt !== null && isoToMs(c.returnsAt) <= now)
-    .sort((a, b) => isoToMs(a.returnsAt!) - isoToMs(b.returnsAt!) || (a.id < b.id ? -1 : 1));
+    .sort((a, b) => isoToMs(a.returnsAt!) - isoToMs(b.returnsAt!) || compareCodeUnits(a.id, b.id));
   for (const c of due) returnCaptain(ctx, c.id);
 }
 
 /**
  * A disguised, living Captain is exposed with `chance`, as a story of its own that requires `head` (the
- * Clash he lost, or the Rumour about him). His disguise ends and he goes by his own name again.
+ * Clash he lost, or the Rumour about him). His disguise ends and he goes by his own name again. `depth` is
+ * the reaction depth of `head`.
  */
-export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'clash' | 'rumour', chance: number): void {
+export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'clash' | 'rumour', chance: number, depth = 0): void {
   if (ctx.rosterOf(id) !== 'active') return;
   const disguise = ctx.humiliations().find((h) => h.captainId === id && h.cat === 'disguise');
   if (!disguise || !ctx.rng.chance(chance)) return;
   const alias = aliasOf(ctx, id, ctx.captain(id).aliasIdx ?? 0);
   const no = ctx.allocNo();
-  const { causes, blame } = ctx.link(no, { requires: [{ fact: head.no, blame: head.blame }] });
+  const { causes, blame } = ctx.link(no, { requires: [causeOf(head)] });
   const fact: Fact = {
     no,
     at: ctx.state.world.now,
@@ -136,7 +140,8 @@ export function maybeUnmask(ctx: TickContext, head: Fact, id: CaptainId, by: 'cl
   };
   ctx.facts.push(fact);
   gainInfamy(ctx, fact, id, INFAMY.unmasked);
-  endHumiliation(ctx, disguise, 'unmasked', no, [{ fact: no, blame }]);
+  endHumiliation(ctx, disguise, 'unmasked', no, [causeOf(fact)]);
+  followUp(ctx, fact, depth);
 }
 
 /** The Return head, then its Humiliation, then whoever it benches; his held Meddles go back on a Fuse. */
@@ -170,7 +175,7 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
     graceUntil,
   };
   ctx.facts.push(head);
-  const headCause: Cause = { fact: no, blame };
+  const headCause = causeOf(head);
   if (choice) applyHumiliation(ctx, id, choice, no, [headCause]);
   bench(ctx, id, head);
 
@@ -178,24 +183,25 @@ function returnCaptain(ctx: TickContext, id: CaptainId): void {
   const { min, max } = ROSTER.refuseMinutes;
   const held = Object.values(state.meddles)
     .filter((m) => m.status === 'held' && m.heldOn === id)
-    .sort((a, b) => (a.id < b.id ? -1 : 1));
+    .sort((a, b) => compareCodeUnits(a.id, b.id));
   for (const m of held) {
     ctx.diff.meddles.push({ id: m.id, status: 'pending', heldOn: null });
     ctx.diff.fuses.add.push({ no: ctx.allocNo(), dueAt: addMinutes(now, min + rng.int(max - min + 1)), meddleId: m.id });
   }
+  followUp(ctx, head, 0);
 }
 
 /**
  * A Returner makes 13: the active Captain with the least Infamy in the last 7 days goes to the reserve (slug
- * breaks a tie), never Krúg or the Warlord.
+ * breaks a tie), never Krúg, the Warlord or a Legendary Captain (D45: permanent, he keeps playing).
  */
 function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
   const active = ctx.activeCaptains();
   if (active.length <= ROSTER.activeSize) return;
   const warlord = ctx.warlord();
   const [id] = active
-    .filter((x) => x !== returner && x !== KRUG && x !== warlord)
-    .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || (a < b ? -1 : 1));
+    .filter((x) => x !== returner && x !== KRUG && x !== warlord && ctx.captain(x).legendaryFact === null)
+    .sort((a, b) => benchScore(ctx, a) - benchScore(ctx, b) || compareCodeUnits(a, b));
   if (!id) return;
   ctx.patchCaptain(id, { roster: 'reserve' });
   const no = ctx.allocNo();
@@ -207,7 +213,7 @@ function bench(ctx: TickContext, returner: CaptainId, head: Fact): void {
     line,
     tier: 'silent',
     cast: [id],
-    ...ctx.link(no, { requires: [{ fact: head.no, blame: head.blame }] }),
+    ...ctx.link(no, { requires: [causeOf(head)] }),
     infamy: [],
     kind: 'benched',
     captainId: id,
@@ -221,7 +227,7 @@ function benchScore(ctx: TickContext, id: CaptainId): number {
 }
 
 /** A reserve Captain, drawn at random, steps into the active roster with his Introduction (a story head). */
-function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
+function stepIn(ctx: TickContext, dead: CaptainId, death: Cause, depth: number): void {
   if (ctx.activeCaptains().length >= ROSTER.activeSize) return;
   const reserve = Object.keys(ctx.state.captains)
     .filter((id) => ctx.rosterOf(id) === 'reserve')
@@ -230,7 +236,7 @@ function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
   const id = ctx.rng.pick(reserve);
   ctx.patchCaptain(id, { roster: 'active' });
   const no = ctx.allocNo();
-  ctx.facts.push({
+  const head: Fact = {
     no,
     at: ctx.state.world.now,
     storyNo: no,
@@ -242,7 +248,9 @@ function stepIn(ctx: TickContext, dead: CaptainId, death: Cause): void {
     kind: 'stepped_in',
     intro: ctx.introduction(id),
     replacing: dead,
-  });
+  };
+  ctx.facts.push(head);
+  followUp(ctx, head, depth);
 }
 
 interface Choice {
@@ -311,7 +319,7 @@ function applyHumiliation(ctx: TickContext, id: CaptainId, choice: Choice, story
     const fears = ctx.fears(id);
     const oldest = fears
       .filter((f) => f.added)
-      .sort((a, b) => isoToMs(a.since) - isoToMs(b.since) || (a.fear < b.fear ? -1 : a.fear > b.fear ? 1 : 0))[0];
+      .sort((a, b) => isoToMs(a.since) - isoToMs(b.since) || compareCodeUnits(a.fear, b.fear))[0];
     const remove = fears.length >= ROSTER.maxFears ? oldest?.fear : undefined;
     if (remove !== undefined) {
       replaced.push(...current.filter((h) => h.cat === 'fear' && state.content.banks.humiliations[h.key]?.fear === remove));

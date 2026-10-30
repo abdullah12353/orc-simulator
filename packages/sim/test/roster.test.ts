@@ -119,8 +119,8 @@ const quiet = (): Content => {
  * A calm world where `victim` died of `tag` (as Fact 900) and is due back now, a reserve Captain having
  * taken his place. Everyone else gained 10 Infamy in the last 7 days, except `lowest` (5), who should be the one benched.
  */
-function dueBack(tag: 'beaten' | 'drowned' | 'fell', seed = 1): { state: WorldState; victim: CaptainId; lowest: CaptainId } {
-  const base = freshWorld({ content: quiet(), seed, players: [P1] });
+function dueBack(tag: 'beaten' | 'drowned' | 'fell', seed = 1, c: Content = quiet()): { state: WorldState; victim: CaptainId; lowest: CaptainId } {
+  const base = freshWorld({ content: c, seed, players: [P1] });
   const active = activeIds(base);
   const victim = active.find((id) => id !== KRUG && id !== base.world.warlordId)!;
   const lowest = active.find((id) => id !== KRUG && id !== base.world.warlordId && id !== victim)!;
@@ -396,4 +396,90 @@ test('deaths and Humiliations are misfortunes an accuser can blame on a Player',
     }
   }
   assert.deepEqual([...kinds].sort(), ['death', 'humiliation']);
+});
+
+test('a Rumour can be about a Fear he came back with earlier in the same tick', () => {
+  // Find a Return that gives him a new Fear.
+  for (let seed = 1; ; seed++) {
+    const { state, victim } = dueBack('drowned', seed);
+    const fear = ofKind(simulate(state, [], seed).facts, 'humiliation').find((h) => h.cat === 'fear');
+    if (!fear) continue;
+    const def = shipped.banks.humiliations[fear.key]!;
+    assert.ok(!state.captains[victim]!.fears.some((f) => f.fear === def.fear), 'a Fear he did not have before');
+    const source = activeIds(state).find((id) => id !== victim)!;
+    const intent = rumour(state, P1, { source, target: victim, subject: { from: 'fear', key: def.fear! } });
+    const { stateDiff } = simulate(state, [intent], seed);
+    assert.deepEqual(stateDiff.intents, [{ id: intent.id, status: 'consumed' }], 'the Return happens first, so his new Fear counts');
+    return;
+  }
+});
+
+test('a Legendary Captain is never benched, however quiet his week (D45: he keeps playing)', () => {
+  const { state: base, lowest } = dueBack('beaten');
+  const state: WorldState = { ...base, captains: { ...base.captains, [lowest]: { ...base.captains[lowest]!, infamy: 160, legendaryFact: 600 } } };
+  const { facts, stateDiff } = simulate(state, [], 3);
+  const [benched] = ofKind(facts, 'benched');
+  assert.ok(benched);
+  assert.notEqual(benched.captainId, lowest, 'the Legendary one stays');
+  const next = applyDiff(state, stateDiff);
+  assert.equal(next.captains[lowest]!.roster, 'active');
+  assert.equal(activeIds(next).length, 12);
+});
+
+/** A reaction incident that always follows a `kind` head, casting its `from` role. */
+const reactsTo = (kind: NonNullable<TemplateDef['after']>['kind'], from: string): TemplateDef => ({
+  id: `test.after-${kind}`,
+  kind: 'incident',
+  trigger: 'reaction',
+  after: { kind, chance: 1 },
+  roles: [{ name: 'a', from }],
+  outcomes: [{ key: 'again', weight: 1 }],
+  lines: ['{a} again.', '{a} again!', '{a}, again.'],
+  baseWeight: 1,
+});
+const withReactions = (c: Content, ...ts: TemplateDef[]): Content => ({ ...c, templates: [...c.templates, ...ts] });
+
+/** The reaction to `head` in `facts`: an incident that requires it and casts `id`. */
+function reactionTo(facts: Fact[], head: Fact | undefined, id: CaptainId) {
+  assert.ok(head, 'the head is there');
+  const r = ofKind(facts, 'incident').find((f) => f.trigger === 'reaction' && f.causes.includes(head.no));
+  assert.ok(r, `something reacts to the ${head.kind}`);
+  assert.equal(r.storyNo, r.no);
+  assert.deepEqual(r.cast, [id]);
+}
+
+test('the world reacts to a Return, a stepping in, an Unmasking and a crowning like any other story head', () => {
+  // A Return.
+  const back = dueBack('beaten', 1, withReactions(quiet(), reactsTo('return', 'returner')));
+  const returned = simulate(back.state, [], 1).facts;
+  reactionTo(returned, ofKind(returned, 'return')[0], back.victim);
+
+  // A reserve Captain stepping in, and (the Warlord being the one who died) the crowning.
+  const deadly = withReactions(deadlyContent(), reactsTo('stepped_in', 'newcomer'), reactsTo('crowned', 'warlord'));
+  const { state, seed } = calm(deadly, (s) => {
+    const captains = { ...s.captains };
+    for (const x of activeIds(s)) if (x !== s.world.warlordId) captains[x] = { ...captains[x]!, roster: 'reserve' };
+    return { ...s, captains };
+  });
+  const { facts } = simulate(state, [], seed);
+  assert.equal(ofKind(facts, 'death')[0]?.captainId, state.world.warlordId);
+  const [stepped] = ofKind(facts, 'stepped_in');
+  reactionTo(facts, stepped, stepped!.intro.captainId);
+  const [crowned] = ofKind(facts, 'crowned');
+  reactionTo(facts, crowned, crowned!.intro.captainId);
+
+  // An Unmasking (by a Rumour about him).
+  for (let seed = 1; ; seed++) {
+    const { state, id } = disguised(withReactions(quiet(), reactsTo('unmasked', 'captain')));
+    const source = activeIds(state).find((x) => x !== id)!;
+    const intent = rumour(state, P1, { source, target: id, firstMeddle: true });
+    const t1: WorldState = { ...state, world: { ...state.world, tickSeq: 1, now: addMinutes(state.world.now, 1) } };
+    const s = applyDiff(t1, simulate(t1, [intent], seed).stateDiff);
+    const t2: WorldState = { ...s, world: { ...s.world, tickSeq: 2, prevTickAt: s.world.now, now: s.fuses[0]!.dueAt } };
+    const r = simulate(t2, [], seed).facts;
+    const [unmasked] = ofKind(r, 'unmasked');
+    if (!unmasked) continue;
+    reactionTo(r, unmasked, id);
+    break;
+  }
 });

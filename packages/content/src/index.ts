@@ -3,7 +3,7 @@ import type { Content } from './types.ts';
 
 export * from './types.ts';
 export { content } from './bundle.ts';
-export { ACCENTS, ACCENT_LABELS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
+export { ACCENTS, ACCENT_LABELS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, PARENT_ROLES, TRAITS, type ParentKind } from './pools.ts';
 export { subjectText, type SubjectRef } from './subjects.ts';
 export { blameLine, type BlameName } from './blame-line.ts';
 export { DARE_OFFERS, SURPRISE, dareFits, dareOffers, daresFor, playsOnFear } from './dares.ts';
@@ -33,8 +33,8 @@ export {
   type PortraitLayer,
   type PortraitMark,
 } from './portrait.ts';
-export { validateContent, RUMOUR_TEMPLATES, DARE_TEMPLATES, PARENT_ROLES, ROSTER_TEMPLATES } from './validate.ts';
-export { hashString, hashValue, stableStringify } from './hash.ts';
+export { validateContent, RUMOUR_TEMPLATES, DARE_TEMPLATES, ROSTER_TEMPLATES } from './validate.ts';
+export { compareCodeUnits, hashString, hashValue, stableStringify } from './hash.ts';
 export { TONE_BIBLE } from './tone-bible.ts';
 
 const versions = new WeakMap<Content, string>();

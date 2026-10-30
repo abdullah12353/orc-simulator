@@ -69,3 +69,18 @@ export const CASTING = {
   /** Exactly this many accusers (D59). */
   accusers: 6,
 } as const;
+
+/**
+ * The roles a reaction can cast from its parent Fact, per parent kind (incidents offer their own Template's
+ * roles). The sim's `parentRoles` fills exactly these, so this is the one list of them.
+ */
+export const PARENT_ROLES = {
+  rumour: ['source', 'target', 'reached'],
+  clash: ['a', 'b', 'winner', 'loser', 'saviour'],
+  dare: ['target', 'victim'],
+  return: ['returner'],
+  stepped_in: ['newcomer', 'dead'],
+  unmasked: ['captain'],
+  crowned: ['warlord', 'previous'],
+} as const;
+export type ParentKind = keyof typeof PARENT_ROLES;

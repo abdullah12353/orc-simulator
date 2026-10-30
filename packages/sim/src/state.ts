@@ -1,4 +1,4 @@
-import { hashValue } from '@orc/content';
+import { compareCodeUnits, hashValue } from '@orc/content';
 import { BACKING } from './backing.ts';
 import { BLAME } from './blame.ts';
 import { INFAMY_WINDOW_DAYS, MEDDLE_CAP, VARIETY } from './context.ts';
@@ -91,7 +91,7 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     grudgeTags: newestPerPair([...state.grudgeTags, ...diff.grudgeTags]),
     infamy7d: infamyWindow([...state.infamy7d, ...diff.infamy], world.now),
     players,
-    stakes: [...stakes].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, s]) => s),
+    stakes: [...stakes].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, s]) => s),
     meddles,
     fuses,
   };
@@ -99,7 +99,7 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
 
 /** Fears oldest first, then by name (code units), as the tick loads them. */
 const fearOrder = (a: CaptainState['fears'][number], b: CaptainState['fears'][number]) =>
-  isoToMs(a.since) - isoToMs(b.since) || (a.fear < b.fear ? -1 : a.fear > b.fear ? 1 : 0);
+  isoToMs(a.since) - isoToMs(b.since) || compareCodeUnits(a.fear, b.fear);
 
 /**
  * The newest 3 Grudge tags per pair, in number order: all the sim reads (Blame takes at most 3 per pair,
@@ -120,7 +120,7 @@ function infamyWindow(gains: WorldState['infamy7d'], now: string): WorldState['i
   const since = isoToMs(now) - INFAMY_WINDOW_DAYS * 86_400_000;
   return gains
     .filter((g) => isoToMs(g.at) > since)
-    .sort((a, b) => a.fact - b.fact || (a.captainId < b.captainId ? -1 : a.captainId > b.captainId ? 1 : 0));
+    .sort((a, b) => a.fact - b.fact || compareCodeUnits(a.captainId, b.captainId));
 }
 
 /** Keeps the entries inside the window ending at `now`, as the tick's loader does from `facts`. */

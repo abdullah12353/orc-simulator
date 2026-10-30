@@ -2,8 +2,12 @@
 // Template REQUIRED; its Blame is every cause's Blame one hop further on, plus its own Meddle at hop 0,
 // deduped per Meddle (the nearest path wins) and cut off past the hop cap. Callbacks add comedy weight
 // but never Blame. The sim materialises Blame on every Fact, so the DB never has to recurse.
+import { compareCodeUnits } from '@orc/content';
 import { isoToMs } from './time.ts';
-import type { BlameEntry, Cause, FactNo, GrudgeTag, Iso } from './types.ts';
+import type { BlameEntry, Cause, Fact, FactNo, GrudgeTag, Iso } from './types.ts';
+
+/** A Fact as a cause: requiring it carries its Blame one hop on. */
+export const causeOf = (f: Fact): Cause => ({ fact: f.no, blame: f.blame });
 
 /** Decision 8: (a) required state only, (b) a pair's last 3 Grudge tags from 7 days, (c) at most 6 hops. */
 export const BLAME = {
@@ -17,7 +21,7 @@ function byLanding(a: BlameEntry, b: BlameEntry): number {
   return (
     isoToMs(a.landedAt) - isoToMs(b.landedAt) ||
     a.landedFact - b.landedFact ||
-    (a.meddleId < b.meddleId ? -1 : a.meddleId > b.meddleId ? 1 : 0)
+    compareCodeUnits(a.meddleId, b.meddleId)
   );
 }
 
@@ -40,7 +44,7 @@ export function mergeBlame(causes: readonly Cause[], own: readonly BlameEntry[] 
 export interface Links {
   /** State the Template required: these become `fact.causes` and carry Blame. */
   requires?: readonly Cause[];
-  /** State the event merely called back to: comedy weight only, never a cause, never Blame. */
+  /** State the Fact merely calls back to: comedy weight only, never a cause, never Blame. */
   callbacks?: readonly unknown[];
   /** The Fact's own Meddle, if it is a Meddle landing (hop 0). */
   own?: readonly BlameEntry[];

@@ -1,4 +1,4 @@
-import { ACCENTS, CASTING, KRUG, contentVersion, type CastCard, type Content } from '@orc/content';
+import { ACCENTS, CASTING, KRUG, compareCodeUnits, contentVersion, type CastCard, type Content } from '@orc/content';
 import { createRng, type Rng } from './rng.ts';
 import { londonDate } from './time.ts';
 import type { CaptainId, CaptainState, GrudgeTag, Iso, PlayerId, WorldState } from './types.ts';
@@ -11,7 +11,7 @@ const CAST_DRAWS = 24;
 /** Seeded Grudges start below −50, so a Clash can start on day one (D48): −55..−90. */
 const SEEDED_AFFINITY = { min: 55, spread: 36 } as const;
 
-const bySlug = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+const bySlug = (a: { id: string }, b: { id: string }) => compareCodeUnits(a.id, b.id);
 
 /**
  * Casts a new world (D57). The active 12 are Krúg plus 2 per accent archetype (drawn so the Traits
