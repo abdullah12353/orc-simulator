@@ -168,3 +168,52 @@ test("a reaction Template needs `after`, and may only cast roles its parent's ki
   assert.ok(errors.some((e) => e.includes('reaction.sulk') && e.includes('goose')), errors.join('\n'));
   assert.ok(errors.some((e) => e.includes('reaction.moat-blame') && e.includes('after')), errors.join('\n'));
 });
+
+test('every death cause tag has a Humiliation that fits it, and Humiliations only name known causes', () => {
+  const broken = clone(content);
+  for (const [key, h] of Object.entries(broken.banks.humiliations)) {
+    if (h.causes.includes('fell')) h.causes = h.causes.filter((c) => c !== 'fell');
+    if (h.causes.length === 0) delete broken.banks.humiliations[key];
+  }
+  broken.banks.humiliations['bandage.head']!.causes.push('exploded' as never);
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('"fell"') && e.includes('no Humiliation')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('bandage.head') && e.includes('"exploded"')), errors.join('\n'));
+});
+
+test('a deadly outcome kills a role its Template casts, with a known cause tag', () => {
+  const broken = clone(content);
+  const moat = broken.templates.find((t) => t.id === 'ambient.moat-dip')!;
+  moat.outcomes[1]!.death = { role: 'ghost', tag: 'squashed' as never };
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('ambient.moat-dip') && e.includes('"ghost"')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('ambient.moat-dip') && e.includes('"squashed"')), errors.join('\n'));
+});
+
+test('Humiliations name real Epithets and Fears with Rumour subjects, and portrait overlays for marks', () => {
+  const broken = clone(content);
+  broken.banks.humiliations['epithet.the-damp']!.epithet = 'the-nonexistent';
+  broken.banks.humiliations['fear.puddles']!.fear = 'Spoons';
+  delete broken.banks.humiliations['lost.ear']!.overlay;
+  broken.banks.humiliations['disguise.wig']!.text = 'in a wig, answering only to {nickname}';
+  const errors = validateContent(broken);
+  for (const [key, words] of [
+    ['epithet.the-damp', 'the-nonexistent'],
+    ['fear.puddles', 'Spoons'],
+    ['lost.ear', 'overlay'],
+    ['disguise.wig', '{nickname}'],
+  ] as const) {
+    assert.ok(errors.some((e) => e.includes(key) && e.includes(words)), `${key}: ${errors.join('\n')}`);
+  }
+});
+
+test('the roster Templates exist, and the death bank needs sentences naming {captain}', () => {
+  const broken = clone(content);
+  broken.templates = broken.templates.filter((t) => t.id !== 'roster.return');
+  broken.banks.death.averted.daily_cap = [];
+  broken.banks.death.died[0] = 'Somebody died.';
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('roster.return')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('banks.death.averted.daily_cap')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('banks.death.died') && e.includes('{captain}')), errors.join('\n'));
+});

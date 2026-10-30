@@ -1,4 +1,4 @@
-import { ACCENTS, CASTING, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
+import { ACCENTS, CASTING, CAUSE_TAGS, CLAIMS, FEARS, KRUG, TRAITS } from './pools.ts';
 import type { CastCard, ClashOutcome, Content } from './types.ts';
 
 const TRAIT_POOL = new Set<string>(TRAITS);
@@ -121,6 +121,86 @@ export function validateContent(c: Content): string[] {
   errors.push(...validateBlameLines(c));
   errors.push(...validateClashes(c));
   errors.push(...validateReactions(c));
+  errors.push(...validateRoster(c));
+  return errors;
+}
+
+/** The roster's story heads (#32); the sim writes them by these slugs, with exactly these roles. */
+export const ROSTER_TEMPLATES = {
+  return: { id: 'roster.return', roles: ['returner'] },
+  stepped_in: { id: 'roster.stepped-in', roles: ['newcomer', 'dead'] },
+  unmasked: { id: 'roster.unmasked', roles: ['captain'] },
+} as const;
+
+const CAUSE_SET = new Set<string>(CAUSE_TAGS);
+const HUMILIATION_TEXT = new Set(['name', 'alias', 'epithet']);
+
+/** Death, Return and Humiliations (#32): every way to die picks a Humiliation that fits it. */
+function validateRoster(c: Content): string[] {
+  const errors: string[] = [];
+  for (const [kind, def] of Object.entries(ROSTER_TEMPLATES)) {
+    const t = c.templates.find((x) => x.id === def.id);
+    if (!t) {
+      errors.push(`templates: the roster Template "${def.id}" is missing`);
+      continue;
+    }
+    if (t.kind !== kind || t.trigger !== 'roster') errors.push(`template ${t.id}: needs kind ${kind} and trigger roster`);
+    const roles = (t.roles ?? []).map((r) => r.name).sort().join(',');
+    if (roles !== [...def.roles].sort().join(',')) errors.push(`template ${t.id}: casts exactly ${def.roles.join(', ')}`);
+  }
+  for (const t of c.templates) {
+    if (t.trigger === 'roster' && !Object.values(ROSTER_TEMPLATES).some((d) => d.id === t.id)) {
+      errors.push(`template ${t.id}: only the roster Templates use trigger roster`);
+    }
+    const roles = new Set((t.roles ?? []).map((r) => r.name));
+    for (const o of t.outcomes ?? []) {
+      if (!o.death) continue;
+      if (!roles.has(o.death.role)) errors.push(`template ${t.id}: outcome "${o.key}" kills role "${o.death.role}", which it doesn't cast`);
+      if (!CAUSE_SET.has(o.death.tag)) errors.push(`template ${t.id}: outcome "${o.key}" has unknown cause tag "${o.death.tag}"`);
+    }
+  }
+
+  const bank = c.banks.humiliations ?? {};
+  for (const tag of CAUSE_TAGS) {
+    if (!Object.values(bank).some((h) => h.causes?.includes(tag))) errors.push(`banks.humiliations: no Humiliation fits the cause "${tag}"`);
+  }
+  for (const [key, h] of Object.entries(bank)) {
+    const where = `banks.humiliations.${key}`;
+    if (!h.text?.trim()) errors.push(`${where}: needs text`);
+    for (const name of placeholders(h.text ?? '')) {
+      if (!HUMILIATION_TEXT.has(name)) errors.push(`${where}: "{${name}}" can't be used (only {name}, {alias}, {epithet})`);
+    }
+    if (!h.causes?.length) errors.push(`${where}: fits no cause`);
+    for (const tag of h.causes ?? []) if (!CAUSE_SET.has(tag)) errors.push(`${where}: unknown cause tag "${tag}"`);
+    const marks = h.cat === 'bandage' || h.cat === 'lost_bit' || h.cat === 'disguise';
+    if (marks && !(h.overlay && Number.isInteger(h.overlay.slot) && h.overlay.slot >= 2 && h.overlay.slot <= 8)) {
+      errors.push(`${where}: a ${h.cat} needs a portrait overlay in slot 2–8`);
+    }
+    if (h.cat === 'epithet' && !(h.epithet && c.banks.epithets?.[h.epithet])) {
+      errors.push(`${where}: Epithet "${h.epithet}" is not in the Epithet bank`);
+    }
+    if (h.cat === 'fear' && !(h.fear && c.banks.subjects?.[h.fear]?.trim())) {
+      errors.push(`${where}: Fear "${h.fear}" has no Rumour subject phrase in banks.subjects`);
+    }
+    if (h.cat === 'disguise' && !String(h.text).includes('{alias}')) errors.push(`${where}: a disguise names his {alias}`);
+  }
+
+  const death = c.banks.death;
+  const lists: [string, string[] | undefined][] = [
+    ['banks.death.died', death?.died],
+    ['banks.death.averted.grace', death?.averted?.grace],
+    ['banks.death.averted.daily_cap', death?.averted?.daily_cap],
+    ['banks.death.benched', death?.benched],
+  ];
+  for (const [where, list] of lists) {
+    if (!Array.isArray(list) || list.length === 0) {
+      errors.push(`${where}: needs at least 1 sentence`);
+      continue;
+    }
+    for (const line of list) {
+      if (!String(line).includes('{captain}')) errors.push(`${where}: "${line}" doesn't name {captain}`);
+    }
+  }
   return errors;
 }
 
