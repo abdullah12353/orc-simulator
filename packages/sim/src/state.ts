@@ -1,0 +1,135 @@
+import { compareCodeUnits, hashValue } from '@orc/content';
+import { BACKING } from './backing.ts';
+import { BLAME } from './blame.ts';
+import { INFAMY_WINDOW_DAYS, MEDDLE_CAP, VARIETY } from './context.ts';
+import { isoToMs } from './time.ts';
+import type { CaptainState, GrudgeTag, Humiliation, StateDiff, Trophy, WorldState } from './types.ts';
+
+/** Applies a diff to a state, purely. Used for day zero and tests; the tick commits the same diff to SQL. */
+export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
+  const captains = { ...state.captains };
+  for (const patch of diff.captains) {
+    const current = captains[patch.id];
+    if (!current) throw new Error(`applyDiff: unknown Captain ${patch.id}`);
+    captains[patch.id] = { ...current, ...patch };
+  }
+  // Fears a Humiliation added (or replaced), kept oldest first as the tick loads them.
+  for (const f of diff.fears) {
+    const current = captains[f.captainId];
+    if (!current) throw new Error(`applyDiff: unknown Captain ${f.captainId}`);
+    let fears: CaptainState['fears'] = current.fears.filter((x) => x.fear !== f.remove);
+    if (f.add !== undefined) fears = [...fears, { fear: f.add, added: true, since: state.world.now }];
+    captains[f.captainId] = { ...current, fears: fears.sort(fearOrder) };
+  }
+
+  const affinity = { ...state.affinity };
+  for (const a of diff.affinity) {
+    if (a.value === 0) delete affinity[`${a.holder}>${a.toward}`];
+    else affinity[`${a.holder}>${a.toward}`] = a.value;
+  }
+
+  const players = { ...state.players };
+  for (const d of diff.playerDeltas) {
+    const p = players[d.playerId];
+    if (!p) throw new Error(`applyDiff: unknown Player ${d.playerId}`);
+    players[d.playerId] = {
+      ...p,
+      meddles: Math.max(0, Math.min(MEDDLE_CAP, p.meddles + (d.meddles ?? 0))),
+      ...(d.firstMeddleDone ? { firstMeddleDone: true } : {}),
+    };
+  }
+  // Gold moves only by ledger deltas (the sim already capped them at 30).
+  for (const l of diff.ledger) {
+    const p = players[l.playerId];
+    if (!p) throw new Error(`applyDiff: unknown Player ${l.playerId}`);
+    players[l.playerId] = { ...p, gold: Math.max(0, Math.min(BACKING.goldCap, p.gold + l.delta)) };
+  }
+
+  // Stakes are absolute (0 deletes), kept in (Player, Captain) order as the tick loads them.
+  const stakes = new Map(state.stakes.map((s) => [`${s.playerId}|${s.captainId}`, s]));
+  for (const s of diff.stakes) {
+    const key = `${s.playerId}|${s.captainId}`;
+    if (s.amount === 0) stakes.delete(key);
+    else stakes.set(key, { playerId: s.playerId, captainId: s.captainId, amount: s.amount });
+  }
+
+  const meddles = { ...state.meddles };
+  for (const m of diff.newMeddles) meddles[m.id] = m;
+  for (const m of diff.meddles) {
+    const current = meddles[m.id];
+    if (!current) throw new Error(`applyDiff: unknown Meddle ${m.id}`);
+    if (m.status === 'landed') delete meddles[m.id];
+    else meddles[m.id] = { ...current, status: m.status, heldOn: m.heldOn ?? null };
+  }
+
+  const removed = new Set(diff.fuses.remove);
+  // Kept in firing order, (dueAt, no), as the tick loads them.
+  const fuses = [...state.fuses.filter((f) => !removed.has(f.no)), ...diff.fuses.add].sort(
+    (a, b) => isoToMs(a.dueAt) - isoToMs(b.dueAt) || a.no - b.no,
+  );
+
+  // Current holders only (D15), by number.
+  const trophies = new Map<number, Trophy>(state.trophies.map((t) => [t.no, t]));
+  for (const t of diff.trophies.upsert) trophies.set(t.no, t);
+
+  // Current Humiliations only, by number; ended ones live on as history in the DB.
+  const humiliations = new Map<number, Humiliation>(state.humiliations.map((h) => [h.no, h]));
+  for (const h of diff.humiliations.upsert) humiliations.set(h.no, h);
+
+  const world = { ...state.world, ...diff.world };
+  return {
+    ...state,
+    world,
+    trophies: [...trophies.values()].sort((a, b) => a.no - b.no),
+    humiliations: [...humiliations.values()].filter((h) => !h.ended).sort((a, b) => a.no - b.no),
+    recent: {
+      templates: recentWithin({ ...state.recent.templates, ...diff.recent.templates }, world.now, VARIETY.templateHours),
+      pairs: recentWithin({ ...state.recent.pairs, ...diff.recent.pairs }, world.now, VARIETY.pairHours),
+    },
+    captains,
+    affinity,
+    grudgeTags: newestPerPair([...state.grudgeTags, ...diff.grudgeTags]),
+    infamy7d: infamyWindow([...state.infamy7d, ...diff.infamy], world.now),
+    players,
+    stakes: [...stakes].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, s]) => s),
+    meddles,
+    fuses,
+  };
+}
+
+/** Fears oldest first, then by name (code units), as the tick loads them. */
+const fearOrder = (a: CaptainState['fears'][number], b: CaptainState['fears'][number]) =>
+  isoToMs(a.since) - isoToMs(b.since) || compareCodeUnits(a.fear, b.fear);
+
+/**
+ * The newest 3 Grudge tags per pair, in number order: all the sim reads (Blame takes at most 3 per pair,
+ * narration the top 3), and exactly what the tick loads. Older tags stay in the database forever.
+ */
+function newestPerPair(tags: GrudgeTag[]): GrudgeTag[] {
+  const kept = new Map<string, GrudgeTag[]>();
+  for (const t of [...tags].sort((a, b) => b.no - a.no)) {
+    const key = `${t.holder}>${t.toward}`;
+    const list = kept.get(key) ?? [];
+    if (list.length < BLAME.pairMaxTags) kept.set(key, [...list, t]);
+  }
+  return [...kept.values()].flat().sort((a, b) => a.no - b.no);
+}
+
+/** The 7-day Infamy window ending at `now`, in (fact, Captain) order: exactly what the tick loads. */
+function infamyWindow(gains: WorldState['infamy7d'], now: string): WorldState['infamy7d'] {
+  const since = isoToMs(now) - INFAMY_WINDOW_DAYS * 86_400_000;
+  return gains
+    .filter((g) => isoToMs(g.at) > since)
+    .sort((a, b) => a.fact - b.fact || compareCodeUnits(a.captainId, b.captainId));
+}
+
+/** Keeps the entries inside the window ending at `now`, as the tick's loader does from `facts`. */
+function recentWithin(entries: Record<string, string>, now: string, hours: number): Record<string, string> {
+  const since = isoToMs(now) - hours * 3_600_000;
+  return Object.fromEntries(Object.entries(entries).filter(([, at]) => isoToMs(at) > since));
+}
+
+/** A hash of everything in the state except the content bundle (represented by its version). */
+export function stateHash(state: WorldState): string {
+  return hashValue({ ...state, content: undefined });
+}

@@ -1,0 +1,14 @@
+{
+  "name": "@orc/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@orc/content": "*",
+    "@orc/sim": "*",
+    "postgres": "3.4.7"
+  }
+}

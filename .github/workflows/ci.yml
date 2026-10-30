@@ -1,0 +1,59 @@
+name: CI
+
+# Heavy testing lives here, not on dev machines. Standard ubuntu-latest runners only (free for a
+# public repo); never larger runners.
+on:
+  push:
+    branches: [build/mvp, 'ticket/**', main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Type-check, content, Seam A
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - name: Content check
+        run: npm run content:check
+      - name: Seam A (sim core), long multi-seed runs
+        run: npm run test:unit
+        env:
+          ORC_SEEDS: 500
+      - run: npm run build:web
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:55421
+          VITE_SUPABASE_ANON_KEY: ci-build-only
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Deno check the Edge Function entrypoints
+        run: for f in supabase/functions/*/index.ts; do deno check --no-lock "$f"; done
+
+  seam-b:
+    name: Seam B (backend on local Supabase)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start Supabase (the CLI comes from devDependencies)
+        run: npx supabase start
+      - name: Seam B suite (reset to this commit's migrations, then run)
+        run: npm run test:db
+      - name: Smoke test the served functions end to end
+        run: npm run smoke:local

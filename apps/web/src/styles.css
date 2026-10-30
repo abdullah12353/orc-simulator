@@ -1,0 +1,746 @@
+:root {
+  color-scheme: dark;
+  font-family: Georgia, 'Times New Roman', serif;
+  background: #1c1917;
+  color: #f5f5f4;
+}
+body {
+  margin: 0;
+}
+.page {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 4rem;
+}
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+h1 {
+  letter-spacing: 0.08em;
+}
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+label {
+  display: grid;
+  gap: 0.25rem;
+}
+input,
+select,
+button {
+  font: inherit;
+  padding: 0.5rem;
+}
+button.link {
+  background: none;
+  border: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.error {
+  color: #fca5a5;
+}
+.quiet {
+  color: #a8a29e;
+}
+.facts {
+  list-style: none;
+  padding: 0;
+}
+.facts li {
+  display: grid;
+  grid-template-columns: 3.5rem 1fr;
+  gap: 0.5rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid #44403c;
+}
+.invites {
+  margin: 1rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #44403c;
+}
+.invites summary {
+  cursor: pointer;
+}
+.invites ul {
+  list-style: none;
+  padding: 0;
+}
+.invites li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+}
+.invites li input {
+  flex: 1 1 100%;
+}
+.facts time {
+  color: #a8a29e;
+  font-variant-numeric: tabular-nums;
+}
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+.tabs button {
+  background: none;
+  border: 1px solid #44403c;
+  color: inherit;
+  cursor: pointer;
+}
+.tabs button.on {
+  border-color: #f5f5f4;
+}
+.captains {
+  list-style: none;
+  padding: 0;
+}
+.captain {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #44403c;
+}
+.captain.warlord h3 {
+  color: #fcd34d;
+}
+.captain h3 {
+  margin: 0 0 0.25rem;
+}
+.captain .quiet {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+}
+.captain dl {
+  display: grid;
+  grid-template-columns: 4.5rem 1fr;
+  gap: 0.15rem 0.5rem;
+  margin: 0;
+}
+.captain dt {
+  color: #a8a29e;
+}
+.captain dd {
+  margin: 0;
+}
+.badge {
+  margin-left: 0.5rem;
+  padding: 0.05rem 0.4rem;
+  border: 1px solid #fcd34d;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+/* The Gutter Herald (#27): a newsprint page inside the dark app. */
+.edition {
+  background: #f5f0e6;
+  color: #1c1917;
+  padding: 1rem 1.25rem 1.5rem;
+}
+.masthead {
+  border-bottom: 3px double #1c1917;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.masthead h2 {
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  margin: 0.25rem 0;
+  text-transform: uppercase;
+}
+.masthead .strap {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top: 1px solid #1c1917;
+  border-bottom: 1px solid #1c1917;
+  padding: 0.25rem 0;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.masthead .weather {
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.edition .quiet {
+  color: #57534e;
+}
+.lead h3 {
+  font-size: 1.6rem;
+  line-height: 1.2;
+  margin: 0.5rem 0;
+}
+.headlines {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid #1c1917;
+}
+.headlines li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #d6d3d1;
+}
+.headlines h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.blame {
+  font-style: italic;
+  font-size: 0.9rem;
+}
+.blame mark.me {
+  background: #fde047;
+  font-weight: bold;
+  padding: 0 0.15em;
+}
+.accusation {
+  margin: 0.5rem 0 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-left: 4px solid #dc2626;
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+}
+.accusation p {
+  margin: 0;
+  font-weight: bold;
+}
+.accusation .play-name {
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+.gutter summary {
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0.5rem 0;
+}
+.gutter ul {
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+.stop-press {
+  border: 2px solid #dc2626;
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+.stop-press h3 {
+  color: #fca5a5;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.9rem;
+}
+.stop-press ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+/* Backing and gold (#36): private, so set apart from the shared Herald. */
+.your-stable {
+  border: 1px dashed #a3a3a3;
+  padding: 0.5rem 1rem;
+  margin-top: 1.5rem;
+}
+.ledger {
+  padding-left: 1.25rem;
+}
+.ledger .credit {
+  color: #86efac;
+}
+.ledger .debit {
+  color: #fca5a5;
+}
+.back-form label {
+  display: block;
+}
+.editions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-top: 1rem;
+}
+.editions button {
+  background: none;
+  border: 1px solid #44403c;
+  color: inherit;
+  cursor: pointer;
+}
+.editions button.on {
+  border-color: #f5f5f4;
+}
+
+/* The Rumour composer (#28) */
+.meddles-left {
+  font-size: 1.1rem;
+}
+.composer select,
+.composer input:not([type='radio']) {
+  width: 100%;
+}
+.composer .claims {
+  border: 1px solid #555;
+  padding: 0.5rem;
+}
+.composer .claims label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: 1rem;
+}
+.composer .preview {
+  font-style: italic;
+}
+
+/* ---- Trophies on Captain cards (#30). */
+.trophies {
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.9rem;
+}
+.trophies li {
+  display: inline-block;
+  margin: 0 0.4rem 0.2rem 0;
+  padding: 0 0.4rem;
+  border: 1px solid #c9a94a;
+  color: #f1e3b5;
+}
+
+/* ---- The Clash card (#30): the prototype's "Fight Night" stage (#10). */
+.watch {
+  margin-top: 0.4rem;
+  background: #7f1d1d;
+  color: #f5f5f4;
+  border: 1px solid #a3171b;
+  cursor: pointer;
+}
+.clash-card {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #3a0d0d 0%, #0d0b0a 70%);
+  color: #e9e2d4;
+  cursor: pointer;
+  user-select: none;
+}
+.clash-card.judder {
+  animation: judder 0.08s linear 8;
+}
+@keyframes judder {
+  0% { transform: translate(0, 0); }
+  25% { transform: translate(-8px, 4px); }
+  50% { transform: translate(6px, -6px); }
+  75% { transform: translate(-4px, -2px); }
+  100% { transform: translate(0, 0); }
+}
+.clash-card .controls {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  display: flex;
+  gap: 0.5rem;
+  z-index: 5;
+}
+.clash-card .controls button {
+  background: #000a;
+  color: #e9e2d4;
+  border: 1px solid #555;
+  cursor: pointer;
+}
+.clash-card .nameplate {
+  position: absolute;
+  top: 9vh;
+  max-width: 46vw;
+  font: 900 clamp(1.6rem, 7vw, 4rem) / 1 Impact, 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  color: #d8cfb8;
+  text-shadow: 0 0 30px #f00a, 4px 4px 0 #000;
+}
+.clash-card .np-left { left: 4vw; }
+.clash-card .np-right { right: 4vw; text-align: right; }
+.clash-card .side {
+  position: absolute;
+  bottom: 30vh;
+  transition: transform 0.35s cubic-bezier(0.2, 1.6, 0.4, 1), filter 0.3s;
+}
+.clash-card .side .portrait { width: min(40vw, 260px); height: auto; }
+.clash-card .left { left: 4vw; transform: translateX(-140%); }
+.clash-card .right { right: 4vw; transform: translateX(140%) scaleX(-1); }
+.clash-card .left.in { transform: translateX(0); }
+.clash-card .right.in { transform: translateX(0) scaleX(-1); }
+.clash-card .side.dim { filter: brightness(0.35) grayscale(0.6); }
+.clash-card .left.loser { filter: grayscale(1) brightness(0.5); transform: translateY(40px) rotate(-8deg); }
+.clash-card .right.loser { filter: grayscale(1) brightness(0.5); transform: translateY(40px) rotate(8deg) scaleX(-1); }
+.clash-card .kept {
+  position: absolute;
+  top: -1.5rem;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font: 700 0.9rem system-ui, sans-serif;
+  color: #fde68a;
+}
+.clash-card .right .kept { transform: scaleX(-1); }
+.clash-card .vs {
+  position: absolute;
+  top: 40vh;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  font: 900 clamp(3rem, 12vw, 8rem) Impact, sans-serif;
+  color: #a3171b;
+  text-shadow: 0 0 40px #f00;
+  transition: transform 0.25s cubic-bezier(0.2, 2, 0.4, 1);
+}
+.clash-card .vs.on { transform: translate(-50%, -50%) scale(1); }
+.clash-card .crash {
+  position: absolute;
+  top: 14vh;
+  left: 50%;
+  transform: translate(-50%, -160%) rotate(8deg);
+  transition: transform 0.3s cubic-bezier(0.2, 1.6, 0.4, 1);
+}
+.clash-card .crash.on { transform: translate(-50%, 0) rotate(8deg); }
+.clash-card .crash .burst {
+  position: absolute;
+  top: -1.8rem;
+  left: -2.5rem;
+  font: 900 2.75rem Impact, sans-serif;
+  color: #ffd400;
+  -webkit-text-stroke: 2px #000;
+  transform: rotate(-14deg);
+}
+.clash-card .stamp {
+  position: absolute;
+  top: 30vh;
+  left: 50%;
+  opacity: 0;
+  white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(-12deg) scale(3);
+  font: 900 clamp(2.5rem, 9vw, 6rem) Impact, sans-serif;
+  color: transparent;
+  -webkit-text-stroke: 3px #a3171b;
+  transition: all 0.3s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.clash-card .stamp.on { opacity: 1; transform: translate(-50%, -50%) rotate(-12deg) scale(1); }
+.clash-card .trophy {
+  position: absolute;
+  top: 50vh;
+  opacity: 0;
+  padding: 0.25rem 0.6rem;
+  border: 2px solid #c9a94a;
+  background: #120d09;
+  color: #f1e3b5;
+  font: 700 1rem system-ui, sans-serif;
+  transition: left 1.2s ease-in-out, opacity 0.2s;
+}
+.clash-card .trophy.from-left { left: 12vw; }
+.clash-card .trophy.from-right { left: 68vw; }
+.clash-card .trophy.fly { opacity: 1; }
+.clash-card .trophy.from-left.fly { left: 68vw; }
+.clash-card .trophy.from-right.fly { left: 12vw; }
+.clash-card .sub {
+  position: absolute;
+  bottom: 3.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(900px, 92vw);
+  min-height: 4rem;
+  text-align: center;
+  background: #000c;
+  padding: 0.9rem 1.1rem;
+  border-top: 3px solid #a3171b;
+  font-size: clamp(1.1rem, 2.4vw, 1.6rem);
+}
+.clash-card .sub .who {
+  display: block;
+  margin-bottom: 0.25rem;
+  font: 700 0.8rem system-ui, sans-serif;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #cc6666;
+}
+.clash-card .sub .blame { font-size: 1rem; font-style: italic; }
+.clash-card .tap-hint {
+  position: absolute;
+  bottom: 0.5rem;
+  width: 100%;
+  text-align: center;
+  font: 0.8rem system-ui, sans-serif;
+  color: #999;
+}
+
+/* ---- The Introduction card (#33): the same Fight Night stage, one Captain, spotlit. */
+.intro-card {
+  background: radial-gradient(ellipse at 50% 40%, #3b2f12 0%, #0d0b0a 65%);
+}
+.intro-card .intro-portrait {
+  position: absolute;
+  top: 8vh;
+  left: 50%;
+  transform: translate(-50%, -160%) rotate(-6deg);
+  transition: transform 0.3s cubic-bezier(0.2, 1.8, 0.4, 1);
+}
+.intro-card .intro-portrait.in { transform: translate(-50%, 0) rotate(0); }
+.intro-card .intro-portrait.shouting { animation: judder 0.08s linear 6; }
+.intro-card .intro-portrait .portrait { width: min(60vw, 280px); height: auto; }
+.intro-card .intro-name {
+  position: absolute;
+  top: calc(8vh + min(75vw, 350px) + 1rem);
+  left: 0;
+  right: 0;
+  text-align: center;
+}
+.intro-card .intro-name .shout {
+  display: block;
+  font: 900 clamp(2rem, 9vw, 5rem) / 1 Impact, 'Arial Black', sans-serif;
+  color: #ffd400;
+  -webkit-text-stroke: 2px #000;
+  text-shadow: 0 0 30px #f80a;
+  animation: slam-in 0.25s cubic-bezier(0.2, 2, 0.4, 1);
+}
+.intro-card .intro-name .epithet {
+  display: block;
+  margin-top: 0.4rem;
+  font: 700 clamp(1.1rem, 4vw, 2rem) / 1.1 Georgia, serif;
+  letter-spacing: 0.12em;
+  color: #d8cfb8;
+}
+.intro-card .intro-name .really {
+  display: block;
+  margin-top: 0.3rem;
+  font: italic 0.9rem system-ui, sans-serif;
+  color: #a8a29e;
+}
+.intro-card .intro-line {
+  position: absolute;
+  bottom: 4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(800px, 90vw);
+  text-align: center;
+  font: 700 clamp(1.1rem, 3vw, 1.8rem) Georgia, serif;
+  color: #f1e3b5;
+}
+@keyframes slam-in {
+  from { transform: scale(2.5); opacity: 0; }
+}
+
+/* Live stage (#31): a notable event while you watch. Clashes play as their full-screen card. */
+.live-notice {
+  position: fixed;
+  top: 0.75rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(36rem, calc(100% - 2rem));
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  padding: 0.6rem 0.9rem;
+  background: #292524;
+  border: 2px solid #dc2626;
+  box-shadow: 0 0.5rem 1.5rem rgb(0 0 0 / 0.5);
+  cursor: pointer;
+  animation: live-in 0.25s ease-out;
+}
+.live-tag {
+  flex: none;
+  color: #fca5a5;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.8rem;
+}
+@keyframes live-in {
+  from {
+    transform: translate(-50%, -150%);
+  }
+}
+
+/* The throne and Legendary (#34). */
+.badge.legendary {
+  border-color: #c084fc;
+  color: #e9d5ff;
+}
+.lead.legendary {
+  border: 2px solid #c084fc;
+  padding: 0.75rem;
+}
+.lead .kicker {
+  margin: 0 0 0.25rem;
+  color: #c084fc;
+  font-weight: bold;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.intro-card .intro-name .title {
+  display: block;
+  color: #fcd34d;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+.intro-card .intro-name .title.legendary {
+  color: #c084fc;
+}
+
+/* The Hall of Shame (#40) */
+.hall-list {
+  list-style: none;
+  padding: 0;
+}
+.hall-list li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #44403c;
+}
+.hall-list time,
+.trace time {
+  display: block;
+  color: #a8a29e;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+.hall-list .story-line {
+  display: block;
+  font-size: 0.9rem;
+}
+.hall-actions {
+  display: flex;
+  gap: 1rem;
+}
+.shelf-tag {
+  margin-right: 0.5rem;
+  padding: 0 0.35rem;
+  border: 1px solid #44403c;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.shelf-tag.legend,
+.legend-name {
+  color: #c084fc;
+}
+.hall-pick {
+  display: block;
+  margin: 0.5rem 0;
+}
+.trace {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border-left: 3px solid #fcd34d;
+  background: #292524;
+}
+.trace ol {
+  padding-left: 1.25rem;
+}
+
+/* Clippings (#41): the frozen card, over the page. */
+.clip {
+  margin-left: 0.5rem;
+  font-size: 0.85rem;
+}
+.clipping-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(12, 10, 9, 0.75);
+}
+.clipping {
+  width: min(92vw, 30rem);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 1.25rem 1.5rem;
+  background: #f3ecd9;
+  color: #1c1917;
+  font-family: Georgia, serif;
+  box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
+  transform: rotate(-0.6deg);
+}
+.clipping header {
+  text-align: center;
+  border-bottom: 3px solid #1c1917;
+  margin-bottom: 0.75rem;
+}
+.clipping .masthead-mini {
+  margin: 0;
+  font-weight: 900;
+  font-size: 1.4rem;
+}
+.clipping h3 {
+  font-size: 1.5rem;
+  line-height: 1.15;
+  margin: 0.5rem 0;
+}
+.clipping-faces {
+  display: flex;
+  justify-content: space-around;
+  gap: 0.75rem;
+}
+.clipping-faces figure {
+  margin: 0;
+  text-align: center;
+}
+.clipping-faces figcaption {
+  font-weight: bold;
+}
+.pull-quote {
+  margin: 0.75rem 0;
+  font-style: italic;
+  font-size: 1.15rem;
+}
+.pull-quote p {
+  margin: 0;
+}
+.pull-quote cite::before {
+  content: '— ';
+}
+.clipping .trophy {
+  font-size: 0.95rem;
+}
+.clipping-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+/* First open and hints (#43) */
+.hint {
+  border-left: 3px solid #d97706;
+  padding: 0.25rem 0.75rem;
+  color: #fde68a;
+  font-style: italic;
+}
+.first-open {
+  background: #292524;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  padding: 0.75rem;
+}
+.first-open button {
+  margin-left: 0.5rem;
+}
+
+/* Install and pushes (#42) */
+.install,
+.pushes {
+  margin: 0.25rem 0;
+  font-size: 0.9rem;
+}
+.story-view {
+  margin: 0.75rem 0;
+  padding: 0.75rem;
+  border: 1px solid #44403c;
+  border-radius: 8px;
+}
