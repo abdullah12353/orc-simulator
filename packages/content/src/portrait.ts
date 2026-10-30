@@ -43,6 +43,7 @@ export interface PortraitLayer {
 
 export interface ComposedPortrait {
   captainId: CaptainId;
+  portraitKey: string;
   /** The base portrait's WebP. */
   base: string;
   /** What to draw over the base, bottom first. */
@@ -107,6 +108,7 @@ export function composePortrait(
 
   return {
     captainId,
+    portraitKey: card?.portraitKey ?? captainId,
     base: portraitPath(card?.portraitKey ?? captainId),
     layers: layers.map(({ no: _no, ...layer }) => {
       const nudge = card?.faceBox?.[layer.key];

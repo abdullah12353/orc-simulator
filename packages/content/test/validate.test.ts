@@ -44,6 +44,15 @@ test('a cast card missing a field the sim needs is rejected', () => {
   assert.ok(errors.some((e) => e.includes(broken.cast[0]!.id) && e.includes('name')), errors.join('\n'));
 });
 
+test('a face-box override must name an overlay (a Humiliation with one, or the Legendary stamp)', () => {
+  const broken = clone(content);
+  broken.cast[0]!.faceBox = { 'lost.hook': { x: 10 }, legendary: { scale: 0.9 }, 'fear.water': { y: 4 } };
+  assert.deepEqual(
+    validateContent(broken).filter((e) => e.includes('face-box')),
+    [`cast ${broken.cast[0]!.id}: face-box override "fear.water" is not an overlay`],
+  );
+});
+
 test('duplicate slugs are rejected', () => {
   const broken = clone(content);
   broken.cast.push(structuredClone(broken.cast[0]!));
