@@ -2,11 +2,15 @@
 // open. It works out the window, decides between a new edition and a Stop press, ranks the story heads
 // and fills the lead, the headlines and the gutter. This is the templated edition: headlines are the
 // Facts' template lines, and each Meddle-caused story carries its templated Blame line (#29). At most
-// one Accusation (#39) runs as a pull quote over its story's true Blame line. "Your Stable" and the
-// model call come later.
+// one Accusation (#39) runs as a pull quote over its story's true Blame line. Then (#38) one model call
+// rewrites the lead's and headlines' headline, standfirst and body in the Herald's voice: open-edition
+// waits about 8 s for it, else returns the templated edition and lets the job finish in the background.
+// "Your Stable" comes later.
 import { blameLine, content as shippedContent, hashString, type BlameName, type Content } from '@orc/content';
 import { DAY_ZERO, londonDate } from '@orc/sim';
 import { jsonb, type Sql, type Tx } from './db.ts';
+import type { NarrationDeps } from './narration/drain.ts';
+import { queueHeraldJob, runHeraldJob } from './narration/herald-job.ts';
 
 /** Edition rules (D51, data-model §4.1). */
 export const HERALD = {
@@ -17,6 +21,10 @@ export const HERALD = {
   /** Ranks 2..8 are headlines; 9..28 go in "Also in the gutter"; the rest fall through to the Hall. */
   lastHeadlineRank: 8,
   lastRank: 28,
+  /** How long open-edition waits for the generated words before answering with the templated edition. */
+  waitMs: 8_000,
+  /** A Herald job queued longer ago than this is taken to have died: nobody waits on it any more. */
+  generatingForSeconds: 60,
 } as const;
 
 export type Slot = 'lead' | 'headline' | 'gutter';
@@ -77,12 +85,23 @@ export interface OpenEditionResult {
   reader: string;
   /** New stories since the last edition, as lines, when no new edition is due (else empty). */
   stopPress: StopPressLine[];
+  /**
+   * The edition is still templated but its words are being written: reread it shortly (it turns
+   * `generated`, or stays templated if the model fails).
+   */
+  generating: boolean;
 }
 
 export interface OpenEditionDeps {
   sql: Sql;
   now: () => Date;
   content?: Content;
+  /** Narration's providers. Without it no Herald job is made and every edition stays templated. */
+  narration?: Pick<NarrationDeps, 'fetch' | 'providers' | 'timeoutMs'>;
+  /** Keeps a Herald job alive after the response (`EdgeRuntime.waitUntil`). */
+  waitUntil?: (work: Promise<unknown>) => void;
+  /** Overrides `HERALD.waitMs` (tests). */
+  heraldWaitMs?: number;
 }
 
 /** A refusal with a machine-readable reason as its message (`not_a_player`). */
@@ -116,6 +135,35 @@ export async function openEdition(
   deps: OpenEditionDeps,
   input: { userId: string; worldId: string },
 ): Promise<OpenEditionResult> {
+  const { result, heraldJob } = await printEdition(deps, input);
+  if (heraldJob === null || !deps.narration) return result;
+
+  // At most one model call, after the templated edition has committed. Wait for it a while; past that,
+  // answer templated and let it finish in the background.
+  const narration = { ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content };
+  const job = runHeraldJob(narration, heraldJob).catch((e: unknown) => {
+    console.error('Herald job failed', e);
+    return null;
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waited = new Promise<'waited'>((resolve) => {
+    timer = setTimeout(() => resolve('waited'), deps.heraldWaitMs ?? HERALD.waitMs);
+  });
+  const status = await Promise.race([job, waited]);
+  clearTimeout(timer);
+  if (status === 'waited') {
+    deps.waitUntil?.(job);
+    return { ...result, generating: true };
+  }
+  if (status !== 'done') return result;
+  return { ...result, edition: await loadEdition(deps.sql, result.edition.id) };
+}
+
+/** The templated part, in one transaction: a new edition (with its Herald job queued) or the last one. */
+async function printEdition(
+  deps: OpenEditionDeps,
+  input: { userId: string; worldId: string },
+): Promise<{ result: OpenEditionResult; heraldJob: number | null }> {
   const content = deps.content ?? shippedContent;
   return deps.sql.begin(async (tx) => {
     const [player] = await tx<{ id: string; display_name: string; world_created_at: string }[]>`
@@ -143,12 +191,14 @@ export async function openEdition(
       (candidates.length >= 1 && Date.parse(now) - Date.parse(last.created_at) >= HERALD.dueAfterMinutes * 60_000);
 
     if (!due) {
-      return {
+      const result: OpenEditionResult = {
         edition: await loadEdition(tx, last.id),
         created: false,
         reader: player.display_name,
         stopPress: candidates.map((c) => ({ storyNo: c.no, at: c.at, line: c.line })),
+        generating: await stillGenerating(tx, last.id, now),
       };
+      return { result, heraldJob: null };
     }
 
     const no = (last?.no ?? 0) + 1;
@@ -178,8 +228,12 @@ export async function openEdition(
         from jsonb_array_elements(${jsonb(tx, stories)}) as s`;
     }
     await tx`update player_private set last_edition_no = ${no} where player_id = ${player.id}`;
+    // The words for the lead and headlines (never the gutter, never a Blame line) are the model's job.
+    const toWrite = stories.some((s) => s.slot !== 'gutter');
+    const heraldJob =
+      deps.narration && toWrite ? await queueHeraldJob(tx, { worldId: input.worldId, editionId: edition!.id, now }) : null;
 
-    return {
+    const result: OpenEditionResult = {
       edition: {
         id: edition!.id,
         no,
@@ -194,8 +248,19 @@ export async function openEdition(
       created: true,
       reader: player.display_name,
       stopPress: [],
+      generating: false,
     };
+    return { result, heraldJob };
   });
+}
+
+/** Whether the edition's Herald job is still out (queued, and recent enough to be alive). */
+async function stillGenerating(tx: Tx, editionId: string, now: string): Promise<boolean> {
+  const [row] = await tx<{ n: number }[]>`
+    select count(*)::int as n from narration_jobs
+    where kind = 'herald' and edition_id = ${editionId} and status = 'queued'
+      and created_at > ${now}::timestamptz - make_interval(secs => ${HERALD.generatingForSeconds})`;
+  return row!.n > 0;
 }
 
 /** Story heads in `(from, to]` that aren't silent, flagged if a `legendary` Fact names them as its deed. */
@@ -233,7 +298,7 @@ async function loadBlameNames(tx: Tx, worldId: string, storyNos: number[]): Prom
  * Or, for an edition already printed, its stored `factNo` (still only while the render exists).
  */
 async function loadAccusation(
-  tx: Tx,
+  tx: Sql | Tx,
   worldId: string,
   which: { storyNos: number[] } | { factNo: number | null },
 ): Promise<EditionAccusation | null> {
@@ -253,7 +318,7 @@ async function loadAccusation(
   return row ? { factNo: row.no, storyNo: row.story_no, accuser: row.accuser, line: row.line, clipKey: row.clip_key } : null;
 }
 
-async function loadEdition(tx: Tx, id: string): Promise<Edition> {
+async function loadEdition(tx: Sql | Tx, id: string): Promise<Edition> {
   const [e] = await tx<
     {
       id: string;
