@@ -31,3 +31,22 @@ npm run smoke:local      # magic link → create-world → tick endpoint → Fac
 npm run web:env && npm run dev:web   # PWA on http://127.0.0.1:5173 (magic-link mail: http://127.0.0.1:55424)
 npm run dev:clock -- 5   # tick the local stack every 5 s, like the clock Worker
 ```
+
+## Deploying
+
+The first deploy runs through a guided setup script in Git Bash, with Docker Desktop running:
+
+```sh
+bash scripts/setup-deploy.sh
+```
+
+It walks you through every account step in order:
+
+- Supabase: create the project, push the migrations, set the function secrets and deploy the functions.
+- Cloudflare: Pages for the PWA, Workers AI, and the clock Worker.
+- Groq: an API key, with Zero Data Retention turned on.
+- Resend: SMTP for magic-link emails.
+- VAPID keys for pushes.
+- The real Gemma Neuron rate for `packages/server/src/narration/quota.ts`.
+
+Every value you enter is saved to `.env.deploy`, which git ignores. If you run the script again, it remembers what you've already entered.
