@@ -1,5 +1,6 @@
 // Request → response adapters for the Edge Functions. Runtime-neutral (Fetch API only), so the
 // Deno entrypoints stay one-liners and tests can call these in-process from Node.
+import { ClippingError, createClipping, type ClippingDeps } from './clippings.ts';
 import { createWorld, CreateWorldError, type CreateWorldDeps } from './create-world.ts';
 import { openEdition, OpenEditionError, type OpenEditionDeps } from './herald.ts';
 import { drainJobs, type NarrationDeps } from './narration/index.ts';
@@ -117,6 +118,39 @@ export async function handleOpenEdition(
     return json(await openEdition(deps, { userId, worldId }), 200, CORS);
   } catch (e) {
     if (e instanceof OpenEditionError) return json({ error: e.message }, 403, CORS);
+    throw e;
+  }
+}
+
+/**
+ * POST /create-clipping with the caller's Supabase JWT. Body `{ "worldId", "editionId", "storyNo" }`: a story
+ * printed in one of the caller's own editions. Returns `{ id, snapshot }` (201).
+ */
+export async function handleCreateClipping(
+  req: Request,
+  deps: ClippingDeps & { getUserId: (req: Request) => Promise<string | null> },
+): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
+  const userId = await deps.getUserId(req);
+  if (!userId) return json({ error: 'sign in first' }, 401, CORS);
+
+  let body: { worldId?: unknown; editionId?: unknown; storyNo?: unknown };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return json({ error: 'body must be JSON' }, 400, CORS);
+  }
+  const uuid = /^[0-9a-f-]{36}$/i;
+  const worldId = String(body.worldId ?? '');
+  const editionId = String(body.editionId ?? '');
+  const storyNo = Number(body.storyNo);
+  if (!uuid.test(worldId) || !uuid.test(editionId)) return json({ error: 'worldId and editionId must be uuids' }, 400, CORS);
+  if (!Number.isSafeInteger(storyNo) || storyNo < 1) return json({ error: 'storyNo must be a Fact number' }, 400, CORS);
+  try {
+    return json(await createClipping(deps, { userId, worldId, editionId, storyNo }), 201, CORS);
+  } catch (e) {
+    if (e instanceof ClippingError) return json({ error: e.message }, 403, CORS);
     throw e;
   }
 }
