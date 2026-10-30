@@ -2,10 +2,12 @@
 // (it stamps first_open_at), and see_hint is true once per hint (it records it in hints_seen), so the
 // sequence and each hint can never come back. Both answers are cached per page load: React's StrictMode
 // runs effects twice, and the second call would (rightly) say "not the first time" and hide them.
-import { useEffect, useState } from 'react';
+// begin_first_open stamps before anything plays, so the device remembers how far the first open got (per
+// world and Player, in localStorage) and a closed app picks up where it stopped.
+import { useCallback, useEffect, useState } from 'react';
 import { content, KRUG } from '@orc/content';
 import { introductionScript } from '@orc/sim';
-import type { Hint } from './first-open.ts';
+import { nextStep, progressAfter, resumeFirstOpen, type FirstOpenStep, type Hint } from './first-open.ts';
 import type { IntroductionCardData } from './introduction-data.ts';
 import { faceAt, loadFaces } from './portrait-data.ts';
 import { supabase } from './supabase.ts';
@@ -21,27 +23,76 @@ function askOnce(key: string, call: () => PromiseLike<{ data: unknown; error: un
   return p;
 }
 
-/** True on this Player's very first open of the world (and only for this page load). */
-export function useFirstOpen(worldId: string): boolean | undefined {
-  const [first, setFirst] = useState<boolean | undefined>(undefined);
+const progressKey = (worldId: string, playerId: string) => `orc:first-open:${worldId}:${playerId}`;
+
+function remembered(key: string | null): string | null {
+  try {
+    return key ? localStorage.getItem(key) : null;
+  } catch {
+    return null;
+  }
+}
+
+function remember(key: string | null, value: string | null): void {
+  if (!key) return;
+  try {
+    if (value === null) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    // no storage (private mode): the first open just can't resume
+  }
+}
+
+interface FirstOpenState {
+  key: string | null;
+  running: boolean;
+  done: FirstOpenStep | null;
+}
+
+export interface FirstOpen {
+  /** The step to play now; null = no first open (or it's over); undefined while asking. */
+  step: FirstOpenStep | null | undefined;
+  /** Marks the current step done (any other step is ignored). */
+  finish: (step: FirstOpenStep) => void;
+}
+
+/** This Player's first open of the world: fresh from begin_first_open, or resumed from this device. */
+export function useFirstOpen(worldId: string): FirstOpen {
+  const [state, setState] = useState<FirstOpenState | undefined>(undefined);
   useEffect(() => {
-    let live = true;
-    void askOnce(`open:${worldId}`, () => supabase.rpc('begin_first_open', { world_id: worldId })).then((f) => live && setFirst(f));
+    let cancelled = false;
+    void Promise.all([
+      askOnce(`open:${worldId}`, () => supabase.rpc('begin_first_open', { world_id: worldId })),
+      supabase.rpc('my_player', { w: worldId }),
+    ]).then(([fresh, me]) => {
+      if (cancelled) return;
+      const key = typeof me.data === 'string' ? progressKey(worldId, me.data) : null;
+      const resumed = resumeFirstOpen(fresh, remembered(key));
+      if (fresh) remember(key, progressAfter(null));
+      setState({ key, ...resumed });
+    });
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [worldId]);
-  return first;
+  const finish = useCallback((step: FirstOpenStep) => {
+    setState((s) => {
+      if (!s || nextStep(s.running, s.done) !== step) return s;
+      remember(s.key, progressAfter(step));
+      return { ...s, done: step };
+    });
+  }, []);
+  return { step: state && nextStep(state.running, state.done), finish };
 }
 
 /** True if this is the first time the Player meets `hint` (show its one-liner). */
 export function useHint(worldId: string, hint: Hint): boolean {
   const [show, setShow] = useState(false);
   useEffect(() => {
-    let live = true;
-    void askOnce(`hint:${worldId}:${hint}`, () => supabase.rpc('see_hint', { world_id: worldId, hint })).then((s) => live && setShow(s));
+    let cancelled = false;
+    void askOnce(`hint:${worldId}:${hint}`, () => supabase.rpc('see_hint', { world_id: worldId, hint })).then((s) => !cancelled && setShow(s));
     return () => {
-      live = false;
+      cancelled = true;
     };
   }, [worldId, hint]);
   return show;

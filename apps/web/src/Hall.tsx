@@ -1,10 +1,14 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { content } from '@orc/content';
+import { captainName } from './captain-names.ts';
 import { ClashCard } from './ClashCard.tsx';
 import { ClippingCard } from './ClippingCard.tsx';
+import { OnStage } from './OnStage.tsx';
 import { loadClipping, loadClippings, type Clipping } from './clipping-data.ts';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
+import { factKindLabel } from './fact-labels.ts';
 import {
+  HALL_PAGE,
   loadCaptainStory,
   loadLegends,
   loadMoments,
@@ -16,6 +20,7 @@ import {
   type StoryEntry,
   type TraceStep,
 } from './hall-data.ts';
+import { addPage, type Page } from './paging.ts';
 
 // The Hall of Shame (#40, D55): the best idiocy, kept forever, in time order and never ranked. Shelves
 // (Legends, Infamous moments, and Clippings (#41)), browse by Captain or by Player (the rap sheet), and a
@@ -32,7 +37,6 @@ const VIEWS: { id: View; label: string }[] = [
 ];
 
 const SHELF_LABEL: Record<HallEntry['shelf'], string> = { legend: 'Legend', moment: 'Moment', clipping: 'Clipping', rap: '' };
-const names = new Map(content.cast.map((c) => [c.id, c.name]));
 
 const when = (iso: string) =>
   new Date(iso).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -52,6 +56,62 @@ function useLoad<T>(load: () => Promise<T>, deps: unknown[]): T | { error: strin
     };
   }, deps);
   return state;
+}
+
+/**
+ * A list that pages (D55: the Hall is kept forever): the first page on mount and whenever `deps` change,
+ * then one more page per `more()`. `load(shown, size)` fetches the page `shown` rows in.
+ */
+function usePaged<T>(
+  load: (shown: number, size: number) => Promise<T[]>,
+  key: (t: T) => string,
+  deps: unknown[],
+): { state: Page<T> | { error: string } | null; more: () => void; busy: boolean } {
+  const [state, setState] = useState<Page<T> | { error: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  /** Bumped whenever the list starts over, so a late page for the old list is dropped. */
+  const epoch = useRef(0);
+  useEffect(() => {
+    let cancelled = false;
+    epoch.current += 1;
+    setBusy(false);
+    setState(null);
+    load(0, HALL_PAGE).then(
+      (page) => !cancelled && setState(addPage([], page, HALL_PAGE, key)),
+      (e: unknown) => !cancelled && setState({ error: e instanceof Error ? e.message : String(e) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, deps);
+  const more = () => {
+    if (busy || !state || 'error' in state || !state.more) return;
+    const asked = epoch.current;
+    const shown = state.items;
+    setBusy(true);
+    load(shown.length, HALL_PAGE).then(
+      (page) => {
+        if (epoch.current !== asked) return;
+        setBusy(false);
+        setState(addPage(shown, page, HALL_PAGE, key));
+      },
+      (e: unknown) => {
+        if (epoch.current !== asked) return;
+        setBusy(false);
+        setState({ error: e instanceof Error ? e.message : String(e) });
+      },
+    );
+  };
+  return { state, more, busy };
+}
+
+function ShowMore({ page, more, busy }: { page: Page<unknown>; more: () => void; busy: boolean }) {
+  if (!page.more) return null;
+  return (
+    <button className="link show-more" disabled={busy} onClick={more}>
+      {busy ? 'Fetching more…' : 'Show more'}
+    </button>
+  );
 }
 
 function Loading<T>({ state, children }: { state: T | { error: string } | null; children: (v: T) => ReactNode }) {
@@ -93,10 +153,10 @@ function EntryList({ entries, actions, empty, showShelf }: { entries: HallEntry[
   return (
     <ul className="hall-list">
       {entries.map((e) => (
-        <li key={`${e.shelf}:${e.factNo}:${e.captainId ?? ''}:${e.clippingId ?? ''}`}>
+        <li key={entryKey(e)}>
           <time>{when(e.at)}</time>
           {showShelf && SHELF_LABEL[e.shelf] && <span className={`shelf-tag ${e.shelf}`}>{SHELF_LABEL[e.shelf]}</span>}
-          {e.shelf === 'legend' && e.captainId && <strong className="legend-name">{names.get(e.captainId) ?? e.captainId} goes Legendary: </strong>}
+          {e.shelf === 'legend' && e.captainId && <strong className="legend-name">{captainName(e.captainId)} goes Legendary: </strong>}
           <span className="caption">{e.caption}</span>
           {e.clippingId && (
             <button className="link" onClick={() => actions.onClipping(e.clippingId!)}>
@@ -125,46 +185,72 @@ function Buttons({ factNo, actions }: { factNo: number; actions: Actions }) {
   );
 }
 
+const entryKey = (e: HallEntry) => `${e.shelf}:${e.factNo}:${e.captainId ?? ''}:${e.clippingId ?? ''}`;
+
 function Shelves({ worldId, handlers }: { worldId: string; handlers: Handlers }) {
-  const state = useLoad(() => Promise.all([loadLegends(worldId), loadMoments(worldId), loadClippings(worldId)]), [worldId]);
-  const loaded = state && !('error' in state) ? state : null;
-  const a: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? [...loaded[0], ...loaded[1]].map((e) => e.factNo) : []) };
+  const legends = useLoad(() => loadLegends(worldId), [worldId]);
+  const moments = usePaged((shown, size) => loadMoments(worldId, shown, size), entryKey, [worldId]);
+  const clippings = usePaged(
+    (shown, size) => loadClippings(worldId, shown, size),
+    (c) => c.id,
+    [worldId],
+  );
+  const heads = [...(legends && !('error' in legends) ? legends : []), ...(moments.state && !('error' in moments.state) ? moments.state.items : [])];
+  const actions: Actions = {
+    ...handlers,
+    clashes: useClashes(
+      worldId,
+      heads.map((e) => e.factNo),
+    ),
+  };
   return (
-    <Loading state={state}>
-      {([legends, moments, clippings]: [HallEntry[], HallEntry[], Clipping[]]) => (
-        <>
-          <section className="shelf">
-            <h3>Legends</h3>
-            <EntryList entries={legends} actions={a} empty="Nobody has gone Legendary. Yet." />
-          </section>
-          <section className="shelf">
-            <h3>Infamous moments</h3>
-            <EntryList entries={moments} actions={a} empty="Nothing infamous enough. Give it time." />
-          </section>
-          <section className="shelf">
-            <h3>Clippings</h3>
-            {clippings.length === 0 ? (
+    <>
+      <section className="shelf">
+        <h3>Legends</h3>
+        <Loading state={legends}>
+          {(list: HallEntry[]) => <EntryList entries={list} actions={actions} empty="Nobody has gone Legendary. Yet." />}
+        </Loading>
+      </section>
+      <section className="shelf">
+        <h3>Infamous moments</h3>
+        <Loading state={moments.state}>
+          {(page: Page<HallEntry>) => (
+            <>
+              <EntryList entries={page.items} actions={actions} empty="Nothing infamous enough. Give it time." />
+              <ShowMore page={page} more={moments.more} busy={moments.busy} />
+            </>
+          )}
+        </Loading>
+      </section>
+      <section className="shelf">
+        <h3>Clippings</h3>
+        <Loading state={clippings.state}>
+          {(page: Page<Clipping>) =>
+            page.items.length === 0 ? (
               <p className="quiet">Nobody has cut anything out of the Herald yet. Every story has a "Clip it" button.</p>
             ) : (
-              <ul className="hall-list">
-                {clippings.map((c) => (
-                  <li key={c.id}>
-                    <time>{when(c.at)}</time>
-                    <span className="caption">{c.caption}</span>
-                    <span className="quiet"> clipped by {c.clippedBy}</span>
-                    <span className="hall-actions">
-                      <button className="link" onClick={() => a.onClipping(c)}>
-                        See the Clipping
-                      </button>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-        </>
-      )}
-    </Loading>
+              <>
+                <ul className="hall-list">
+                  {page.items.map((c) => (
+                    <li key={c.id}>
+                      <time>{when(c.at)}</time>
+                      <span className="caption">{c.caption}</span>
+                      <span className="quiet"> clipped by {c.clippedBy}</span>
+                      <span className="hall-actions">
+                        <button className="link" onClick={() => actions.onClipping(c)}>
+                          See the Clipping
+                        </button>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <ShowMore page={page} more={clippings.more} busy={clippings.busy} />
+              </>
+            )
+          }
+        </Loading>
+      </section>
+    </>
   );
 }
 
@@ -172,7 +258,7 @@ function ByCaptain({ worldId, handlers }: { worldId: string; handlers: Handlers 
   const [captain, setCaptain] = useState(content.cast[0]!.id);
   const state = useLoad(() => loadCaptainStory(worldId, captain), [worldId, captain]);
   const loaded = state && !('error' in state) ? state : null;
-  const a: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? [...new Set(loaded.map((s) => s.storyNo))] : []) };
+  const actions: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? [...new Set(loaded.map((s) => s.storyNo))] : []) };
   return (
     <>
       <label className="hall-pick">
@@ -194,10 +280,10 @@ function ByCaptain({ worldId, handlers }: { worldId: string; handlers: Handlers 
               {story.map((s) => (
                 <li key={s.factNo}>
                   <time>{when(s.at)}</time>
-                  <span className={`shelf-tag ${s.kind}`}>{s.kind.replace('_', ' ')}</span>
+                  <span className={`shelf-tag ${s.kind}`}>{factKindLabel(s.kind)}</span>
                   <span className="caption">{s.text}</span>
                   {s.storyLine && s.storyLine !== s.text && <span className="quiet story-line">{s.storyLine}</span>}
-                  <Buttons factNo={s.storyNo} actions={a} />
+                  <Buttons factNo={s.storyNo} actions={actions} />
                 </li>
               ))}
             </ul>
@@ -212,11 +298,13 @@ function ByPlayer({ worldId, handlers }: { worldId: string; handlers: Handlers }
   const players = useLoad(() => loadPlayers(worldId), [worldId]);
   const [picked, setPicked] = useState<string | null>(null);
   const list = players && !('error' in players) ? players.players : [];
-  const playerId = picked ?? (players && !('error' in players) ? (players.me ?? list[0]?.id ?? null) : null);
+  // A pick only counts if it's one of this world's Players.
+  const mine = picked && list.some((p) => p.id === picked) ? picked : null;
+  const playerId = mine ?? (players && !('error' in players) ? (players.me ?? list[0]?.id ?? null) : null);
   // One Player's sheet per request, always (no endpoint returns two).
   const sheet = useLoad(() => (playerId ? loadRapSheet(playerId) : Promise.resolve([])), [playerId]);
   const loaded = sheet && !('error' in sheet) ? sheet : null;
-  const a: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? loaded.map((e) => e.factNo) : []) };
+  const actions: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? loaded.map((e) => e.factNo) : []) };
   return (
     <>
       <label className="hall-pick">
@@ -229,16 +317,31 @@ function ByPlayer({ worldId, handlers }: { worldId: string; handlers: Handlers }
           ))}
         </select>
       </label>
-      <Loading state={sheet}>{(entries: HallEntry[]) => <EntryList entries={entries} actions={a} empty="A clean sheet. For now." />}</Loading>
+      <Loading state={sheet}>{(entries: HallEntry[]) => <EntryList entries={entries} actions={actions} empty="A clean sheet. For now." />}</Loading>
     </>
   );
 }
 
 function Timeline({ worldId, handlers }: { worldId: string; handlers: Handlers }) {
-  const state = useLoad(() => loadTimeline(worldId), [worldId]);
-  const loaded = state && !('error' in state) ? state : null;
-  const a: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? loaded.map((e) => e.factNo) : []) };
-  return <Loading state={state}>{(entries: HallEntry[]) => <EntryList entries={entries} actions={a} empty="History has yet to happen." showShelf />}</Loading>;
+  const timeline = usePaged((shown, size) => loadTimeline(worldId, shown, size), entryKey, [worldId]);
+  const loaded = timeline.state && !('error' in timeline.state) ? timeline.state.items : [];
+  const actions: Actions = {
+    ...handlers,
+    clashes: useClashes(
+      worldId,
+      loaded.map((e) => e.factNo),
+    ),
+  };
+  return (
+    <Loading state={timeline.state}>
+      {(page: Page<HallEntry>) => (
+        <>
+          <EntryList entries={page.items} actions={actions} empty="History has yet to happen." showShelf />
+          <ShowMore page={page} more={timeline.more} busy={timeline.busy} />
+        </>
+      )}
+    </Loading>
+  );
 }
 
 function Trace({ steps, onClose }: { steps: TraceStep[] | { error: string } | null; onClose: () => void }) {
@@ -286,7 +389,11 @@ export function Hall({ worldId }: { worldId: string }) {
 
   return (
     <section className="hall">
-      {playing && <ClashCard key={playing.clash.no} data={playing} reader={reader} onDone={() => setPlaying(null)} />}
+      {playing && (
+        <OnStage key={playing.clash.no} name="hall">
+          <ClashCard data={playing} reader={reader} onDone={() => setPlaying(null)} />
+        </OnStage>
+      )}
       {clipping && <ClippingCard snapshot={clipping.snapshot} reader={reader} clippedBy={clipping.clippedBy} onClose={() => setClipping(null)} />}
       <h2>The Hall of Shame</h2>
       <nav className="tabs hall-views">

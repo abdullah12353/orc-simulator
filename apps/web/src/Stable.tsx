@@ -1,18 +1,17 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { content } from '@orc/content';
-import { displayName } from './Captains.tsx';
+import { useState, type FormEvent } from 'react';
+import { BACKING } from '@orc/sim';
+import { captainName as nameOf, goesBy } from './captain-names.ts';
 import { HintLine } from './HintLine.tsx';
 import { reasonText } from './invite-link.ts';
 import { goldLine, type GoldChange, type YourStable } from './stable-lines.ts';
 import { supabase } from './supabase.ts';
+import { useWorldLoad } from './world-load.ts';
 
 // The Stable (#36): my Stakes (held while the Captain is dead), my gold and my ledger, all owner-only,
 // plus who backs whom across the world (public, never how much). Backing debits gold at once through
 // submit_intent; the next tick makes the Stake. A withdrawal pays half back at the next tick.
 // Also `YourStableSection`, the Herald's frozen private section.
 
-const names = new Map(content.cast.map((c) => [c.id, c.name]));
-const nameOf = (id: string) => names.get(id) ?? id;
 const POLL_MS = 15_000;
 const LEDGER_LINES = 30;
 
@@ -20,6 +19,7 @@ interface CaptainRow {
   id: string;
   roster: 'active' | 'reserve' | 'dead';
   epithet: string | null;
+  alias_idx: 0 | 1 | null;
 }
 
 interface Loaded {
@@ -34,78 +34,78 @@ interface Loaded {
   backers: Map<string, string[]>;
 }
 
-export function Stable({ worldId }: { worldId: string }) {
-  const [data, setData] = useState<Loaded | { error: string } | null>(null);
+async function loadStable(worldId: string): Promise<Loaded> {
+  const { data: me } = await supabase.rpc('my_player', { w: worldId });
+  const [priv, captains, stakes, queued, ledger, backers, players] = await Promise.all([
+    supabase.from('player_private').select('gold').eq('player_id', me).single(),
+    supabase.from('captains').select('id, roster, epithet, alias_idx').eq('world_id', worldId),
+    supabase.from('stakes').select('captain_id, amount').eq('player_id', me),
+    supabase.from('intents').select('kind, payload').eq('player_id', me).eq('status', 'queued').in('kind', ['back', 'withdraw']),
+    supabase
+      .from('gold_ledger')
+      .select('id, at, delta, lost, reason, captain_id, fact_no')
+      .eq('player_id', me)
+      .order('id', { ascending: false })
+      .limit(LEDGER_LINES),
+    supabase.from('backers').select('player_id, captain_id').eq('world_id', worldId),
+    supabase.from('players').select('id, display_name').eq('world_id', worldId),
+  ]);
+  const error = priv.error ?? captains.error ?? stakes.error ?? queued.error ?? ledger.error ?? backers.error ?? players.error;
+  if (error) throw new Error(error.message);
 
-  async function load() {
-    const { data: me } = await supabase.rpc('my_player', { w: worldId });
-    const [priv, captains, stakes, queued, ledger, backers, players] = await Promise.all([
-      supabase.from('player_private').select('gold').eq('player_id', me).single(),
-      supabase.from('captains').select('id, roster, epithet').eq('world_id', worldId),
-      supabase.from('stakes').select('captain_id, amount').eq('player_id', me),
-      supabase.from('intents').select('kind, payload').eq('player_id', me).eq('status', 'queued').in('kind', ['back', 'withdraw']),
-      supabase
-        .from('gold_ledger')
-        .select('id, at, delta, lost, reason, captain_id, fact_no')
-        .eq('player_id', me)
-        .order('id', { ascending: false })
-        .limit(LEDGER_LINES),
-      supabase.from('backers').select('player_id, captain_id').eq('world_id', worldId),
-      supabase.from('players').select('id, display_name').eq('world_id', worldId),
-    ]);
-    const error = priv.error ?? captains.error ?? stakes.error ?? queued.error ?? ledger.error ?? backers.error ?? players.error;
-    if (error) return setData({ error: error.message });
-
-    const factNos = [...new Set((ledger.data ?? []).flatMap((l) => (l.fact_no === null ? [] : [l.fact_no])))];
-    const lines = new Map<number, string>();
-    if (factNos.length > 0) {
-      const { data: facts } = await supabase.from('facts').select('no, line').eq('world_id', worldId).in('no', factNos);
-      for (const f of facts ?? []) lines.set(f.no, f.line);
-    }
-    const playerName = new Map((players.data ?? []).map((p) => [p.id, p.display_name as string]));
-    const byCaptain = new Map<string, string[]>();
-    for (const b of backers.data ?? []) {
-      byCaptain.set(b.captain_id, [...(byCaptain.get(b.captain_id) ?? []), b.player_id === me ? 'you' : (playerName.get(b.player_id) ?? 'someone')]);
-    }
-    setData({
-      me,
-      gold: priv.data?.gold ?? 0,
-      captains: (captains.data ?? []).sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id))),
-      stakes: (stakes.data ?? []).map((s) => ({ captainId: s.captain_id, amount: s.amount })),
-      queued: (queued.data ?? []).map((q) => ({ kind: q.kind, captainId: q.payload.captainId, amount: q.payload.amount })),
-      ledger: (ledger.data ?? []).map((l) => ({
-        id: l.id,
-        at: l.at,
-        delta: l.delta,
-        lost: l.lost,
-        reason: l.reason,
-        captainId: l.captain_id,
-        line: l.fact_no === null ? null : (lines.get(l.fact_no) ?? null),
-      })),
-      backers: byCaptain,
-    });
+  const factNos = [...new Set((ledger.data ?? []).flatMap((l) => (l.fact_no === null ? [] : [l.fact_no])))];
+  const lines = new Map<number, string>();
+  if (factNos.length > 0) {
+    const { data: facts } = await supabase.from('facts').select('no, line').eq('world_id', worldId).in('no', factNos);
+    for (const f of facts ?? []) lines.set(f.no, f.line);
   }
+  const playerName = new Map((players.data ?? []).map((p) => [p.id, p.display_name as string]));
+  const byCaptain = new Map<string, string[]>();
+  for (const b of backers.data ?? []) {
+    byCaptain.set(b.captain_id, [...(byCaptain.get(b.captain_id) ?? []), b.player_id === me ? 'you' : (playerName.get(b.player_id) ?? 'someone')]);
+  }
+  return {
+    me,
+    gold: priv.data?.gold ?? 0,
+    captains: (captains.data ?? []).sort((a, b) => nameOf(a.id).localeCompare(nameOf(b.id))),
+    stakes: (stakes.data ?? []).map((s) => ({ captainId: s.captain_id, amount: s.amount })),
+    queued: (queued.data ?? []).map((q) => ({ kind: q.kind, captainId: q.payload.captainId, amount: q.payload.amount })),
+    ledger: (ledger.data ?? []).map((l) => ({
+      id: l.id,
+      at: l.at,
+      delta: l.delta,
+      lost: l.lost,
+      reason: l.reason,
+      captainId: l.captain_id,
+      line: l.fact_no === null ? null : (lines.get(l.fact_no) ?? null),
+    })),
+    backers: byCaptain,
+  };
+}
 
-  useEffect(() => {
-    void load();
-    const timer = setInterval(() => void load(), POLL_MS);
-    return () => clearInterval(timer);
-  }, [worldId]);
+export function Stable({ worldId }: { worldId: string }) {
+  const { state: data, reload } = useWorldLoad(worldId, loadStable, { pollMs: POLL_MS });
 
   if (data === null) return <p className="quiet">…</p>;
   if ('error' in data) return <p className="error">{data.error}</p>;
 
   const captain = (id: string) => data.captains.find((c) => c.id === id);
-  const label = (id: string) => displayName(nameOf(id), captain(id)?.epithet ?? null);
+  const label = (id: string) => {
+    const c = captain(id);
+    return goesBy(id, { epithet: c?.epithet, aliasIdx: c?.alias_idx });
+  };
   return (
     <section className="stable">
       <h2>Your Stable</h2>
       <HintLine worldId={worldId} hint="stable" />
       <p className="gold">
-        <strong>{data.gold}</strong> gold <span className="quiet">(banks up to 30; 10 more at midnight)</span>
+        <strong>{data.gold}</strong> gold{' '}
+        <span className="quiet">
+          (banks up to {BACKING.goldCap}; {BACKING.stipend} more at midnight)
+        </span>
       </p>
       <HintLine worldId={worldId} hint="backing" />
-      <BackForm worldId={worldId} data={data} label={label} onDone={() => void load()} />
+      <BackForm worldId={worldId} data={data} label={label} onDone={reload} />
 
       <h3>Your Stakes</h3>
       {data.stakes.length === 0 && data.queued.length === 0 && <p className="quiet">You back nobody. Yet.</p>}
@@ -119,7 +119,7 @@ export function Stable({ worldId }: { worldId: string }) {
             amount={s.amount}
             held={captain(s.captainId)?.roster === 'dead'}
             withdrawing={data.queued.some((q) => q.kind === 'withdraw' && q.captainId === s.captainId)}
-            onDone={() => void load()}
+            onDone={reload}
           />
         ))}
         {data.queued
@@ -201,7 +201,9 @@ function BackForm({ worldId, data, label, onDone }: { worldId: string; data: Loa
         <input type="number" min={1} max={Math.max(1, data.gold)} step={1} value={amount} onChange={(e) => setAmount(Number(e.target.value))} />
       </label>
       <button disabled={!ready || state === 'sending'}>{data.gold > 0 ? 'Back him' : 'No gold left'}</button>
-      <p className="quiet">Each win pays 10% of your Stake, each point of Infamy 1%. Idiots pay best.</p>
+      <p className="quiet">
+        Each win pays {BACKING.winPct}% of your Stake, each point of Infamy {BACKING.infamyPct}%. Idiots pay best.
+      </p>
       {typeof state === 'object' && 'sent' in state && <p className="quiet">{state.sent}</p>}
       {typeof state === 'object' && 'error' in state && <p className="error">{state.error}</p>}
     </form>
