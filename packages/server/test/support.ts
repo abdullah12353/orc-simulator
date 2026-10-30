@@ -95,3 +95,53 @@ export async function freshWorld(opts: { clock: ReturnType<typeof fakeClock>; se
   );
   return { worldId, playerId, userId };
 }
+
+export interface StoryFact {
+  /** Minutes after `from`. */
+  minute: number;
+  weight?: number;
+  kind?: string;
+  tier?: 'generated' | 'templated' | 'silent';
+  /** The head this consequence belongs to (an index into the same list); omit for a head. */
+  consequenceOf?: number;
+  /** For a `legendary` consequence: the head (an index into the same list) that was the deed. */
+  deed?: number;
+  line?: string;
+}
+
+/**
+ * Appends hand-made Facts to a world's log, numbered from its `next_no` (which it then moves on, so
+ * the sim never reuses a number). Lets Herald tests control weights, times, kinds and tiers exactly.
+ * Returns the Fact numbers, in list order.
+ */
+export async function insertStoryFacts(worldId: string, from: string, list: StoryFact[], sql: Sql = db()): Promise<number[]> {
+  const [w] = await sql<{ next_no: number; tick_seq: number }[]>`
+    select next_no::int, tick_seq::int from worlds where id = ${worldId}`;
+  const nos = list.map((_, i) => w!.next_no + i);
+  const rows = list.map((f, i) => {
+    const no = nos[i]!;
+    const head = f.consequenceOf === undefined;
+    const fact = {
+      no,
+      at: new Date(Date.parse(from) + f.minute * 60_000).toISOString(),
+      storyNo: head ? no : nos[f.consequenceOf!]!,
+      line: f.line ?? `Story fact ${no}.`,
+      tier: f.tier ?? 'templated',
+      cast: [],
+      causes: [],
+      blame: [],
+      infamy: [],
+      kind: f.kind ?? (head ? 'incident' : 'power'),
+      ...(head ? { comedyWeight: f.weight ?? 4 } : {}),
+      ...(f.deed !== undefined ? { deed: nos[f.deed]! } : {}),
+    };
+    return { tickSeq: w!.tick_seq, fact };
+  });
+  await sql`
+    insert into facts (world_id, no, tick_seq, at, kind, story_no, line, tier, "cast", comedy_weight, payload)
+    select ${worldId}, (f->>'no')::bigint, (r->>'tickSeq')::bigint, (f->>'at')::timestamptz, f->>'kind',
+           (f->>'storyNo')::bigint, f->>'line', (f->>'tier')::tier, '{}', (f->>'comedyWeight')::smallint, f
+    from jsonb_array_elements(${sql.json(rows)}) as r, lateral (select r->'fact' as f) as x`;
+  await sql`update worlds set next_no = ${w!.next_no + list.length} where id = ${worldId}`;
+  return nos;
+}

@@ -427,3 +427,6 @@ verify_jwt = false
 
 [functions.create-world]
 verify_jwt = true
+
+[functions.open-edition]
+verify_jwt = true
