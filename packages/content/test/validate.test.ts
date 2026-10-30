@@ -70,3 +70,40 @@ test('the content version is a stable hash that changes when the content does', 
   assert.notEqual(contentVersion(edited), contentVersion(content));
   assert.match(contentVersion(content), /^[0-9a-f]{16}$/);
 });
+
+test('every Trait and Fear has a Rumour subject phrase', () => {
+  const broken = clone(content);
+  delete broken.banks.subjects['Glutton'];
+  delete broken.banks.subjects['Water'];
+  const errors = validateContent(broken);
+  for (const key of ['Glutton', 'Water']) {
+    assert.ok(errors.some((e) => e.includes('banks.subjects') && e.includes(key)), `${key}: ${errors.join('\n')}`);
+  }
+});
+
+test('every Claim needs 3 phrasings that each place the {subject}', () => {
+  const broken = clone(content);
+  broken.banks.claims.mum.phrasings[2] = 'said his mum is cross';
+  (broken.banks.claims.coup as { phrasings: string[] }).phrasings = ['said he plots with his {subject}'];
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('claims.mum') && e.includes('{subject}')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('claims.coup') && e.includes('3 phrasings')), errors.join('\n'));
+});
+
+test('the Garble ladder has 4 distinct Claims, and Garbles need absurd subjects', () => {
+  const broken = clone(content);
+  broken.banks.garbleLadder = ['insult', 'insult', 'coup'];
+  broken.banks.absurdSubjects = {};
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('garbleLadder')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('absurdSubjects')), errors.join('\n'));
+});
+
+test('a Rumour outcome without its Template is rejected, and {claim} is only allowed where declared', () => {
+  const broken = clone(content);
+  broken.templates = broken.templates.filter((t) => t.id !== 'rumour.garbled');
+  broken.templates[0]!.lines[0] = '{a} said {claim}.';
+  const errors = validateContent(broken);
+  assert.ok(errors.some((e) => e.includes('rumour.garbled')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes(broken.templates[0]!.id) && e.includes('{claim}')), errors.join('\n'));
+});

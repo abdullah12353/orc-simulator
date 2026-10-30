@@ -75,4 +75,93 @@ export const banks: Banks = {
       'Crows heavy. Visibility poor, morale poorer',
     ],
   },
+  // Rumours (#28). A subject reads after "his": "laughed at his appetite in front of the latrine queue".
+  subjects: {
+    Glutton: 'appetite',
+    Vain: 'vanity',
+    "Mummy's Boy": 'devotion to his mum',
+    'Compulsive Liar': 'lying',
+    'Little Fortresser': 'views on outsiders',
+    Coward: 'cowardice',
+    Hothead: 'temper',
+    Gullible: 'gullibility',
+    Drunkard: 'drinking',
+    Snob: 'snobbery',
+    Hoarder: 'hoard of junk',
+    Superstitious: 'lucky charms',
+    'Show-off': 'showing off',
+    Lazy: 'laziness',
+    'Sore Loser': 'sulking',
+    Sleepwalker: 'sleepwalking',
+    Water: 'fear of water',
+    Heights: 'fear of heights',
+    'The Dark': 'fear of the dark',
+    Birds: 'fear of birds',
+    Doctors: 'fear of doctors',
+    Soap: 'fear of soap',
+    Cats: 'fear of cats',
+    'Being Laughed At': 'fear of being laughed at',
+    'Small Dogs': 'fear of small dogs',
+    'His Mum': 'fear of his mum',
+  },
+  // Only Garbles swap these in. The v1 catalogue (#44) grows the bank to about 20.
+  absurdSubjects: {
+    'secret-goose': 'secret goose',
+    'pet-turnip': 'pet turnip',
+    'tiny-hats': 'collection of tiny hats',
+    'imaginary-dragon': 'imaginary dragon',
+    'pie-engagement': 'engagement to a pie',
+    'ballet-lessons': 'ballet lessons',
+    'gravel-poetry': 'poetry about gravel',
+    'spoon-shrine': 'shrine to a spoon',
+    'turnip-head': 'second head (a turnip on a stick)',
+    'false-beard': 'false beard',
+    'knitting-circle': 'knitting circle',
+    'rat-council': 'seat on the rat council',
+  },
+  // What the source supposedly did. Clean: these end up in Herald lines and Grudge tags.
+  claims: {
+    insult: {
+      label: 'An insult',
+      phrasings: [
+        'called his {subject} a disgrace to the fortress',
+        'laughed at his {subject} in front of the latrine queue',
+        'said his {subject} smells worse than the moat',
+      ],
+    },
+    fear: {
+      label: 'A Fear exposed',
+      phrasings: [
+        'told the whole mess hall about his {subject}',
+        'drew a picture of his {subject} on the latrine wall',
+        'said his {subject} is why he sleeps with a candle',
+      ],
+    },
+    theft: {
+      label: 'A theft',
+      phrasings: [
+        "said he nicked the Warlord's spoon to feed his {subject}",
+        'said he sold the feast money to pay for his {subject}',
+        "said he pinched the Warlord's boots and blamed his {subject}",
+      ],
+    },
+    mum: {
+      label: 'A mum claim',
+      phrasings: [
+        'said his mum is the real reason for his {subject}',
+        'said even his mum is embarrassed by his {subject}',
+        'said his mum writes to the Herald about his {subject}',
+      ],
+    },
+    coup: {
+      label: 'A coup plot',
+      phrasings: [
+        'said he is plotting to seize the throne with his {subject}',
+        "said he has promised the Warlord's chair to his {subject}",
+        'said he holds secret meetings about the throne, chaired by his {subject}',
+      ],
+    },
+  },
+  // insult → mum → betrayal (a theft) → coup. A Fear exposed enters at the bottom.
+  garbleLadder: ['insult', 'mum', 'theft', 'coup'],
 };

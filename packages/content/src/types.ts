@@ -1,8 +1,8 @@
 // The content bundle's shapes (D46, data-model decision 6). Content ships as TS modules in the repo,
 // is bundled into the Edge Functions and the PWA, and is referenced from the DB only by text slugs.
-import type { Accent } from './pools.ts';
+import type { Accent, Claim } from './pools.ts';
 
-export type { Accent };
+export type { Accent, Claim };
 
 export type CaptainId = string;
 export type TemplateId = string;
@@ -45,12 +45,19 @@ export interface OutcomeDef {
   weight: number;
 }
 
-/** One event = one data record (D46). Lines use `{role}` placeholders for Captain names. */
+/**
+ * One event = one data record (D46). Lines use `{role}` placeholders for Captain names, and `{slot}`
+ * placeholders for text the sim fills in (a Rumour's `{claim}`).
+ */
 export interface TemplateDef {
   id: TemplateId;
-  kind: 'incident';
-  trigger: 'ambient';
+  /** `rumour` Templates voice a landed Rumour, one per outcome (`rumour.works`, …). */
+  kind: 'incident' | 'rumour';
+  /** `ambient`: rolled on a tick. `meddle`: a Meddle landing. */
+  trigger: 'ambient' | 'meddle';
   roles: RoleDef[];
+  /** Non-Captain placeholders the sim fills in. */
+  slots?: string[];
   outcomes: OutcomeDef[];
   lines: [string, string, string];
   baseWeight: number;
@@ -69,6 +76,27 @@ export interface Banks {
   epithets: Record<BankKey, EpithetDef>;
   /** The Herald's masthead gags (D51). Clean: the Herald never swears. */
   masthead: MastheadBank;
+  /**
+   * What a Rumour's subject is called in a line, after "his": one entry per Trait and per Fear
+   * ("Glutton" → "appetite", "Water" → "fear of water").
+   */
+  subjects: Record<string, string>;
+  /** Absurd subjects only a Garble can swap in, after "his" ("secret goose"). */
+  absurdSubjects: Record<BankKey, string>;
+  /** Three phrasings per Claim, as what the source supposedly did: "called his {subject} a disgrace". */
+  claims: Record<Claim, ClaimDef>;
+  /**
+   * The Garble escalation ladder, bottom to top (insult → mum → betrayal → coup). A Garble moves a
+   * Claim one step up; a Claim that isn't on the ladder enters at the bottom.
+   */
+  garbleLadder: Claim[];
+}
+
+export interface ClaimDef {
+  /** How the Rumour composer names it. */
+  label: string;
+  /** 3 phrasings with a `{subject}` placeholder; the Rumour's line variant picks one. */
+  phrasings: [string, string, string];
 }
 
 export interface MastheadBank {
