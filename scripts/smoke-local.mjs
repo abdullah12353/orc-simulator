@@ -67,6 +67,15 @@ if (lines.length === 0) throw new Error('no Facts after 60 ticks');
 console.log(`the creator sees ${lines.length} Fact line(s), newest first:`);
 for (const f of lines) console.log(`  #${f.no} ${f.at}  ${f.line}`);
 
+// 3b. The creator opens the Herald: edition #1 covers day zero, and the PWA can read it back under RLS.
+const opened = await call('/functions/v1/open-edition', { method: 'POST', token, body: { worldId } });
+if (!opened.created || opened.edition.no !== 1) throw new Error(`open-edition: ${JSON.stringify(opened).slice(0, 300)}`);
+const stored = await call(`/rest/v1/editions?world_id=eq.${worldId}&select=no,edition_stories(rank,headline)`, { token });
+if (stored.length !== 1 || stored[0].edition_stories.length !== opened.edition.stories.length) {
+  throw new Error(`editions under RLS: ${JSON.stringify(stored).slice(0, 300)}`);
+}
+console.log(`edition #1 (${opened.edition.masthead.orcDate}) has ${opened.edition.stories.length} stories; lead: ${opened.edition.stories[0]?.headline}`);
+
 // 4. An anonymous caller is refused.
 const anonRes = await fetch(`${api}/rest/v1/facts?world_id=eq.${worldId}&select=no`, {
   headers: { apikey: anon, authorization: `Bearer ${anon}` },
@@ -85,6 +94,8 @@ const names = await call(`/rest/v1/players?world_id=eq.${worldId}&select=display
 console.log('the friend joined; Players:', names.map((p) => p.display_name).join(', '));
 const privateRows = await call('/rest/v1/player_private?select=player_id,gold,meddles_available', { token: friend });
 if (privateRows.length !== 1) throw new Error(`the friend sees ${privateRows.length} player_private rows`);
+const friendsView = await call(`/rest/v1/editions?world_id=eq.${worldId}&select=id`, { token: friend });
+if (friendsView.length !== 0) throw new Error(`the friend can read ${friendsView.length} of the creator's editions`);
 
 await call('/rest/v1/rpc/revoke_invite', { method: 'POST', token, body: { token: invite.token } });
 const late = await signIn(`smoke-late-${Date.now()}@test.local`);

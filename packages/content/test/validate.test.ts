@@ -51,6 +51,18 @@ test('duplicate slugs are rejected', () => {
   assert.ok(errors.some((e) => e.includes('duplicate')), errors.join('\n'));
 });
 
+test('the Herald masthead needs 7 orc weekdays, 12 orc months, price gags and weather', () => {
+  const broken = clone(content);
+  broken.banks.masthead.days = broken.banks.masthead.days.slice(0, 6);
+  broken.banks.masthead.months = broken.banks.masthead.months.slice(0, 11);
+  broken.banks.masthead.prices = [];
+  broken.banks.masthead.weather = [];
+  const errors = validateContent(broken);
+  for (const part of ['days', 'months', 'prices', 'weather']) {
+    assert.ok(errors.some((e) => e.includes(`masthead.${part}`)), `${part}: ${errors.join('\n')}`);
+  }
+});
+
 test('the content version is a stable hash that changes when the content does', () => {
   assert.equal(contentVersion(content), contentVersion(clone(content)));
   const edited = clone(content);

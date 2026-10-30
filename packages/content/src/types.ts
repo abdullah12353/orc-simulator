@@ -67,6 +67,19 @@ export interface Banks {
   /** Grudge tags for the Grudges seeded at casting ("still owes him a pie"). */
   oldHistory: string[];
   epithets: Record<BankKey, EpithetDef>;
+  /** The Herald's masthead gags (D51). Clean: the Herald never swears. */
+  masthead: MastheadBank;
+}
+
+export interface MastheadBank {
+  /** Orc weekdays, Sunday first (7). */
+  days: string[];
+  /** Orc months, January first (12). */
+  months: string[];
+  /** Cover-price gags ("Two teeth, or one good tooth"). */
+  prices: string[];
+  /** Weather reports. */
+  weather: string[];
 }
 
 export interface Content {

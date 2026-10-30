@@ -141,3 +141,101 @@ button.link {
   text-transform: uppercase;
   vertical-align: middle;
 }
+/* The Gutter Herald (#27): a newsprint page inside the dark app. */
+.edition {
+  background: #f5f0e6;
+  color: #1c1917;
+  padding: 1rem 1.25rem 1.5rem;
+}
+.masthead {
+  border-bottom: 3px double #1c1917;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+.masthead h2 {
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  margin: 0.25rem 0;
+  text-transform: uppercase;
+}
+.masthead .strap {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-top: 1px solid #1c1917;
+  border-bottom: 1px solid #1c1917;
+  padding: 0.25rem 0;
+  margin: 0;
+  font-size: 0.85rem;
+}
+.masthead .weather {
+  font-style: italic;
+  font-size: 0.85rem;
+}
+.edition .quiet {
+  color: #57534e;
+}
+.lead h3 {
+  font-size: 1.6rem;
+  line-height: 1.2;
+  margin: 0.5rem 0;
+}
+.headlines {
+  list-style: none;
+  padding: 0;
+  border-top: 1px solid #1c1917;
+}
+.headlines li {
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #d6d3d1;
+}
+.headlines h4 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+.blame {
+  font-style: italic;
+  font-size: 0.9rem;
+}
+.gutter summary {
+  cursor: pointer;
+  font-weight: bold;
+  padding: 0.5rem 0;
+}
+.gutter ul {
+  padding-left: 1.25rem;
+  font-size: 0.9rem;
+}
+.stop-press {
+  border: 2px solid #dc2626;
+  padding: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+.stop-press h3 {
+  color: #fca5a5;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.9rem;
+}
+.stop-press ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+.editions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: baseline;
+  margin-top: 1rem;
+}
+.editions button {
+  background: none;
+  border: 1px solid #44403c;
+  color: inherit;
+  cursor: pointer;
+}
+.editions button.on {
+  border-color: #f5f5f4;
+}

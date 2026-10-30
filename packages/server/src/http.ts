@@ -1,6 +1,7 @@
 // Request → response adapters for the Edge Functions. Runtime-neutral (Fetch API only), so the
 // Deno entrypoints stay one-liners and tests can call these in-process from Node.
 import { createWorld, CreateWorldError, type CreateWorldDeps } from './create-world.ts';
+import { openEdition, OpenEditionError, type OpenEditionDeps } from './herald.ts';
 import { tickAllWorlds, tickWorld, type TickDeps } from './tick.ts';
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
@@ -70,6 +71,35 @@ export async function handleCreateWorld(
     return json(out, 201, CORS);
   } catch (e) {
     if (e instanceof CreateWorldError) return json({ error: e.message }, 400, CORS);
+    throw e;
+  }
+}
+
+/**
+ * POST /open-edition with the caller's Supabase JWT. Body `{ "worldId": "..." }`. Returns the caller's
+ * `OpenEditionResult`: a new edition if one is due, otherwise the last one plus a Stop press.
+ */
+export async function handleOpenEdition(
+  req: Request,
+  deps: OpenEditionDeps & { getUserId: (req: Request) => Promise<string | null> },
+): Promise<Response> {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405, CORS);
+  const userId = await deps.getUserId(req);
+  if (!userId) return json({ error: 'sign in first' }, 401, CORS);
+
+  let body: { worldId?: unknown };
+  try {
+    body = (await req.json()) as typeof body;
+  } catch {
+    return json({ error: 'body must be JSON' }, 400, CORS);
+  }
+  const worldId = String(body.worldId ?? '');
+  if (!/^[0-9a-f-]{36}$/i.test(worldId)) return json({ error: 'worldId must be a uuid' }, 400, CORS);
+  try {
+    return json(await openEdition(deps, { userId, worldId }), 200, CORS);
+  } catch (e) {
+    if (e instanceof OpenEditionError) return json({ error: e.message }, 403, CORS);
     throw e;
   }
 }

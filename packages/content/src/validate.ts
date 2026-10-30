@@ -74,6 +74,13 @@ export function validateContent(c: Content): string[] {
     errors.push(`banks.oldHistory: ${history.size} distinct tags; casting needs at least ${CASTING.seededGrudges.max}`);
   }
 
+  const masthead = c.banks.masthead;
+  const nonEmpty = (list: unknown) => Array.isArray(list) && list.every((s) => typeof s === 'string' && s.trim() !== '');
+  if (!nonEmpty(masthead?.days) || masthead.days.length !== 7) errors.push('banks.masthead.days: needs 7 orc weekdays');
+  if (!nonEmpty(masthead?.months) || masthead.months.length !== 12) errors.push('banks.masthead.months: needs 12 orc months');
+  if (!nonEmpty(masthead?.prices) || masthead.prices.length === 0) errors.push('banks.masthead.prices: needs at least 1 price gag');
+  if (!nonEmpty(masthead?.weather) || masthead.weather.length === 0) errors.push('banks.masthead.weather: needs at least 1 weather report');
+
   const templateIds = new Set<string>();
   for (const t of c.templates) {
     const where = `template ${t.id}`;

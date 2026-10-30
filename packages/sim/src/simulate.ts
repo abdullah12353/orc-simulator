@@ -1,4 +1,5 @@
 import type { TemplateDef } from '@orc/content';
+import { weighStories } from './comedy.ts';
 import { createRng, type Rng } from './rng.ts';
 import type { CaptainId, Fact, Intent, SimResult, StateDiff, WorldState } from './types.ts';
 
@@ -60,6 +61,7 @@ export function simulate(state: WorldState, intents: Intent[], seed: number): Si
   void intents; // consumed from #28 onwards
   const ctx = new TickContext(state, createRng(seed));
   rollAmbient(ctx);
+  weighStories(state, ctx.facts);
   return { facts: ctx.facts, stateDiff: ctx.diff };
 }
 
