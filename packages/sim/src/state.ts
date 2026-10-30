@@ -1,21 +1,12 @@
 import { hashValue } from '@orc/content';
+import { BACKING } from './backing.ts';
 import { BLAME } from './blame.ts';
 import { INFAMY_WINDOW_DAYS, MEDDLE_CAP, VARIETY } from './context.ts';
 import { isoToMs } from './time.ts';
 import type { CaptainState, GrudgeTag, Humiliation, StateDiff, Trophy, WorldState } from './types.ts';
 
-/** Diff sections applyDiff (and the tick's commit) can apply so far. Others must stay empty. */
-function assertSupported(diff: StateDiff): void {
-  const unsupported: string[] = [];
-  const nonEmpty = (name: string, list: unknown[]) => list.length > 0 && unsupported.push(name);
-  nonEmpty('stakes', diff.stakes);
-  nonEmpty('ledger', diff.ledger);
-  if (unsupported.length > 0) throw new Error(`applyDiff: unsupported diff sections: ${unsupported.join(', ')}`);
-}
-
 /** Applies a diff to a state, purely. Used for day zero and tests; the tick commits the same diff to SQL. */
 export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
-  assertSupported(diff);
   const captains = { ...state.captains };
   for (const patch of diff.captains) {
     const current = captains[patch.id];
@@ -46,6 +37,20 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
       meddles: Math.max(0, Math.min(MEDDLE_CAP, p.meddles + (d.meddles ?? 0))),
       ...(d.firstMeddleDone ? { firstMeddleDone: true } : {}),
     };
+  }
+  // Gold moves only by ledger deltas (the sim already capped them at 30).
+  for (const l of diff.ledger) {
+    const p = players[l.playerId];
+    if (!p) throw new Error(`applyDiff: unknown Player ${l.playerId}`);
+    players[l.playerId] = { ...p, gold: Math.max(0, Math.min(BACKING.goldCap, p.gold + l.delta)) };
+  }
+
+  // Stakes are absolute (0 deletes), kept in (Player, Captain) order as the tick loads them.
+  const stakes = new Map(state.stakes.map((s) => [`${s.playerId}|${s.captainId}`, s]));
+  for (const s of diff.stakes) {
+    const key = `${s.playerId}|${s.captainId}`;
+    if (s.amount === 0) stakes.delete(key);
+    else stakes.set(key, { playerId: s.playerId, captainId: s.captainId, amount: s.amount });
   }
 
   const meddles = { ...state.meddles };
@@ -86,6 +91,7 @@ export function applyDiff(state: WorldState, diff: StateDiff): WorldState {
     grudgeTags: newestPerPair([...state.grudgeTags, ...diff.grudgeTags]),
     infamy7d: infamyWindow([...state.infamy7d, ...diff.infamy], world.now),
     players,
+    stakes: [...stakes].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, s]) => s),
     meddles,
     fuses,
   };

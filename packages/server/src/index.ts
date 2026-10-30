@@ -17,6 +17,7 @@ export {
   type Slot,
   type StopPressLine,
 } from './herald.ts';
+export { buildStable, type YourStable } from './backing.ts';
 export { registerNameRender, NameRenderError, type NameRenderInput } from './name-renders.ts';
 export { createClipping, ClippingError, type ClippingDeps, type ClippingInput } from './clippings.ts';
 export type { ClippingSnapshot } from '@orc/sim';

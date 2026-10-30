@@ -31,3 +31,4 @@ export {
   type ClippingSnapshot,
   type PullQuote,
 } from './clipping.ts';
+export { BACKING, edgeFor, isBackingIntent, type BackingIntent, type LedgerReason } from './backing.ts';

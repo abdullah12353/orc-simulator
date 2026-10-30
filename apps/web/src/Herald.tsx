@@ -8,6 +8,8 @@ import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
 import { legendaryDeeds } from './legendary.ts';
+import { YourStableSection } from './Stable.tsx';
+import type { YourStable } from './stable-lines.ts';
 import { supabase } from './supabase.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
@@ -65,6 +67,8 @@ interface Edition {
   stories: Story[];
   /** Only the edition open-edition returned carries it; back issues read under RLS don't. */
   accusation?: Accusation | null;
+  /** My private "Your Stable" (#36), frozen when the edition was printed (null before #36). */
+  stable: YourStable | null;
 }
 
 interface Opened {
@@ -84,6 +88,7 @@ interface EditionRow {
   covers_to: string;
   masthead: Edition['masthead'];
   status: Edition['status'];
+  stable: YourStable | null;
   edition_stories: {
     rank: number;
     story_no: number;
@@ -97,7 +102,7 @@ interface EditionRow {
 
 const SHOWN_EDITIONS = 7;
 const EDITION_COLUMNS =
-  'id, no, covers_from, covers_to, masthead, status, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)';
+  'id, no, covers_from, covers_to, masthead, status, stable, edition_stories (rank, story_no, slot, headline, standfirst, body, blame_line)';
 /** Rereads while the words are being written: the job gives up on the model after about 20 s. */
 const PICKUP = { everyMs: 3_000, tries: 12 } as const;
 /** A lead Clash auto-plays once per edition on this device (D52); after that it's the Watch button. */
@@ -113,6 +118,7 @@ function fromRow(r: EditionRow): Edition {
     coversTo: r.covers_to,
     masthead: r.masthead,
     status: r.status,
+    stable: r.stable,
     stories: [...r.edition_stories]
       .sort((a, b) => a.rank - b.rank)
       .map((s) => ({
@@ -379,6 +385,7 @@ function EditionView({
           </ul>
         </details>
       )}
+      {edition.stable && <YourStableSection stable={edition.stable} />}
     </article>
   );
 }
