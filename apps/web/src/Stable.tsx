@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { content } from '@orc/content';
 import { displayName } from './Captains.tsx';
+import { HintLine } from './HintLine.tsx';
 import { reasonText } from './invite-link.ts';
 import { goldLine, type GoldChange, type YourStable } from './stable-lines.ts';
 import { supabase } from './supabase.ts';
@@ -99,9 +100,11 @@ export function Stable({ worldId }: { worldId: string }) {
   return (
     <section className="stable">
       <h2>Your Stable</h2>
+      <HintLine worldId={worldId} hint="stable" />
       <p className="gold">
         <strong>{data.gold}</strong> gold <span className="quiet">(banks up to 30; 10 more at midnight)</span>
       </p>
+      <HintLine worldId={worldId} hint="backing" />
       <BackForm worldId={worldId} data={data} label={label} onDone={() => void load()} />
 
       <h3>Your Stakes</h3>

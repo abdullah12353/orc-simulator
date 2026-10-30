@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { content, dareOffers, playsOnFear, SURPRISE, subjectText } from '@orc/content';
 import { displayName } from './Captains.tsx';
+import { HintLine } from './HintLine.tsx';
 import { reasonText } from './invite-link.ts';
 import { supabase } from './supabase.ts';
 
@@ -84,6 +85,7 @@ export function DarePicker({
   return (
     <section>
       <h2>Set a Dare</h2>
+      <HintLine worldId={worldId} hint="dare" />
       <form onSubmit={submit} className="composer">
         <label>
           Who you're daring

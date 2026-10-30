@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
 import { applyDiff, simulate, type Claim, type WorldState } from '@orc/sim';
-import { activeIds, addMinutes, freshWorld, rumour, SEEDS, step } from './support.ts';
+import { activeIds, addMinutes, dare, freshWorld, rumour, SEEDS, step } from './support.ts';
 
 const P1 = '11111111-1111-4111-8111-111111111111';
 const minutesBetween = (a: string, b: string) => (Date.parse(b) - Date.parse(a)) / 60_000;
@@ -56,7 +56,26 @@ test("a Player's guided first Rumour gets a 2–5 minute Fuse, and a later one 1
   }
 });
 
-const LADDER: Claim[] = ['insult', 'mum', 'theft', 'coup'];
+test('a first Meddle the sim rejects still uses up the short Fuse (submit_intent marked it done)', () => {
+  const { state, source, target } = setup(3);
+  const bad = step(state, 3, 5, [rumour(state, P1, { source, target: source, firstMeddle: true })]);
+  assert.equal(bad.diff.intents[0]!.status, 'rejected');
+  assert.equal(bad.state.players[P1]!.firstMeddleDone, true, 'the DB set first_meddle_done when it was submitted');
+
+  const next = step(bad.state, 3, 5, [rumour(bad.state, P1, { source, target, firstMeddle: true })]);
+  const due = minutesBetween(next.state.world.now, next.diff.fuses.add[0]!.dueAt);
+  assert.ok(due >= 10 && due <= 90, `the next Meddle waits 10–90, got ${due}`);
+});
+
+test('a first Dare gets the 2–5 minute Fuse too, and then the Player has had their first Meddle', () => {
+  const { state, target } = setup(4);
+  const r = step(state, 4, 5, [dare(state, P1, { target, dareKey: 'stunt.torches', firstMeddle: true })]);
+  const due = minutesBetween(r.state.world.now, r.diff.fuses.add[0]!.dueAt);
+  assert.ok(due >= 2 && due <= 5, `first fuse ${due} min`);
+  assert.equal(r.state.players[P1]!.firstMeddleDone, true);
+});
+
+const LADDER: Claim[] =['insult', 'mum', 'theft', 'coup'];
 const rank = (c: Claim) => Math.max(0, LADDER.indexOf(c)); // a Fear exposed enters at the bottom
 
 /** A Rumour planted by P1 between two plain Captains (no Trait that shifts the odds), and the state an hour and a half later. */
