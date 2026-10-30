@@ -95,7 +95,8 @@ function apiKey(): string {
   if (process.env.ELEVENLABS_API_KEY) return process.env.ELEVENLABS_API_KEY;
   const file = join(ROOT, '.env.voices');
   const line = existsSync(file) && readFileSync(file, 'utf8').split(/\r?\n/).find((l) => l.startsWith('ELEVENLABS_API_KEY='));
-  return line ? line.slice('ELEVENLABS_API_KEY='.length).trim().replace(/^['"]|['"]$/g, '') : fail('no ELEVENLABS_API_KEY (env or .env.voices)');
+  const key = line ? line.slice('ELEVENLABS_API_KEY='.length).trim().replace(/^['"]|['"]$/g, '') : '';
+  return key || fail('no ELEVENLABS_API_KEY: paste your key after the = in .env.voices');
 }
 
 async function api(path: string, body: object): Promise<Response> {
