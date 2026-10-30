@@ -3,6 +3,7 @@ import { content } from '@orc/content';
 import { captainName } from './captain-names.ts';
 import { ClashCard } from './ClashCard.tsx';
 import { ClippingCard } from './ClippingCard.tsx';
+import { OnStage } from './OnStage.tsx';
 import { loadClipping, loadClippings, type Clipping } from './clipping-data.ts';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import { factKindLabel } from './fact-labels.ts';
@@ -388,7 +389,11 @@ export function Hall({ worldId }: { worldId: string }) {
 
   return (
     <section className="hall">
-      {playing && <ClashCard key={playing.clash.no} data={playing} reader={reader} onDone={() => setPlaying(null)} />}
+      {playing && (
+        <OnStage key={playing.clash.no} name="hall">
+          <ClashCard data={playing} reader={reader} onDone={() => setPlaying(null)} />
+        </OnStage>
+      )}
       {clipping && <ClippingCard snapshot={clipping.snapshot} reader={reader} clippedBy={clipping.clippedBy} onClose={() => setClipping(null)} />}
       <h2>The Hall of Shame</h2>
       <nav className="tabs hall-views">
