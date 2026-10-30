@@ -26,6 +26,7 @@ export {
   NEURON_RATES,
   QUOTA,
   neuronsFor,
+  providerKeysFromEnv,
   type DrainReport,
   type NarrationDeps,
   type NarrationFailure,

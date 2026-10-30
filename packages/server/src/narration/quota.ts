@@ -2,7 +2,7 @@
 // A call first reserves its worst case with one conditional UPDATE … RETURNING (so concurrent drains
 // can't both take the last of an allowance), then settles to what the provider reported.
 import type { Sql, Tx } from '../db.ts';
-import { MAX_TOKENS, MODELS, type ProviderId, type Usage } from './providers.ts';
+import { MAX_TOKENS, MODELS, type NarrationTask, type ProviderId, type Usage } from './providers.ts';
 
 /**
  * Workers AI gives 10k Neurons a day; Clash calls move to Groq at about 9k. Groq's free gpt-oss-120b
@@ -32,8 +32,8 @@ export function neuronsFor(model: string, usage: Usage): number {
 export type QuotaKind = 'clash' | 'herald';
 
 /** What a call is reserved at before it's made: its prompt (about 4 characters a token) and its full budget. */
-export function worstCase(provider: ProviderId, promptChars: number): Usage {
-  return { prompt: Math.ceil(promptChars / 4), completion: MAX_TOKENS[provider] };
+export function worstCase(provider: ProviderId, promptChars: number, task: NarrationTask = 'clash'): Usage {
+  return { prompt: Math.ceil(promptChars / 4), completion: MAX_TOKENS[task][provider] };
 }
 
 const NO_LIMIT = 2 ** 31 - 1;

@@ -22,8 +22,17 @@ export interface ProviderKeys {
 
 export const configured = (keys: ProviderKeys, p: ProviderId) => (p === 'workers-ai' ? !!keys.workersAi : !!keys.groq);
 
-/** Completion budgets. gpt-oss spends part of its budget reasoning, so Groq gets more. */
-export const MAX_TOKENS: Record<ProviderId, number> = { 'workers-ai': 1024, groq: 2048 };
+/** What a call writes: one Clash's dialogue, or one Herald edition's headlines, standfirsts and bodies. */
+export type NarrationTask = 'clash' | 'herald';
+
+/**
+ * Completion budgets. gpt-oss spends part of its budget reasoning, so Groq gets more. A Herald edition
+ * is up to 8 stories of three fields each.
+ */
+export const MAX_TOKENS: Record<NarrationTask, Record<ProviderId, number>> = {
+  clash: { 'workers-ai': 1024, groq: 2048 },
+  herald: { 'workers-ai': 2048, groq: 3072 },
+};
 
 /** Token usage as the provider reported it. `completion` includes any reasoning tokens. */
 export interface Usage {
@@ -41,7 +50,7 @@ export interface CallDeps {
   timeoutMs: number;
 }
 
-const LINES_SCHEMA = {
+const CLASH_SCHEMA = {
   type: 'object',
   properties: {
     lines: {
@@ -57,6 +66,26 @@ const LINES_SCHEMA = {
   required: ['lines'],
   additionalProperties: false,
 };
+
+/** Groq's strict mode needs every property required; a non-lead story may leave its standfirst empty. */
+const HERALD_SCHEMA = {
+  type: 'object',
+  properties: {
+    stories: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { rank: { type: 'integer' }, headline: { type: 'string' }, standfirst: { type: 'string' }, body: { type: 'string' } },
+        required: ['rank', 'headline', 'standfirst', 'body'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['stories'],
+  additionalProperties: false,
+};
+
+const SCHEMAS: Record<NarrationTask, object> = { clash: CLASH_SCHEMA, herald: HERALD_SCHEMA };
 
 function usageOf(u: Record<string, unknown> | undefined): Usage | null {
   if (!u) return null;
@@ -96,15 +125,20 @@ function httpFailure(status: number, text: string): NarrationFailure {
   return 'timeout';
 }
 
-export async function callProvider(provider: ProviderId, deps: CallDeps, messages: ChatMessage[]): Promise<CallResult> {
-  return provider === 'workers-ai' ? callWorkersAi(deps, messages) : callGroq(deps, messages);
+export async function callProvider(
+  provider: ProviderId,
+  deps: CallDeps,
+  messages: ChatMessage[],
+  task: NarrationTask = 'clash',
+): Promise<CallResult> {
+  return provider === 'workers-ai' ? callWorkersAi(deps, messages, task) : callGroq(deps, messages, task);
 }
 
-async function callWorkersAi(deps: CallDeps, messages: ChatMessage[]): Promise<CallResult> {
+async function callWorkersAi(deps: CallDeps, messages: ChatMessage[], task: NarrationTask): Promise<CallResult> {
   const keys = deps.keys.workersAi!;
   const out = await post(deps, `https://api.cloudflare.com/client/v4/accounts/${keys.accountId}/ai/run/${MODELS['workers-ai']}`, keys.apiToken, {
     messages,
-    max_tokens: MAX_TOKENS['workers-ai'],
+    max_tokens: MAX_TOKENS[task]['workers-ai'],
     // Gemma 4 thinks by default and spends the whole budget doing it (#13).
     chat_template_kwargs: { enable_thinking: false },
   });
@@ -118,13 +152,13 @@ async function callWorkersAi(deps: CallDeps, messages: ChatMessage[]): Promise<C
   return { ok: true, content, usage };
 }
 
-async function callGroq(deps: CallDeps, messages: ChatMessage[]): Promise<CallResult> {
+async function callGroq(deps: CallDeps, messages: ChatMessage[], task: NarrationTask): Promise<CallResult> {
   const out = await post(deps, 'https://api.groq.com/openai/v1/chat/completions', deps.keys.groq!.apiKey, {
     model: MODELS.groq,
     messages,
     reasoning_effort: 'low',
-    max_completion_tokens: MAX_TOKENS.groq,
-    response_format: { type: 'json_schema', json_schema: { name: 'clash', strict: true, schema: LINES_SCHEMA } },
+    max_completion_tokens: MAX_TOKENS[task].groq,
+    response_format: { type: 'json_schema', json_schema: { name: task, strict: true, schema: SCHEMAS[task] } },
   });
   if ('error' in out) return { ok: false, failure: 'timeout', detail: out.error!, usage: null };
   const usage = usageOf(out.data?.usage as Record<string, unknown> | undefined);
@@ -133,4 +167,19 @@ async function callGroq(deps: CallDeps, messages: ChatMessage[]): Promise<CallRe
   if (message.refusal) return { ok: false, failure: 'refusal', detail: String(message.refusal), usage };
   if (typeof message.content !== 'string' || !message.content.trim()) return { ok: false, failure: 'bad_output', detail: `empty: ${out.text}`, usage };
   return { ok: true, content: message.content, usage };
+}
+
+/**
+ * Provider keys from Edge Function secrets (`supabase secrets set`). A provider whose keys aren't all
+ * set is left out, so it's skipped.
+ */
+export function providerKeysFromEnv(get: (name: string) => string | undefined): ProviderKeys {
+  const env = (name: string) => get(name) || undefined;
+  const cfAccount = env('CF_ACCOUNT_ID');
+  const cfToken = env('CF_AI_TOKEN');
+  const groqKey = env('GROQ_API_KEY');
+  return {
+    ...(cfAccount && cfToken ? { workersAi: { accountId: cfAccount, apiToken: cfToken } } : {}),
+    ...(groqKey ? { groq: { apiKey: groqKey } } : {}),
+  };
 }
