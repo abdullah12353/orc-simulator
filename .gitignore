@@ -10,3 +10,5 @@ supabase/.branches/
 supabase/functions/.env
 supabase/functions/**/deno.lock
 .env.deploy
+.env.voices
+voices/takes/

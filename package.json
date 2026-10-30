@@ -15,7 +15,8 @@
     "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\" \"apps/web/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
     "audio:placeholders": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/placeholder-audio.ts",
-    "content:check":"node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
+    "voices": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/render-voices.ts",
+    "content:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
     "names:register": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/register-name.ts",
     "db:start": "node scripts/db-lock.mjs -- npx supabase start",
     "db:lock": "node scripts/db-lock.mjs",
@@ -24,6 +25,7 @@
     "dev:web": "npm run dev -w @orc/web",
     "dev:clock": "node scripts/dev-clock.mjs",
     "build:web": "npm run build -w @orc/web",
+    "deploy:web": "node scripts/deploy-web.mjs",
     "tone-bible:sync": "node scripts/sync-tone-bible.mjs"
   },
   "devDependencies": {
