@@ -1,8 +1,12 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
+import { nextStep, type FirstOpenStep } from './first-open.ts';
+import { loadKrugIntroduction, useFirstOpen } from './first-open-data.ts';
 import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
+import { IntroductionCard } from './IntroductionCard.tsx';
+import type { IntroductionCardData } from './introduction-data.ts';
 import { useLive, useSeen } from './live.ts';
 import { LiveStage } from './LiveStage.tsx';
 import { Meddle } from './Meddle.tsx';
@@ -124,8 +128,27 @@ function Worlds({ initial }: { initial?: string }) {
 function WorldTabs({ worldId }: { worldId: string }) {
   const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'hall' | 'facts'>('herald');
   useSeen(worldId);
+  // First open (#43, D58): Krúg's Introduction, then the edition, then the guided first Rumour. Never again.
+  const firstOpen = useFirstOpen(worldId);
+  const [done, setDone] = useState<FirstOpenStep | null>(null);
+  const step = firstOpen === undefined ? undefined : nextStep(firstOpen, done);
+  if (step === undefined) return <p className="quiet">…</p>;
+  if (step === 'introduction') return <FirstIntroduction worldId={worldId} onDone={() => setDone('introduction')} />;
   return (
     <>
+      {step === 'edition' && (
+        <p className="first-open">
+          That's the news. Now make some.{' '}
+          <button
+            onClick={() => {
+              setDone('edition');
+              setTab('meddle');
+            }}
+          >
+            Plant your first Rumour
+          </button>
+        </p>
+      )}
       <LiveStage key={worldId} worldId={worldId} />
       <nav className="tabs">
         <button className={tab === 'herald' ? 'on' : ''} onClick={() => setTab('herald')}>
@@ -148,13 +171,30 @@ function WorldTabs({ worldId }: { worldId: string }) {
         </button>
       </nav>
       {tab === 'herald' && <Herald worldId={worldId} />}
-      {tab === 'meddle' && <Meddle worldId={worldId} />}
+      {tab === 'meddle' && <Meddle worldId={worldId} guided={step === 'rumour'} onSent={() => setDone('rumour')} />}
       {tab === 'stable' && <Stable worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}
       {tab === 'hall' && <Hall worldId={worldId} />}
       {tab === 'facts' && <FactLines worldId={worldId} />}
     </>
   );
+}
+
+/** Krúg's Introduction, played before anything else on a Player's first open. */
+function FirstIntroduction({ worldId, onDone }: { worldId: string; onDone: () => void }) {
+  const [data, setData] = useState<IntroductionCardData | null | undefined>(undefined);
+  useEffect(() => {
+    let live = true;
+    void loadKrugIntroduction(worldId).then((d) => live && setData(d));
+    return () => {
+      live = false;
+    };
+  }, [worldId]);
+  useEffect(() => {
+    if (data === null) onDone(); // no Krúg to introduce: straight on to the edition
+  }, [data]);
+  if (!data) return <p className="quiet">…</p>;
+  return <IntroductionCard data={data} onDone={onDone} />;
 }
 
 function CreateWorld({ onCreated }: { onCreated: (worldId: string) => void }) {
