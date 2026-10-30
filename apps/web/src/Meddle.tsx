@@ -44,7 +44,7 @@ export function Meddle({ worldId }: { worldId: string }) {
       supabase.from('captains').select('id, roster, traits, epithet').eq('world_id', worldId),
       supabase.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
       supabase.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
-      supabase.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued'),
+      supabase.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued').in('kind', ['rumour', 'dare']),
       supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
     ]);
     const error = priv.error ?? captains.error ?? fears.error ?? meddles.error ?? queued.error;

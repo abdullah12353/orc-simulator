@@ -48,6 +48,10 @@ const REASON_TEXT: Record<string, string> = {
   bad_rumour: 'That Rumour is missing a piece: pick a source, a target, a Claim and a subject.',
   unsupported_kind: "That kind of Meddle isn't open yet.",
   intent_id_taken: 'Something went wrong. Try again.',
+  // submit_intent, Backing (#36)
+  not_enough_gold: "You haven't got that much gold. 10 more arrives at midnight.",
+  bad_stake: 'A Stake is a whole number of gold, at least 1, on a Captain in this world.',
+  no_stake: "You don't back that Captain.",
 };
 
 export function statusText(status: Exclude<InviteStatus, 'ok'>): string {

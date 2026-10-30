@@ -5,6 +5,7 @@ import { Herald } from './Herald.tsx';
 import { useLive, useSeen } from './live.ts';
 import { LiveStage } from './LiveStage.tsx';
 import { Meddle } from './Meddle.tsx';
+import { Stable } from './Stable.tsx';
 import { supabase } from './supabase.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
@@ -120,7 +121,7 @@ function Worlds({ initial }: { initial?: string }) {
 }
 
 function WorldTabs({ worldId }: { worldId: string }) {
-  const [tab, setTab] = useState<'herald' | 'meddle' | 'captains' | 'facts'>('herald');
+  const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'facts'>('herald');
   useSeen(worldId);
   return (
     <>
@@ -132,6 +133,9 @@ function WorldTabs({ worldId }: { worldId: string }) {
         <button className={tab === 'meddle' ? 'on' : ''} onClick={() => setTab('meddle')}>
           Meddle
         </button>
+        <button className={tab === 'stable' ? 'on' : ''} onClick={() => setTab('stable')}>
+          Stable
+        </button>
         <button className={tab === 'captains' ? 'on' : ''} onClick={() => setTab('captains')}>
           Captains
         </button>
@@ -141,6 +145,7 @@ function WorldTabs({ worldId }: { worldId: string }) {
       </nav>
       {tab === 'herald' && <Herald worldId={worldId} />}
       {tab === 'meddle' && <Meddle worldId={worldId} />}
+      {tab === 'stable' && <Stable worldId={worldId} />}
       {tab === 'captains' && <Captains worldId={worldId} />}
       {tab === 'facts' && <FactLines worldId={worldId} />}
     </>
