@@ -162,6 +162,7 @@ export function resolveClash(ctx: TickContext, start: ClashStart): ClashFact {
     fallbackKey,
   };
   ctx.facts.push(head);
+  ctx.misfortune(loser, head);
   consequences(ctx, head);
   followUp(ctx, head, start.depth);
   return head;

@@ -168,3 +168,12 @@ test("a reaction Template needs `after`, and may only cast roles its parent's ki
   assert.ok(errors.some((e) => e.includes('reaction.sulk') && e.includes('goose')), errors.join('\n'));
   assert.ok(errors.some((e) => e.includes('reaction.moat-blame') && e.includes('after')), errors.join('\n'));
 });
+
+test('Accusation lines must say the mangled {name}, and there must be a few of them', () => {
+  const nameless = clone(content);
+  nameless.banks.accusations[1] = 'It was him, the meddler.';
+  assert.ok(validateContent(nameless).some((e) => e.includes('banks.accusations[1]') && e.includes('{name}')));
+  const few = clone(content);
+  few.banks.accusations = few.banks.accusations.slice(0, 2);
+  assert.ok(validateContent(few).some((e) => e.includes('banks.accusations') && e.includes('at least 3')));
+});

@@ -203,6 +203,21 @@ button.link {
   font-weight: bold;
   padding: 0 0.15em;
 }
+.accusation {
+  margin: 0.5rem 0 0.25rem;
+  padding: 0.25rem 0.75rem;
+  border-left: 4px solid #dc2626;
+  font-family: Georgia, serif;
+  font-size: 1.05rem;
+}
+.accusation p {
+  margin: 0;
+  font-weight: bold;
+}
+.accusation .play-name {
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
 .gutter summary {
   cursor: pointer;
   font-weight: bold;

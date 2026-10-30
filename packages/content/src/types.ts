@@ -121,6 +121,11 @@ export interface Banks {
   trophies: Record<BankKey, TrophyDef>;
   /** Everything a Clash needs to be voiced without a model: headline results, fallback scripts, tags. */
   clash: ClashBanks;
+  /**
+   * What an accuser shouts when he names a Player (D20). `{name}` is the Player's mangled name, as said
+   * in the accuser's prerecorded clip.
+   */
+  accusations: string[];
 }
 
 export interface TrophyDef {

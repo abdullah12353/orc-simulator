@@ -16,6 +16,7 @@
     "test:db": "node scripts/test-db.mjs",
     "audio:placeholders": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/placeholder-audio.ts",
     "content:check":"node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
+    "names:register": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/register-name.ts",
     "db:start": "node scripts/db-lock.mjs -- npx supabase start",
     "db:lock": "node scripts/db-lock.mjs",
     "smoke:local": "node scripts/db-lock.mjs -- node scripts/smoke-local.mjs",

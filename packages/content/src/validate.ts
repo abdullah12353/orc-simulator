@@ -121,6 +121,17 @@ export function validateContent(c: Content): string[] {
   errors.push(...validateBlameLines(c));
   errors.push(...validateClashes(c));
   errors.push(...validateReactions(c));
+  errors.push(...validateAccusations(c));
+  return errors;
+}
+
+/** Accusation lines (#39): a few to pick from, each saying the mangled name. */
+function validateAccusations(c: Content): string[] {
+  const lines = c.banks.accusations ?? [];
+  const errors = lines.length < 3 ? [`banks.accusations: needs at least 3 lines, has ${lines.length}`] : [];
+  lines.forEach((line, i) => {
+    if (!line.includes('{name}')) errors.push(`banks.accusations[${i}]: missing {name}`);
+  });
   return errors;
 }
 

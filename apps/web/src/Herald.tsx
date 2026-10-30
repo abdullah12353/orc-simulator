@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { nameClip } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { ClashCard } from './ClashCard.tsx';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
@@ -20,6 +21,15 @@ interface Story {
   blameLine: string | null;
 }
 
+/** The edition's one Accusation (#39): a pull quote over its story's true Blame line. */
+interface Accusation {
+  factNo: number;
+  storyNo: number;
+  accuser: string;
+  line: string;
+  clipKey: string;
+}
+
 interface Edition {
   id: string;
   no: number;
@@ -28,6 +38,8 @@ interface Edition {
   masthead: { orcDate: string; price: string; weather: string };
   status: 'templated' | 'generated';
   stories: Story[];
+  /** Only the edition open-edition returned carries it; back issues read under RLS don't. */
+  accusation?: Accusation | null;
 }
 
 interface Opened {
@@ -134,7 +146,8 @@ export function Herald({ worldId }: { worldId: string }) {
   if ('error' in opened) return <p className="error">{opened.error}</p>;
 
   const latest = opened.edition;
-  const edition = archive.find((e) => e.id === showing) ?? latest;
+  const shown = archive.find((e) => e.id === showing) ?? latest;
+  const edition = shown.id === latest.id ? { ...shown, accusation: latest.accusation } : shown;
   const isLatest = edition.id === latest.id;
   const watch = async (story: Story) => {
     const card = await loadClashCard(worldId, story.storyNo, story.blameLine);
@@ -189,6 +202,9 @@ function EditionView({
         Watch the Clash
       </button>
     );
+  // At most one Accusation per edition (D53), printed above its story's true Blame line.
+  const accused = (s: Story) =>
+    edition.accusation?.storyNo === s.storyNo && <AccusationQuote accusation={edition.accusation} />;
   const lead = edition.stories.find((s) => s.slot === 'lead');
   const headlines = edition.stories.filter((s) => s.slot === 'headline');
   const gutter = edition.stories.filter((s) => s.slot === 'gutter');
@@ -212,6 +228,7 @@ function EditionView({
           <h3>{lead.headline}</h3>
           {lead.standfirst && <p className="standfirst">{lead.standfirst}</p>}
           {lead.body && <p>{lead.body}</p>}
+          {accused(lead)}
           {lead.blameLine && <BlameLine line={lead.blameLine} reader={reader} />}
           {watch(lead)}
         </div>
@@ -222,6 +239,7 @@ function EditionView({
             <li key={s.rank}>
               <h4>{s.headline}</h4>
               {s.body && <p>{s.body}</p>}
+              {accused(s)}
               {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
               {watch(s)}
             </li>
@@ -233,11 +251,33 @@ function EditionView({
           <summary>Also in the gutter ({gutter.length})</summary>
           <ul>
             {gutter.map((s) => (
-              <li key={s.rank}>{s.headline}</li>
+              <li key={s.rank}>
+                {s.headline}
+                {accused(s)}
+              </li>
             ))}
           </ul>
         </details>
       )}
     </article>
+  );
+}
+
+/**
+ * The Accusation pull quote: the accuser's words, with the Player's mangled name in them, and his
+ * prerecorded clip of that name. It plays once when the quote first shows (if the browser allows sound
+ * yet) and again on tap. Flavour only: the Blame line under it is the truth.
+ */
+function AccusationQuote({ accusation }: { accusation: Accusation }) {
+  useEffect(() => {
+    void nameClip(accusation.clipKey);
+  }, [accusation.factNo, accusation.clipKey]);
+  return (
+    <blockquote className="accusation">
+      <p>{accusation.line}</p>
+      <button className="play-name" onClick={() => void nameClip(accusation.clipKey)} aria-label="Hear the accusation">
+        Hear it
+      </button>
+    </blockquote>
   );
 }
