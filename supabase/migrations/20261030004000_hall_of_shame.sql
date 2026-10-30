@@ -44,3 +44,54 @@ as $$
 $$;
 revoke all on function rap_sheet(uuid) from public, anon;
 grant execute on function rap_sheet(uuid) to authenticated, service_role;
+
+-- ---------------------------------------------------------------- shelves (§4.3)
+
+-- Plain views over member-readable tables, so security_invoker: RLS filters them to the caller's worlds.
+-- Each has its ORDER BY (newest first; ties: the later Fact first), and the PWA asks for the same order.
+
+-- Legends: every Captain who has gone Legendary, with the deed that took him over 150 Infamy.
+create view hall_legends with (security_invoker = true) as
+  select c.world_id, c.id as captain_id, f.no as fact_no, f.at, f.kind, f.line, f.comedy_weight, f."cast",
+         coalesce(story_caption(f.world_id, f.no), f.line) as caption
+  from captains c
+  join facts f on f.world_id = c.world_id and f.no = c.legendary_fact
+  order by f.at desc, f.no desc, c.id;
+
+-- Infamous moments: story heads with comedy weight 20+ (the facts_moments_idx partial index).
+create view hall_moments with (security_invoker = true) as
+  select f.world_id, f.no as fact_no, f.at, f.kind, f.line, f.comedy_weight, f."cast",
+         coalesce(story_caption(f.world_id, f.no), f.line) as caption
+  from facts f
+  where f.comedy_weight >= 20 and f.no = f.story_no and f.tier <> 'silent'
+  order by f.at desc, f.no desc;
+
+-- A Captain's story: his deaths, Returns, Humiliations (Epithets are a Humiliation category), Trophies
+-- won and lost, and his Legendary moment. Silent Facts have no line of their own, so the head's line
+-- comes along, and the PWA renders the rest from the payload.
+create view captain_story with (security_invoker = true) as
+  select f.world_id, c.id as captain_id, f.no as fact_no, f.at, f.kind, f.story_no, f.line, f.payload,
+         h.line as story_line
+  from captains c
+  join facts f on f.world_id = c.world_id and f."cast" @> array[c.id]
+  join facts h on h.world_id = f.world_id and h.no = f.story_no
+  where f.kind in ('death', 'return', 'humiliation', 'trophy', 'legendary')
+  order by f.at desc, f.no desc;
+
+-- The timeline: the shelves merged by time. A Legendary deed heavy enough to be a moment is on both
+-- shelves, so it comes twice (legend first). #41 adds the Clippings shelf as a third branch, keeping
+-- this column list (clipping_id is its slot), e.g.
+--   union all select world_id, 'clipping', story_no, null, created_at, null, <headline>, null, id from clippings
+create view hall_timeline with (security_invoker = true) as
+  select t.* from (
+    select world_id, 'legend'::text as shelf, fact_no, captain_id, at, kind, caption, comedy_weight,
+           null::uuid as clipping_id
+    from hall_legends
+    union all
+    select world_id, 'moment', fact_no, null, at, kind, caption, comedy_weight, null
+    from hall_moments
+  ) t
+  order by t.at desc, t.fact_no desc, t.shelf;
+
+revoke all on hall_legends, hall_moments, captain_story, hall_timeline from anon, authenticated;
+grant select on hall_legends, hall_moments, captain_story, hall_timeline to authenticated;

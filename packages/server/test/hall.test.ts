@@ -132,3 +132,111 @@ test('a rap sheet holds the 10 heaviest stories a Player is blamed for, shown by
   assert.equal(sheet.find((r) => r.comedy_weight === 40)!.caption, 'Story weighing 40.', 'never printed: its line');
   assert.ok(sheet.every((r) => r.hops === 1));
 });
+
+test('a Player can only fetch one rap sheet per request', async () => {
+  const clock = fakeClock();
+  const world = await freshWorld({ clock }); // Mo
+  const dazza = await joinAs(world, 'Dazza');
+  const t0 = clock.iso();
+  const [mine] = await write(world, t0, [{ minute: 0, weight: 30, meddleBy: world.playerId, line: "Mo's story." }]);
+  const [theirs] = await write(world, t0, [{ minute: 5, weight: 40, meddleBy: dazza.playerId, line: "Dazza's story." }]);
+  // A story both are blamed for is on both sheets, each fetched on its own.
+  const [both] = await write(world, t0, [{ minute: 10, weight: 50, requires: [mine!, theirs!], line: 'Their story.' }]);
+
+  assert.deepEqual((await rapSheet(dazza.userId, world.playerId)).map((r) => r.fact_no), [both!.no, mine!.no]);
+  assert.deepEqual((await rapSheet(world.userId, dazza.playerId)).map((r) => r.fact_no), [both!.no, theirs!.no]);
+
+  // The only endpoint takes exactly one Player, and no relation hands out every sheet at once.
+  const fns = await db()`
+    select p.proname, pg_get_function_identity_arguments(p.oid) as args
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public' and p.proname like '%rap%sheet%'`;
+  assert.deepEqual(fns.map((f) => [f.proname, f.args]), [['rap_sheet', 'p_player uuid']]);
+  const [rel] = await db()`select to_regclass('public.rap_sheets') as r`;
+  assert.equal(rel!.r, null);
+  await assert.rejects(asUser(dazza.userId, (tx) => tx`select * from rap_sheet(${`{${world.playerId},${dazza.playerId}}`})`));
+
+  // Outside the world, nobody's sheet.
+  const outsider = await newUser();
+  assert.equal((await rapSheet(outsider, world.playerId)).length, 0);
+});
+
+/** Rows as they come back must already be newest first (ties: the later Fact first). */
+function assertByTime(rows: readonly { at: Date; no: number }[], what: string) {
+  const sorted = [...rows].sort((a, b) => b.at.getTime() - a.at.getTime() || b.no - a.no);
+  assert.deepEqual(rows.map((r) => r.no), sorted.map((r) => r.no), `${what} is in time order`);
+}
+
+test('every Hall view is ordered by time, never by weight', async () => {
+  const clock = fakeClock();
+  const world = await freshWorld({ clock });
+  const t0 = clock.iso();
+  const since = <R extends { at: Date }>(rows: readonly R[]) => rows.filter((r) => r.at.getTime() >= Date.parse(t0));
+
+  // Weights that run against time: sorted by weight this would read 90, 60, 25, 20.
+  const heads = await write(world, t0, [
+    { minute: 0, weight: 90, line: 'Ninety.', cast: ['krug'] },
+    { minute: 10, weight: 25, line: 'Twenty-five.' },
+    { minute: 20, weight: 60, line: 'Sixty.' },
+    { minute: 30, weight: 19, line: 'Nineteen: not a moment.' },
+    { minute: 40, weight: 20, line: 'Twenty.' },
+  ]);
+  const [ninety, twentyFive, sixty, nineteen, twenty] = heads as [Fact, Fact, Fact, Fact, Fact];
+  // Krúg's story: what happened to him, plus things that aren't part of it.
+  const krug = await write(world, t0, [
+    { minute: 1, kind: 'death', storyOf: ninety, cast: ['krug'], line: 'Krúg died.' },
+    { minute: 2, kind: 'power', storyOf: ninety, cast: ['krug'], line: '' },
+    { minute: 50, kind: 'return', weight: 10, cast: ['krug'], line: 'Krúg is back.' },
+    { minute: 51, kind: 'humiliation', cast: ['krug'], line: '', payload: { captainId: 'krug', cat: 'epithet', key: 'x' } },
+    { minute: 60, kind: 'trophy', cast: ['vrakk', 'krug'], line: '', payload: { key: 'y', from: 'krug', to: 'vrakk' } },
+    { minute: 70, kind: 'incident', weight: 50, cast: ['krug'], line: 'Krúg slips (an incident: not his story).' },
+    { minute: 80, kind: 'legendary', storyOf: sixty, cast: ['krug'], line: 'Krúg is Legendary.' },
+  ]);
+  const slip = krug[5]!;
+  await db()`update captains set legendary_fact = ${sixty.no} where world_id = ${world.worldId} and id = 'krug'`;
+  await db()`update captains set legendary_fact = ${nineteen.no} where world_id = ${world.worldId} and id = 'vrakk'`;
+  await db()`update captains set legendary_fact = ${twentyFive.no} where world_id = ${world.worldId} and id = 'pudsack'`;
+
+  type Row = { no: number; at: Date; captain_id: string; kind: string; shelf: string };
+  const read = (view: string, captain?: string) =>
+    asUser(world.userId, (tx) => tx<Row[]>`
+      select v.*, v.fact_no::int as no from ${tx(view)} v
+      where v.world_id = ${world.worldId} ${captain ? tx`and v.captain_id = ${captain}` : tx``}`);
+
+  const moments = await read('hall_moments');
+  assertByTime(moments, 'hall_moments');
+  assert.deepEqual(since(moments).map((r) => r.no), [slip.no, twenty.no, sixty.no, twentyFive.no, ninety.no]);
+
+  const legends = await read('hall_legends');
+  assertByTime(legends, 'hall_legends');
+  assert.deepEqual(since(legends).map((r) => [r.captain_id, r.no]), [
+    ['vrakk', nineteen.no],
+    ['krug', sixty.no],
+    ['pudsack', twentyFive.no],
+  ]);
+
+  const story = await read('captain_story', 'krug');
+  assertByTime(story, 'captain_story');
+  assert.deepEqual(since(story).map((r) => r.kind), ['legendary', 'trophy', 'humiliation', 'return', 'death']);
+  assert.deepEqual(since(await read('captain_story', 'vrakk')).map((r) => r.kind), ['trophy'], 'a Trophy is in both Captains’ stories');
+
+  const timeline = await read('hall_timeline');
+  assertByTime(timeline, 'hall_timeline');
+  assert.deepEqual(since(timeline).map((r) => [r.shelf, r.no]), [
+    ['moment', slip.no],
+    ['moment', twenty.no],
+    ['legend', nineteen.no],
+    ['legend', sixty.no],
+    ['moment', sixty.no],
+    ['legend', twentyFive.no],
+    ['moment', twentyFive.no],
+    ['moment', ninety.no],
+  ]);
+
+  // Members only.
+  const outsider = await newUser();
+  for (const view of ['hall_moments', 'hall_legends', 'captain_story', 'hall_timeline']) {
+    const rows = await asUser(outsider, (tx) => tx`select 1 from ${tx(view)} where world_id = ${world.worldId}`);
+    assert.equal(rows.length, 0, `${view} is members only`);
+  }
+});
