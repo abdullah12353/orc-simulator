@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { nameClip, sting } from './audio.ts';
 import { BlameLine } from './BlameLine.tsx';
 import { ClashCard } from './ClashCard.tsx';
+import { ClippingCard } from './ClippingCard.tsx';
+import { clipStory, type ClippingSnapshot } from './clipping-data.ts';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
@@ -132,6 +134,7 @@ export function Herald({ worldId }: { worldId: string }) {
   const [pieces, setPieces] = useState<Map<number, SetPiece>>(new Map());
   const [playing, setPlaying] = useState<Playing | null>(null);
   const [deeds, setDeeds] = useState<Set<number>>(new Set());
+  const [clipped, setClipped] = useState<ClippingSnapshot | { error: string } | null>(null);
   const learn = (heads: Map<number, SetPiece>) => setPieces((known) => new Map([...known, ...heads]));
   const learnDeeds = (found: Set<number>) => setDeeds((known) => new Set([...known, ...found]));
 
@@ -232,6 +235,14 @@ export function Herald({ worldId }: { worldId: string }) {
     const piece = kind && (await loadSetPiece(worldId, kind, story));
     if (piece) setPlaying(piece);
   };
+  // #41: cut any story into a Clipping (frozen server-side), then show it with its Share button.
+  const clip = async (story: Story) => {
+    try {
+      setClipped((await clipStory(worldId, edition.id, story.storyNo)).snapshot);
+    } catch (e) {
+      setClipped({ error: e instanceof Error ? e.message : String(e) });
+    }
+  };
 
   return (
     <section className="herald">
@@ -239,6 +250,12 @@ export function Herald({ worldId }: { worldId: string }) {
         <ClashCard key={playing.data.clash.no} data={playing.data} reader={opened.reader} onDone={() => setPlaying(null)} />
       )}
       {playing?.kind === 'introduction' && <IntroductionCard key={playing.data.no} data={playing.data} onDone={() => setPlaying(null)} />}
+      {clipped && !('error' in clipped) && <ClippingCard snapshot={clipped} reader={opened.reader} onClose={() => setClipped(null)} />}
+      {clipped && 'error' in clipped && (
+        <p className="error" onClick={() => setClipped(null)}>
+          Couldn't clip that: {clipped.error}
+        </p>
+      )}
       {isLatest && opened.stopPress.length > 0 && (
         <aside className="stop-press">
           <h3>Stop press</h3>
@@ -250,7 +267,7 @@ export function Herald({ worldId }: { worldId: string }) {
         </aside>
       )}
       {isLatest && opened.generating && <p className="quiet">The subs are still at it. Fresh ink shortly.</p>}
-      <EditionView edition={edition} reader={opened.reader} pieces={pieces} deeds={deeds} onWatch={watch} />
+      <EditionView edition={edition} reader={opened.reader} pieces={pieces} deeds={deeds} onWatch={watch} onClip={(s) => void clip(s)} />
       {archive.length > 1 && (
         <nav className="editions" aria-label="Your last editions">
           <span className="quiet">Back issues:</span>
@@ -274,6 +291,7 @@ function EditionView({
   pieces,
   deeds,
   onWatch,
+  onClip,
 }: {
   edition: Edition;
   reader: string;
@@ -281,6 +299,8 @@ function EditionView({
   /** Stories that are Legendary deeds (#34). */
   deeds: Set<number>;
   onWatch: (story: Story) => void;
+  /** Cuts the story into a Clipping (#41). */
+  onClip: (story: Story) => void;
 }) {
   const watch = (s: Story) => {
     const kind = pieces.get(s.storyNo);
@@ -292,6 +312,11 @@ function EditionView({
       )
     );
   };
+  const clipButton = (s: Story) => (
+    <button className="clip link" onClick={() => onClip(s)} aria-label={`Clip "${s.headline}"`}>
+      Clip it
+    </button>
+  );
   // At most one Accusation per edition (D53), printed above its story's true Blame line.
   const accused = (s: Story) =>
     edition.accusation?.storyNo === s.storyNo && <AccusationQuote accusation={edition.accusation} />;
@@ -322,6 +347,7 @@ function EditionView({
           {accused(lead)}
           {lead.blameLine && <BlameLine line={lead.blameLine} reader={reader} />}
           {watch(lead)}
+          {clipButton(lead)}
         </div>
       )}
       {headlines.length > 0 && (
@@ -334,6 +360,7 @@ function EditionView({
               {accused(s)}
               {s.blameLine && <BlameLine line={s.blameLine} reader={reader} />}
               {watch(s)}
+              {clipButton(s)}
             </li>
           ))}
         </ol>
@@ -346,6 +373,7 @@ function EditionView({
               <li key={s.rank}>
                 {s.headline}
                 {accused(s)}
+                {clipButton(s)}
               </li>
             ))}
           </ul>

@@ -1,6 +1,8 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { content } from '@orc/content';
 import { ClashCard } from './ClashCard.tsx';
+import { ClippingCard } from './ClippingCard.tsx';
+import { loadClipping, loadClippings, type Clipping } from './clipping-data.ts';
 import { clashHeads, loadClashCard, type ClashCardData } from './clash-card-data.ts';
 import {
   loadCaptainStory,
@@ -16,7 +18,7 @@ import {
 } from './hall-data.ts';
 
 // The Hall of Shame (#40, D55): the best idiocy, kept forever, in time order and never ranked. Shelves
-// (Legends, Infamous moments, and #41's Clippings), browse by Captain or by Player (the rap sheet), and a
+// (Legends, Infamous moments, and Clippings (#41)), browse by Captain or by Player (the rap sheet), and a
 // timeline merging the shelves. Any Clash replays from its stored dialogue (no model call), and any story
 // can be traced back up its causes. Not checked by hand in a browser.
 
@@ -63,6 +65,8 @@ interface Handlers {
   onWatch: (factNo: number) => void;
   /** Opens "trace it back" for a story. */
   onTrace: (factNo: number) => void;
+  /** Opens a Clipping (#41). */
+  onClipping: (clipping: Clipping | string) => void;
 }
 
 interface Actions extends Handlers {
@@ -89,11 +93,16 @@ function EntryList({ entries, actions, empty, showShelf }: { entries: HallEntry[
   return (
     <ul className="hall-list">
       {entries.map((e) => (
-        <li key={`${e.shelf}:${e.factNo}:${e.captainId ?? ''}`}>
+        <li key={`${e.shelf}:${e.factNo}:${e.captainId ?? ''}:${e.clippingId ?? ''}`}>
           <time>{when(e.at)}</time>
           {showShelf && SHELF_LABEL[e.shelf] && <span className={`shelf-tag ${e.shelf}`}>{SHELF_LABEL[e.shelf]}</span>}
           {e.shelf === 'legend' && e.captainId && <strong className="legend-name">{names.get(e.captainId) ?? e.captainId} goes Legendary: </strong>}
           <span className="caption">{e.caption}</span>
+          {e.clippingId && (
+            <button className="link" onClick={() => actions.onClipping(e.clippingId!)}>
+              See the Clipping
+            </button>
+          )}
           <Buttons factNo={e.factNo} actions={actions} />
         </li>
       ))}
@@ -117,12 +126,12 @@ function Buttons({ factNo, actions }: { factNo: number; actions: Actions }) {
 }
 
 function Shelves({ worldId, handlers }: { worldId: string; handlers: Handlers }) {
-  const state = useLoad(() => Promise.all([loadLegends(worldId), loadMoments(worldId)]), [worldId]);
+  const state = useLoad(() => Promise.all([loadLegends(worldId), loadMoments(worldId), loadClippings(worldId)]), [worldId]);
   const loaded = state && !('error' in state) ? state : null;
   const a: Actions = { ...handlers, clashes: useClashes(worldId, loaded ? [...loaded[0], ...loaded[1]].map((e) => e.factNo) : []) };
   return (
     <Loading state={state}>
-      {([legends, moments]: [HallEntry[], HallEntry[]]) => (
+      {([legends, moments, clippings]: [HallEntry[], HallEntry[], Clipping[]]) => (
         <>
           <section className="shelf">
             <h3>Legends</h3>
@@ -132,7 +141,27 @@ function Shelves({ worldId, handlers }: { worldId: string; handlers: Handlers })
             <h3>Infamous moments</h3>
             <EntryList entries={moments} actions={a} empty="Nothing infamous enough. Give it time." />
           </section>
-          {/* #41 Clippings: the Clippings shelf goes here (clippings, newest first). */}
+          <section className="shelf">
+            <h3>Clippings</h3>
+            {clippings.length === 0 ? (
+              <p className="quiet">Nobody has cut anything out of the Herald yet. Every story has a "Clip it" button.</p>
+            ) : (
+              <ul className="hall-list">
+                {clippings.map((c) => (
+                  <li key={c.id}>
+                    <time>{when(c.at)}</time>
+                    <span className="caption">{c.caption}</span>
+                    <span className="quiet"> clipped by {c.clippedBy}</span>
+                    <span className="hall-actions">
+                      <button className="link" onClick={() => a.onClipping(c)}>
+                        See the Clipping
+                      </button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </>
       )}
     </Loading>
@@ -237,6 +266,7 @@ function Trace({ steps, onClose }: { steps: TraceStep[] | { error: string } | nu
 export function Hall({ worldId }: { worldId: string }) {
   const [view, setView] = useState<View>('shelves');
   const [playing, setPlaying] = useState<ClashCardData | null>(null);
+  const [clipping, setClipping] = useState<Clipping | null>(null);
   const [trace, setTrace] = useState<{ factNo: number; steps: TraceStep[] | { error: string } | null } | null>(null);
   const me = useLoad(() => loadPlayers(worldId), [worldId]);
   const reader = me && !('error' in me) ? (me.players.find((p) => p.id === me.me)?.name ?? '') : '';
@@ -251,11 +281,13 @@ export function Hall({ worldId }: { worldId: string }) {
     const steps = await traceBack(worldId, factNo).catch((e: unknown) => ({ error: e instanceof Error ? e.message : String(e) }));
     setTrace((t) => (t?.factNo === factNo ? { factNo, steps } : t));
   };
-  const handlers: Handlers = { onWatch: (n) => void onWatch(n), onTrace: (n) => void onTrace(n) };
+  const onClipping = async (c: Clipping | string) => setClipping(typeof c === 'string' ? await loadClipping(c) : c);
+  const handlers: Handlers = { onWatch: (n) => void onWatch(n), onTrace: (n) => void onTrace(n), onClipping: (c) => void onClipping(c) };
 
   return (
     <section className="hall">
       {playing && <ClashCard key={playing.clash.no} data={playing} reader={reader} onDone={() => setPlaying(null)} />}
+      {clipping && <ClippingCard snapshot={clipping.snapshot} reader={reader} clippedBy={clipping.clippedBy} onClose={() => setClipping(null)} />}
       <h2>The Hall of Shame</h2>
       <nav className="tabs hall-views">
         {VIEWS.map((v) => (
