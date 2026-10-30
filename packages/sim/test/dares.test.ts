@@ -214,7 +214,10 @@ test('a botched Dare by the Warlord makes him fall, and succession runs', () => 
   assert.ok(crowned, 'a successor is crowned');
   assert.equal(crowned.previous, warlord);
   assert.notEqual(crowned.intro.captainId, warlord);
-  assert.deepEqual(crowned.causes, [fell.no]);
+  assert.ok(crowned.causes.includes(fell.no), 'the crowning requires the fall');
+  for (const no of crowned.causes.filter((n) => n !== fell.no)) {
+    assert.ok(facts.find((f) => f.no === no)?.infamy.some((g) => g.captainId === crowned.intro.captainId), 'and what won him the throne this week');
+  }
   assert.equal(crowned.blame[0]?.meddleId, head.meddleId, 'the crowning is on the Dare too');
   assert.equal(diff.world.warlordId, crowned.intro.captainId);
 

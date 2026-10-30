@@ -46,6 +46,8 @@ export const INFAMY = {
   throne: 20,
   /** Lifetime Infamy that makes a Captain Legendary (D45). */
   legendary: 150,
+  /** A crowning requires the Facts behind the successor's newest this-many gains in the 7-day window. */
+  standingGains: 3,
 } as const;
 
 /** Power runs 1–10 and only ever moves by 1 (D42). */
@@ -155,8 +157,24 @@ export function successor(ctx: TickContext, exclude: CaptainId | null): CaptainI
 }
 
 /**
+ * What won `id` the throne, as causes: his 7-day Infamy. Like a pair's affinity (decision 8b) it is an
+ * aggregate, so its causes are the Facts behind his newest 3 gains in the window. The sim holds a gain's
+ * Cause when the gain was made this tick, or when it is a Humiliation he still bears (gaining one gives
+ * Infamy): that is how a Return carries its Blame on into a coup. Older gains take their slot but add no
+ * Blame, like old-history Grudge tags.
+ */
+function standing(ctx: TickContext, id: CaptainId): Cause[] {
+  const held = new Map<number, Cause>(ctx.facts.map((f) => [f.no, causeOf(f)]));
+  for (const h of ctx.humiliations()) if (h.captainId === id) held.set(h.gained.fact, h.gained);
+  return [...new Set(ctx.infamyGains(id).map((g) => g.fact))]
+    .sort((a, b) => b - a)
+    .slice(0, INFAMY.standingGains)
+    .flatMap((no) => (held.has(no) ? [held.get(no)!] : []));
+}
+
+/**
  * Fills an empty throne, once the tick's other Facts are in (so their Infamy counts): the `crowned` story
- * head (it plays his Introduction), requiring the fall, and +20 Infamy for taking it.
+ * head (it plays his Introduction), requiring the fall and his standing, and +20 Infamy for taking it.
  */
 export function crownSuccessor(ctx: TickContext): void {
   if (ctx.warlord() !== null) return;
@@ -178,7 +196,7 @@ export function crownSuccessor(ctx: TickContext): void {
       ? { templateId: t.id, variant, line: renderLine(ctx, t.lines[variant], { warlord: id }, { previous: previousName }), tier: 'templated' as const }
       : { line: '', tier: 'silent' as const }),
     cast: previous ? [id, previous] : [id],
-    ...ctx.link(no, { requires: fall ? [fall.cause] : [] }),
+    ...ctx.link(no, { requires: [...(fall ? [fall.cause] : []), ...standing(ctx, id)] }),
     infamy: [],
     kind: 'crowned',
     intro: ctx.introduction(id),

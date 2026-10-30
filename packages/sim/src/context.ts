@@ -164,11 +164,13 @@ export class TickContext {
    * `gainInfamy` (infamy.ts), which records them in `diff.infamy`.
    */
   infamy7d(id: CaptainId): number {
+    return this.infamyGains(id).reduce((sum, g) => sum + g.amount, 0);
+  }
+
+  /** His Infamy gains in the last 7 days, this tick's included (one row per Fact and Captain). */
+  infamyGains(id: CaptainId): WorldState['infamy7d'] {
     const since = isoToMs(this.state.world.now) - INFAMY_WINDOW_DAYS * 86_400_000;
-    let sum = 0;
-    for (const g of this.state.infamy7d) if (g.captainId === id && isoToMs(g.at) > since) sum += g.amount;
-    for (const g of this.diff.infamy) if (g.captainId === id) sum += g.amount;
-    return sum;
+    return [...this.state.infamy7d.filter((g) => isoToMs(g.at) > since), ...this.diff.infamy].filter((g) => g.captainId === id);
   }
 
   /** The Warlord as he stands at this point in the tick: null while the throne is empty (after a fall). */
