@@ -26,6 +26,9 @@ export const HERALD = {
   waitMs: 8_000,
   /** A Herald job queued longer ago than this is taken to have died: nobody waits on it any more. */
   generatingForSeconds: 60,
+  /** A Player's first edition looks back at most this far: day zero for a Player who opens on day one,
+   * the last 24 h for a late joiner (#43). */
+  firstWindowHours: 24,
 } as const;
 
 export type Slot = 'lead' | 'headline' | 'gutter';
@@ -182,10 +185,17 @@ async function printEdition(
     const [last] = await tx<{ id: string; no: number; covers_to: string; created_at: string }[]>`
       select id, no, to_json(covers_to)#>>'{}' as covers_to, to_json(created_at)#>>'{}' as created_at
       from editions where player_id = ${player.id} order by no desc limit 1`;
-    // A brand-new Player's window is day zero (D57).
+    // A brand-new Player's window is day zero (D57), or the last 24 h for a late joiner (#43).
     const from = last
       ? iso(last.covers_to)
-      : iso(new Date(Date.parse(player.world_created_at) - DAY_ZERO.steps * DAY_ZERO.minutes * 60_000));
+      : iso(
+          new Date(
+            Math.max(
+              Date.parse(player.world_created_at) - DAY_ZERO.steps * DAY_ZERO.minutes * 60_000,
+              Date.parse(now) - HERALD.firstWindowHours * 3600_000,
+            ),
+          ),
+        );
 
     const candidates = (await loadCandidates(tx, input.worldId, from, now)).sort(byHeraldOrder);
     const due =
