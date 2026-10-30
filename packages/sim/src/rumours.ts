@@ -67,19 +67,12 @@ function consumeMeddle(ctx: TickContext, intent: Intent): void {
 }
 
 function invalidRumour(ctx: TickContext, r: Intent & RumourIntent): string | null {
-  const { captains, trophies } = ctx.state;
-  const source = captains[r.source];
-  const target = captains[r.target];
-  if (!source || !target) return 'unknown_captain';
+  if (!ctx.state.captains[r.source] || !ctx.state.captains[r.target]) return 'unknown_captain';
   if (r.source === r.target) return 'same_captain';
   if (ctx.rosterOf(r.source) === 'reserve' || ctx.rosterOf(r.target) === 'reserve') return 'benched_captain';
   if (!isClaim(r.claim)) return 'bad_claim';
   const s = r.subject as Subject | undefined;
-  const ok =
-    (s?.from === 'trait' && target.traits.includes(s.key)) ||
-    (s?.from === 'fear' && target.fears.some((f) => f.fear === s.key)) ||
-    (s?.from === 'trophy' && trophies.some((t) => t.holder === r.target && t.key === s.key));
-  if (!ok) return 'bad_subject';
+  if (!s || !hasSubject(ctx, r.target, s)) return 'bad_subject';
   if (r.freeText !== undefined && (typeof r.freeText !== 'string' || r.freeText.length > MAX_FREE_TEXT)) {
     return 'bad_free_text';
   }
@@ -252,14 +245,14 @@ function outcomeOdds(ctx: TickContext, r: RumourIntent): Record<RumourOutcome, n
 function wrongOrc(ctx: TickContext, r: RumourIntent): CaptainId | null {
   const candidates = ctx.activeCaptains().filter((id) => id !== r.source && id !== r.target);
   if (candidates.length === 0) return null;
-  const shares = (id: CaptainId) => {
-    const c = ctx.state.captains[id]!;
-    const { from, key } = r.subject;
-    if (from === 'trait') return c.traits.includes(key);
-    if (from === 'fear') return c.fears.some((f) => f.fear === key);
-    return ctx.state.trophies.some((t) => t.holder === id && t.key === key);
-  };
-  return ctx.rng.weighted(candidates, (id) => (shares(id) ? RUMOUR.sharerWeight : 1));
+  return ctx.rng.weighted(candidates, (id) => (hasSubject(ctx, id, r.subject) ? RUMOUR.sharerWeight : 1));
+}
+
+/** Does he have this Trait, Fear or Trophy right now? (A Return earlier in the tick may have given him a Fear.) */
+function hasSubject(ctx: TickContext, id: CaptainId, { from, key }: Subject): boolean {
+  if (from === 'trait') return ctx.captain(id).traits.includes(key);
+  if (from === 'fear') return ctx.fears(id).some((f) => f.fear === key);
+  return from === 'trophy' && ctx.trophies().some((t) => t.holder === id && t.key === key);
 }
 
 /** Fills `{role}` with Captain names and `{slot}` with text. */

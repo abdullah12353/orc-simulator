@@ -397,3 +397,19 @@ test('deaths and Humiliations are misfortunes an accuser can blame on a Player',
   }
   assert.deepEqual([...kinds].sort(), ['death', 'humiliation']);
 });
+
+test('a Rumour can be about a Fear he came back with earlier in the same tick', () => {
+  // Find a Return that gives him a new Fear.
+  for (let seed = 1; ; seed++) {
+    const { state, victim } = dueBack('drowned', seed);
+    const fear = ofKind(simulate(state, [], seed).facts, 'humiliation').find((h) => h.cat === 'fear');
+    if (!fear) continue;
+    const def = shipped.banks.humiliations[fear.key]!;
+    assert.ok(!state.captains[victim]!.fears.some((f) => f.fear === def.fear), 'a Fear he did not have before');
+    const source = activeIds(state).find((id) => id !== victim)!;
+    const intent = rumour(state, P1, { source, target: victim, subject: { from: 'fear', key: def.fear! } });
+    const { stateDiff } = simulate(state, [intent], seed);
+    assert.deepEqual(stateDiff.intents, [{ id: intent.id, status: 'consumed' }], 'the Return happens first, so his new Fear counts');
+    return;
+  }
+});
