@@ -1,0 +1,15 @@
+  first inQuietHours() 57.24 ms, second 0.705 ms; SCRAM PBKDF2 x4096 16.87 ms
+  first tick parts ms: sim 8.38 apply 6.25 hash 10.16 commit 2.16 load 1.70 (facts 0)
+cold: import content 141.9 ms, sim 231.5, server+postgres 178.0; contentVersion() 16.93 ms; ticks 1-5 total JS ms: 28.64, 21.85, 18.06, 25.99, 18.03
+  first inQuietHours() 46.54 ms, second 0.367 ms; SCRAM PBKDF2 x4096 6.88 ms
+  first tick parts ms: sim 6.60 apply 3.71 hash 7.19 commit 1.29 load 1.73 (facts 0)
+cold: import content 171.1 ms, sim 241.0, server+postgres 198.6; contentVersion() 11.79 ms; ticks 1-5 total JS ms: 20.52, 12.47, 10.16, 26.69, 18.25
+  first inQuietHours() 44.12 ms, second 0.270 ms; SCRAM PBKDF2 x4096 5.32 ms
+  first tick parts ms: sim 4.33 apply 4.71 hash 6.99 commit 1.20 load 1.21 (facts 0)
+cold: import content 117.9 ms, sim 203.9, server+postgres 157.9; contentVersion() 12.42 ms; ticks 1-5 total JS ms: 18.43, 13.95, 16, 29.93, 16.05
+  first inQuietHours() 62.18 ms, second 0.442 ms; SCRAM PBKDF2 x4096 7.65 ms
+  first tick parts ms: sim 7.23 apply 4.68 hash 12.86 commit 1.68 load 2.76 (facts 0)
+cold: import content 156.0 ms, sim 230.9, server+postgres 254.7; contentVersion() 17.77 ms; ticks 1-5 total JS ms: 29.22, 15.26, 12.47, 21.83, 17.1
+  first inQuietHours() 38.66 ms, second 0.233 ms; SCRAM PBKDF2 x4096 5.80 ms
+  first tick parts ms: sim 5.82 apply 3.00 hash 6.78 commit 1.04 load 1.35 (facts 0)
+cold: import content 104.1 ms, sim 175.7, server+postgres 147.2; contentVersion() 11.41 ms; ticks 1-5 total JS ms: 17.99, 9.52, 9.97, 16.26, 10.25

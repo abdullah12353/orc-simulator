@@ -1,0 +1,3 @@
+one push (encrypt + VAPID sign, fetch faked), ms: first 71.26, p50 3.835, p95 7.030, max 71.26
+one push (encrypt + VAPID sign, fetch faked), ms: first 47.35, p50 4.138, p95 6.655, max 47.35
+one push (encrypt + VAPID sign, fetch faked), ms: first 41.80, p50 4.469, p95 7.304, max 41.80

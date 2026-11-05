@@ -1,0 +1,38 @@
+node v22.14.0; REPEAT 3 (fastest of); seeds 10; per seed: day zero, 1440 watched 1-min ticks, 144 unwatched 5-min ticks
+end-of-run world size (seed 1): 75 KiB JSON, 44 grudge tags, 25 affinity pairs, 0 fuses, 599 infamy rows, 0 meddles, 10 humiliations
+
+WATCHED 1-minute ticks (all seeds): 14400 ticks, mean facts/tick 0.43, ticks with intents 7424, max facts 12
+ms                             p50      p95      p99      max     mean
+simulate                     0.114    0.972    1.343   26.440    0.329
+applyDiff                    0.476    1.064    1.359    2.124    0.527
+stateHash                    1.972    3.785    4.628    6.684    2.110
+sim+apply+hash (=cpu_ms)     2.716    5.263    6.709   31.998    2.966
+commit JS (no DB)            0.138    0.367    0.496    1.588    0.176
+load proxy                   0.679    1.422    1.743    2.973    0.756
+TOTAL measured JS            3.560    6.843    8.698   33.757    3.897
+
+WATCHED, excluding the first 50 ticks of each seed: 13900 ticks, mean facts/tick 0.41, ticks with intents 7101, max facts 10
+ms                             p50      p95      p99      max     mean
+simulate                     0.115    0.973    1.331   26.440    0.331
+applyDiff                    0.484    1.073    1.360    2.124    0.538
+stateHash                    2.000    3.813    4.664    6.684    2.148
+sim+apply+hash (=cpu_ms)     2.754    5.292    6.744   31.998    3.017
+commit JS (no DB)            0.138    0.366    0.494    1.588    0.175
+load proxy                   0.687    1.433    1.751    2.973    0.768
+TOTAL measured JS            3.611    6.897    8.718   33.757    3.961
+
+UNWATCHED 5-minute ticks: 1440 ticks, mean facts/tick 0.12, ticks with intents 0, max facts 6
+ms                             p50      p95      p99      max     mean
+simulate                     0.082    0.540    1.133   15.373    0.163
+applyDiff                    0.652    1.352    1.563    2.243    0.745
+stateHash                    2.712    4.874    5.400    8.098    2.890
+sim+apply+hash (=cpu_ms)     3.532    6.356    7.594   20.328    3.798
+commit JS (no DB)            0.129    0.345    0.497    1.161    0.165
+load proxy                   0.895    1.771    2.055    2.374    0.999
+TOTAL measured JS            4.618    8.381    9.714   21.551    4.963
+
+create-world day zero (288 steps, simulate+applyDiff+stateHash) ms: p50 276.4  p95 522.0  max 522.0  min 200.5  (seed 1, coldest: 515.0)
+create-world commit JS (encode all Facts, Clash scripts, state, ticks) ms: p50 0.8  p95 2.0  max 2.0  min 0.6
+first watched tick after day zero, per seed, ms: 2.08 2.36 1.85 1.94 2.07 1.22 1.21 1.03 1.52 0.80
+
+cross-check: timed sections 66.57 s; process.cpuUsage user+system over the loop 230.14 s (includes the Player stand-in and GC threads)
