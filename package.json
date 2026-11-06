@@ -10,7 +10,7 @@
     "node": ">=22.6"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @orc/web && npm run typecheck -w @orc/clock",
+    "typecheck": "tsc -p tsconfig.json && npm run typecheck -w @orc/web && npm run typecheck -w @orc/worker",
     "test": "npm run test:unit",
     "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\" \"apps/web/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
@@ -26,7 +26,7 @@
     "smoke:local": "node scripts/smoke-local.mjs",
     "web:env": "node scripts/web-env.mjs",
     "dev:web": "npm run dev -w @orc/web",
-    "dev:clock": "node scripts/dev-clock.mjs",
+    "dev:worker": "npm run dev -w @orc/worker",
     "build:web": "npm run build -w @orc/web",
     "deploy:web": "node scripts/deploy-web.mjs",
     "tone-bible:sync": "node scripts/sync-tone-bible.mjs"

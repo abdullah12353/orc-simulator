@@ -1,0 +1,12 @@
+# Copy to apps/worker/.dev.vars (git-ignored) for `npm run dev:worker`. Values here override wrangler.jsonc's vars.
+# A Neon branch's pooled (-pooler) connection string, e.g. the persistent `dev` branch (#61).
+NEON_DB_URL=postgresql://neondb_owner:<password>@ep-<endpoint>-pooler.<region>.aws.neon.tech/neondb?sslmode=require
+# The branch's Neon Auth: its JWKS and the tokens' issuer (the auth host's origin).
+NEON_AUTH_JWKS_URL=https://ep-<endpoint>.neonauth.<region>.aws.neon.tech/neondb/auth/.well-known/jwks.json
+NEON_AUTH_ISSUER=https://ep-<endpoint>.neonauth.<region>.aws.neon.tech
+# Optional: narration's fallback provider (Workers AI comes from the AI binding, which runs remotely even in dev).
+# GROQ_API_KEY=
+# Optional: Web Push.
+# VAPID_PUBLIC_KEY=
+# VAPID_PRIVATE_KEY=
+# VAPID_SUBJECT=mailto:you@example.com
