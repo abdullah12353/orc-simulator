@@ -47,10 +47,16 @@ export class World extends DurableObject<Env> {
   override async fetch(req: Request): Promise<Response> {
     const [, worldId = '', action = ''] = new URL(req.url).pathname.split('/');
     const userId = req.headers.get(USER_HEADER);
-    const getUserId = async () => userId;
-    await this.ctx.storage.put<string>('worldId', worldId);
-    await this.watchedByRequest();
+    const res = await this.handle(action, req, worldId, async () => userId);
+    // Only a call that worked makes the world watched: a stranger's refused open wakes nothing.
+    if (res.ok) {
+      await this.ctx.storage.put<string>('worldId', worldId);
+      await this.watchedByRequest();
+    }
+    return res;
+  }
 
+  private async handle(action: string, req: Request, worldId: string, getUserId: () => Promise<string | null>): Promise<Response> {
     switch (action) {
       case 'create': {
         const res = await this.withSql((sql) =>
@@ -59,7 +65,7 @@ export class World extends DurableObject<Env> {
         if (res.status === 201) {
           await this.env.WORLDS.put(`world:${worldId}`, new Date().toISOString());
           // Day zero left a Clash job per Clash: the alarm drains them, after this answer.
-          await this.ctx.storage.put({ pending: true, drain: true });
+          await this.ctx.storage.put({ worldId, pending: true, drain: true });
           await this.ctx.storage.setAlarm(Date.now());
         }
         return res;
@@ -107,10 +113,11 @@ export class World extends DurableObject<Env> {
     const report = await this.serial(() => this.withSql((sql) => worldTick(this.deps(sql), worldId, { watched, drain })));
     await this.ctx.storage.delete(['pending', 'drain']);
     this.keep(report.hints);
-    const stepped = [...report.catchUp.outcomes, ...(report.live ? [report.live] : [])].filter((o) => o.status === 'stepped').length;
+    const steps = report.catchUp.outcomes.filter((o) => o.status === 'stepped').length;
+    const tickSeq = report.live?.status === 'stepped' ? report.live.tickSeq : report.catchUp.tickSeq;
     console.log(
-      `world ${worldId}: ${watched ? 'watched' : 'unwatched'}, catch-up ${report.catchUp.mode} (${stepped} stepped` +
-        `${report.live ? `, minute tick ${report.live.status}` : ''}), tick_seq ${report.catchUp.tickSeq ?? '-'}, ${report.hints.length} hints`,
+      `world ${worldId}: ${watched ? 'watched' : 'unwatched'}, catch-up ${report.catchUp.mode} (${steps} steps)` +
+        `${report.live ? `, minute tick ${report.live.status}` : ''}, tick_seq ${tickSeq ?? '-'}, ${report.hints.length} hints`,
     );
   }
 
