@@ -1,7 +1,7 @@
 // Operator tool (#39, D59): register a prerecorded clip of an accuser saying a Player's mangled name, so
 // that accuser can name him in Accusations. Upload the clip to storage first; this records its key.
 //   npm run names:register -- --player <player uuid> --accuser <accuser slug> --key <storage key> --says "<mangled name>"
-// Connects to ORC_DB_URL (default: the local stack). In production, use the service (postgres) DB URL.
+// Connects to ORC_DB_URL: in production, the owner (neondb_owner) connection string.
 import { parseArgs } from 'node:util';
 import { content } from '@orc/content';
 import { connect, NameRenderError, registerNameRender } from '@orc/server';
@@ -21,7 +21,11 @@ if (!values.player || !values.accuser || !values.key || !values.says) {
   process.exit(2);
 }
 
-const sql = connect(process.env.ORC_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres');
+if (!process.env.ORC_DB_URL) {
+  console.error('set ORC_DB_URL to the database to register in');
+  process.exit(2);
+}
+const sql = connect(process.env.ORC_DB_URL);
 try {
   await registerNameRender(
     // The operator's script is the one place the real clock is the right clock.

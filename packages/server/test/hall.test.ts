@@ -8,7 +8,6 @@ import { content } from '@orc/content';
 import { drainJobs, insertFacts } from '@orc/server';
 import { BLAME, chain, type Cause, type Fact } from '@orc/sim';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
-import { importWeb, signInAs } from './web/supabase-stub.ts';
 
 type World = Awaited<ReturnType<typeof freshWorld>>;
 
@@ -339,21 +338,20 @@ function countingProvider() {
   return { fetch, calls: () => calls };
 }
 
-type ClashCardData = { clash: { no: number; kind: string }; lines: { speaker: string; text: string }[]; source: string };
-
 /**
- * A Hall replay, through the PWA's own code: `Hall.tsx` replays a Clash with `loadClashCard`
- * (apps/web/src/clash-card-data.ts), run here against the local stack's PostgREST as the signed-in user.
+ * A Hall replay: the reads `loadClashCard` (apps/web/src/clash-card-data.ts) makes for one, the Clash's
+ * story and its stored dialogue, as the signed-in user under RLS.
  */
 async function replay(userId: string, worldId: string, factNo: number) {
-  const { loadClashCard } = await importWeb<{ loadClashCard: (w: string, n: number) => Promise<ClashCardData | null> }>(
-    'clash-card-data.ts',
-  );
-  signInAs(userId);
-  const card = await loadClashCard(worldId, factNo);
+  const card = await asUser(userId, async (tx) => {
+    const story = await tx<{ no: number; kind: string }[]>`
+      select no::int, kind from facts where world_id = ${worldId} and story_no = ${factNo}`;
+    const [dialogue] = await tx<{ lines: { speaker: string; text: string }[]; source: string }[]>`
+      select lines, source from clash_dialogue where world_id = ${worldId} and fact_no = ${factNo}`;
+    const clash = story.find((f) => f.kind === 'clash' && f.no === factNo);
+    return clash && dialogue ? { clash, lines: dialogue.lines, source: dialogue.source } : null;
+  });
   assert.ok(card, 'the replay loads');
-  assert.equal(card.clash.no, factNo);
-  assert.equal(card.clash.kind, 'clash');
   return card;
 }
 

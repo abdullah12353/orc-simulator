@@ -14,6 +14,7 @@
     "test": "npm run test:unit",
     "test:unit": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"packages/content/test/**/*.test.ts\" \"packages/sim/test/**/*.test.ts\" \"apps/web/test/**/*.test.ts\"",
     "test:db": "node scripts/test-db.mjs",
+    "db:migrate": "node scripts/migrate.mjs",
     "audio:placeholders": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/placeholder-audio.ts",
     "voices": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/render-voices.ts",
     "voices:dry": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/render-voices.ts --dry",
@@ -22,9 +23,7 @@
     "voices:pick": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/render-voices.ts --pick",
     "content:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
     "names:register": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/register-name.ts",
-    "db:start": "node scripts/db-lock.mjs -- npx supabase start",
-    "db:lock": "node scripts/db-lock.mjs",
-    "smoke:local": "node scripts/db-lock.mjs -- node scripts/smoke-local.mjs",
+    "smoke:local": "node scripts/smoke-local.mjs",
     "web:env": "node scripts/web-env.mjs",
     "dev:web": "npm run dev -w @orc/web",
     "dev:clock": "node scripts/dev-clock.mjs",
@@ -36,6 +35,7 @@
     "@neon/config": "^1.12.1",
     "@neon/env": "^1.6.15",
     "@types/node": "^22.10.0",
+    "postgres": "3.4.7",
     "supabase": "^2.122.0",
     "typescript": "~5.8.3"
   }

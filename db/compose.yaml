@@ -1,0 +1,24 @@
+# The local Postgres for Seam B (#61): one shared container for every worktree on this machine, each
+# worktree with its own `orc_test_<hash>` database in it. Postgres 18.6, to match Neon.
+#
+#   npm run test:db                              starts it if it isn't running
+#   docker compose -f db/compose.yaml down       stops it (its data is in memory, so this wipes it)
+#
+# Test data only: it lives on a tmpfs, with fsync off.
+name: orc-simulator-db
+
+services:
+  postgres:
+    image: postgres:18.6
+    ports:
+      - "127.0.0.1:55432:5432"
+    environment:
+      POSTGRES_PASSWORD: postgres
+    command: ["postgres", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
