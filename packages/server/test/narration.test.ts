@@ -4,8 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
-import { drainJobs, handleTick, NARRATION, openEdition, tickWorld, type NarrationDeps } from '@orc/server';
-import { db, fakeClock, freshWorld } from './support.ts';
+import { drainJobs, NARRATION, openEdition, tickWorld, worldTick, type NarrationDeps } from '@orc/server';
+import { AFTER_DAY_ZERO, db, fakeClock, fakeKeys, freshWorld } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
 
@@ -81,13 +81,12 @@ function fakeProviders(opts: {
   return { fetch, calls, of: (p: 'workers-ai' | 'groq') => calls.filter((c) => c.provider === p) };
 }
 
-const KEYS = { workersAi: { accountId: 'test-account', apiToken: 'test-cf-token' }, groq: { apiKey: 'test-groq-key' } };
 
 const deps = (clock: Clock, fetch: typeof globalThis.fetch, extra: Partial<NarrationDeps> = {}): NarrationDeps => ({
   sql: db(),
   now: clock.now,
   fetch,
-  providers: KEYS,
+  providers: fakeKeys(fetch),
   ...extra,
 });
 
@@ -300,38 +299,26 @@ test('dialogue is upgraded once: a second drain makes no call and never overwrit
   );
 });
 
-test('the tick endpoint commits and returns before narration finishes, which then runs in waitUntil', async () => {
+test("the world's tick commits its step before narration calls a model, then drains the world's jobs", async () => {
   const day = '2031-01-14';
   const { worldId, clock, jobs } = await worldWithJobs(day);
-  let open!: () => void;
-  const gate = new Promise<void>((resolve) => (open = resolve));
   const inner = fakeProviders({});
-  const gated = (async (url: string | URL, init?: RequestInit) => {
-    await gate;
+  const committed: number[] = [];
+  const checking = (async (url: string | URL, init?: RequestInit) => {
+    const [t] = await db()`select count(*)::int as n from ticks where world_id = ${worldId} and seq = ${AFTER_DAY_ZERO + 1}`;
+    committed.push(t!.n);
     return inner.fetch(url, init);
   }) as typeof globalThis.fetch;
-  const background: Promise<unknown>[] = [];
 
   clock.advance(5);
-  const res = await Promise.race([
-    handleTick(
-      new Request('http://x/tick', { method: 'POST', headers: { authorization: 'Bearer s' }, body: JSON.stringify({ worldId }) }),
-      { sql: db(), now: clock.now, secret: 's', narration: { fetch: gated, providers: KEYS }, waitUntil: (p) => background.push(p) },
-    ),
-    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('the tick waited on narration')), 10_000)),
-  ]);
+  const report = await worldTick(
+    { sql: db(), now: clock.now, narration: { fetch: checking, providers: fakeKeys(checking) } },
+    worldId,
+    { watched: false },
+  );
 
-  assert.equal(res.status, 200);
-  const { outcomes } = (await res.json()) as { outcomes: { status: string; tickSeq: number }[] };
-  assert.equal(outcomes[0]!.status, 'stepped');
-  assert.equal(background.length, 1, 'the drain was handed to waitUntil');
-  const [t] = await db()`select count(*)::int as n from ticks where world_id = ${worldId} and seq = ${outcomes[0]!.tickSeq}`;
-  assert.equal(t!.n, 1, 'the tick is committed');
-  assert.ok((await jobRows(worldId)).every((j) => j.status === 'queued'), 'narration has not finished');
-  assert.ok((await dialogueRows(worldId)).every((d) => d.source === 'fallback'));
-
-  open();
-  await Promise.all(background);
+  assert.equal(report.catchUp.outcomes[0]!.status, 'stepped');
+  assert.ok(committed.length > 0 && committed.every((n) => n === 1), 'every model call came after the tick committed');
   assert.equal(inner.calls.length, (await jobRows(worldId)).length);
   assert.ok(jobs.length > 0 && (await jobRows(worldId)).every((j) => j.status === 'done'));
   assert.ok((await dialogueRows(worldId)).every((d) => d.source === 'generated'));

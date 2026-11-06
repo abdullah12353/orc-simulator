@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
@@ -65,6 +66,20 @@ test('the create-world endpoint needs a signed-in user and a name', async () => 
   const { worldId } = (await ok.json()) as { worldId: string };
   const [w] = await db()`select name from worlds where id = ${worldId}`;
   assert.equal(w!.name, 'Gutterholm');
+});
+
+test("the world gets the id the Worker picked, so the call lands in that world's own Durable Object", async () => {
+  const clock = fakeClock();
+  const userId = await newUser();
+  const picked = randomUUID();
+  const res = await handleCreateWorld(
+    new Request('http://x/worlds', { method: 'POST', body: JSON.stringify({ name: 'Picked', displayName: 'Mo' }) }),
+    { sql: db(), now: clock.now, randomSeed: () => 7, getUserId: async () => userId, worldId: picked },
+  );
+  assert.equal(res.status, 201);
+  assert.equal(((await res.json()) as { worldId: string }).worldId, picked);
+  const [w] = await db()`select tick_seq::int from worlds where id = ${picked}`;
+  assert.ok(w!.tick_seq > 0, 'day zero ran');
 });
 
 test("no member can read the world's seed: the sim is open source, so it would tell them every roll ahead", async () => {

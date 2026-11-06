@@ -34,11 +34,6 @@ jobs:
         env:
           VITE_SUPABASE_URL: http://127.0.0.1:55421
           VITE_SUPABASE_ANON_KEY: ci-build-only
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-      - name: Deno check the Edge Function entrypoints
-        run: for f in supabase/functions/*/index.ts; do deno check --no-lock "$f"; done
 
   seam-b:
     name: Seam B (backend on Postgres 18.6)

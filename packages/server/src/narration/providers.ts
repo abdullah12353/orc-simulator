@@ -1,5 +1,6 @@
-// The two narration providers, reached through an injected `fetch` (tests fake it). One call is one
-// HTTP request: nothing here retries. Adapted from #13's bake-off (`providers.mjs`).
+// The two narration providers: Workers AI through the Worker's `AI` binding, Groq over an injected
+// `fetch` (tests fake both). One call is one request: nothing here retries. Adapted from #13's bake-off
+// (`providers.mjs`).
 import type { ChatMessage } from './prompt.ts';
 import type { NarrationFailure } from './validate.ts';
 
@@ -12,11 +13,19 @@ export const MODELS: Record<ProviderId, string> = {
 };
 
 /**
- * Provider credentials, from Edge Function secrets (`CF_ACCOUNT_ID` + `CF_AI_TOKEN`, `GROQ_API_KEY`). A
- * provider without keys is skipped, so with neither set every Clash keeps its fallback and no call is made.
+ * The part of the Worker's Workers AI binding (`env.AI`, #62 item 3) narration uses. `run` resolves to
+ * what the REST API returns as `result`: `{ response, usage }`, or `{ choices, usage }`.
+ */
+export interface WorkersAi {
+  run(model: string, inputs: Record<string, unknown>, options?: { signal?: AbortSignal }): Promise<unknown>;
+}
+
+/**
+ * How to reach each provider: the `AI` binding, and the `GROQ_API_KEY` secret. A provider left out is
+ * skipped, so with neither every Clash keeps its fallback and no call is made.
  */
 export interface ProviderKeys {
-  workersAi?: { accountId: string; apiToken: string };
+  workersAi?: WorkersAi;
   groq?: { apiKey: string };
 }
 
@@ -134,21 +143,43 @@ export async function callProvider(
   return provider === 'workers-ai' ? callWorkersAi(deps, messages, task) : callGroq(deps, messages, task);
 }
 
+/** The binding's answer, or its error, within `timeoutMs` (the signal is passed on, and raced in case it's ignored). */
+async function runWorkersAi(deps: CallDeps, inputs: Record<string, unknown>): Promise<{ result: unknown } | { error: string }> {
+  const ctrl = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timedOut = new Promise<{ error: string }>((resolve) => {
+    timer = setTimeout(() => {
+      ctrl.abort(new DOMException('timed out', 'TimeoutError'));
+      resolve({ error: 'timed out' });
+    }, deps.timeoutMs);
+  });
+  const call = deps.keys
+    .workersAi!.run(MODELS['workers-ai'], inputs, { signal: ctrl.signal })
+    .then((result) => ({ result }), (e: unknown) => ({ error: String((e as Error)?.message ?? e) }));
+  try {
+    return await Promise.race([call, timedOut]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 async function callWorkersAi(deps: CallDeps, messages: ChatMessage[], task: NarrationTask): Promise<CallResult> {
-  const keys = deps.keys.workersAi!;
-  const out = await post(deps, `https://api.cloudflare.com/client/v4/accounts/${keys.accountId}/ai/run/${MODELS['workers-ai']}`, keys.apiToken, {
+  const out = await runWorkersAi(deps, {
     messages,
     max_tokens: MAX_TOKENS[task]['workers-ai'],
     // Gemma 4 thinks by default and spends the whole budget doing it (#13).
     chat_template_kwargs: { enable_thinking: false },
   });
-  if ('error' in out) return { ok: false, failure: 'timeout', detail: out.error!, usage: null };
-  if (!out.res.ok) return { ok: false, failure: httpFailure(out.res.status, out.text), detail: `http ${out.res.status}: ${out.text}`, usage: null };
-  const result = (out.data?.result ?? {}) as { response?: unknown; usage?: Record<string, unknown>; choices?: { message?: { content?: unknown } }[] };
+  // The binding throws for what the REST API answered with an HTTP error (out of Neurons, rate limits).
+  if ('error' in out) {
+    const failure = /timed out|abort/i.test(out.error) ? 'timeout' : httpFailure(0, out.error);
+    return { ok: false, failure, detail: out.error, usage: null };
+  }
+  const result = (out.result ?? {}) as { response?: unknown; usage?: Record<string, unknown>; choices?: { message?: { content?: unknown } }[] };
   const usage = usageOf(result.usage);
   let content = result.response ?? result.choices?.[0]?.message?.content;
   if (content && typeof content === 'object') content = JSON.stringify(content);
-  if (typeof content !== 'string' || !content.trim()) return { ok: false, failure: 'bad_output', detail: `empty: ${out.text}`, usage };
+  if (typeof content !== 'string' || !content.trim()) return { ok: false, failure: 'bad_output', detail: `empty: ${JSON.stringify(out.result)}`, usage };
   return { ok: true, content, usage };
 }
 
@@ -169,17 +200,10 @@ async function callGroq(deps: CallDeps, messages: ChatMessage[], task: Narration
   return { ok: true, content: message.content, usage };
 }
 
-/**
- * Provider keys from Edge Function secrets (`supabase secrets set`). A provider whose keys aren't all
- * set is left out, so it's skipped.
- */
-export function providerKeysFromEnv(get: (name: string) => string | undefined): ProviderKeys {
-  const env = (name: string) => get(name) || undefined;
-  const cfAccount = env('CF_ACCOUNT_ID');
-  const cfToken = env('CF_AI_TOKEN');
-  const groqKey = env('GROQ_API_KEY');
+/** The providers from the Worker's environment: the `AI` binding and the `GROQ_API_KEY` secret. Either may be missing. */
+export function providerKeysFromEnv(env: { AI?: WorkersAi; GROQ_API_KEY?: string }): ProviderKeys {
   return {
-    ...(cfAccount && cfToken ? { workersAi: { accountId: cfAccount, apiToken: cfToken } } : {}),
-    ...(groqKey ? { groq: { apiKey: groqKey } } : {}),
+    ...(env.AI ? { workersAi: env.AI } : {}),
+    ...(env.GROQ_API_KEY ? { groq: { apiKey: env.GROQ_API_KEY } } : {}),
   };
 }

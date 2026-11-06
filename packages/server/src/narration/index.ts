@@ -10,7 +10,7 @@ export {
   type ClashStory,
   type HeraldStory,
 } from './prompt.ts';
-export { MODELS, providerKeysFromEnv, type NarrationTask, type ProviderId, type ProviderKeys } from './providers.ts';
+export { MODELS, providerKeysFromEnv, type NarrationTask, type ProviderId, type ProviderKeys, type WorkersAi } from './providers.ts';
 export { NEURON_RATES, QUOTA, neuronsFor, reserve, settle, usageDay, type QuotaKind } from './quota.ts';
 export {
   validateClash,

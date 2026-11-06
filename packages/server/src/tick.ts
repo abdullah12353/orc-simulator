@@ -39,10 +39,10 @@ export type CommitStep = 'locked' | 'facts' | 'world' | 'tick';
 
 export interface TickDeps {
   sql: Sql;
-  /** Injected clock: the only source of "now" for the tick. */
+  /** Injected clock: the only source of "now" for a live tick. A backdated step brings its own time. */
   now: () => Date;
   content?: Content;
-  /** Whether the world is watched (D39): it then steps on every call. Absent: unwatched. */
+  /** Whether the world is watched (D39): it then steps on every live call. Absent: unwatched. */
   watched?: IsWatched;
   /** Test hook, awaited after each commit step. Throwing aborts (and rolls back) the tick. */
   onCommitStep?: (step: CommitStep, info: { tickSeq: number; stateHash?: string }) => void | Promise<void>;
@@ -58,7 +58,10 @@ export type TickOutcome =
       /** For a productive watched tick, the live hint to send. Returned after the commit (#55 item 2). */
       hint: LiveHint | null;
     }
-  /** Unwatched and inside the 5-minute cadence: nothing happened, the call only counted as activity. */
+  /**
+   * Nothing happened: unwatched and inside the 5-minute cadence, or the step's time isn't after the
+   * world's last tick (that step already committed, e.g. a killed alarm retrying).
+   */
   | { status: 'idle'; worldId: string }
   | { status: 'busy'; worldId: string }
   | { status: 'not_found'; worldId: string };
@@ -138,8 +141,20 @@ function toMeddle(m: MeddleRow): Meddle {
   };
 }
 
-/** Ticks one world. Returns `busy` without stepping if another tick holds the world's row lock. */
-export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOutcome> {
+/**
+ * A backdated catch-up step (data-model §3 step 1, #54): it runs at `at` instead of `deps.now()`, is
+ * always unwatched, and consumes only Intents submitted at or before `at`.
+ */
+export interface BackdatedStep {
+  at: Date;
+}
+
+/**
+ * Ticks one world. Returns `busy` without stepping if another tick holds the world's row lock. A live
+ * tick runs at `deps.now()`; a backdated one (`step`) at its own time. Either way a time that isn't
+ * after the world's `last_tick_at` is `idle`, so re-running a step whose commit landed changes nothing.
+ */
+export async function tickWorld(deps: TickDeps, worldId: string, step?: BackdatedStep): Promise<TickOutcome> {
   const content = deps.content ?? shippedContent;
   try {
     return await deps.sql.begin(async (tx) => {
@@ -154,18 +169,21 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       const tickSeq = world.tick_seq + 1;
       await deps.onCommitStep?.('locked', { tickSeq });
 
-      const now = deps.now().toISOString();
-      // Cadence (D39): a watched world steps on every call (the clock calls once a minute); an
-      // unwatched one only every 5 minutes. An idle call commits nothing.
-      const watched = deps.watched?.(worldId) ?? false;
-      if (!watched && Date.parse(now) - Date.parse(world.last_tick_at) < CADENCE.unwatchedMs) {
+      const now = (step?.at ?? deps.now()).toISOString();
+      // Cadence (D39): a watched world steps on every call (its Durable Object calls once a minute); an
+      // unwatched one only every 5 minutes. A backdated step is unwatched: it stands in for a step the
+      // world missed while nobody was looking. An idle call commits nothing.
+      const watched = step ? false : (deps.watched?.(worldId) ?? false);
+      const sinceLast = Date.parse(now) - Date.parse(world.last_tick_at);
+      if (sinceLast <= 0 || (!watched && sinceLast < CADENCE.unwatchedMs)) {
         return { status: 'idle', worldId } as const;
       }
 
       const state = await loadState(tx, world, content, now, tickSeq);
       state.world.watched = watched;
-      // After the Player rows are locked (loadState), so no submit_intent is half-way through.
-      const intents = await loadIntents(tx, worldId);
+      // After the Player rows are locked (loadState), so no submit_intent is half-way through. A backdated
+      // step leaves later Intents to the first step at or after their submission.
+      const intents = await loadIntents(tx, worldId, step ? now : null);
       // #43: submit_intent sets `first_meddle_done` the moment a first Meddle is sent, and leaves its
       // `firstMeddle` flag on only then. For the sim, that Player hasn't had it until this batch is consumed.
       for (const i of intents) {
@@ -217,22 +235,8 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
   }
 }
 
-/** The tick cadence (D39): a watched world steps on every call, an unwatched one every 5 minutes. */
-export const CADENCE = { unwatchedMs: 5 * 60_000 } as const;
-
-/** Ticks every world, one transaction each. One world failing doesn't stop the others. */
-export async function tickAllWorlds(deps: TickDeps): Promise<(TickOutcome | { status: 'error'; worldId: string; error: string })[]> {
-  const worlds = await deps.sql<{ id: string }[]>`select id from worlds order by created_at, id`;
-  const outcomes = [];
-  for (const { id } of worlds) {
-    try {
-      outcomes.push(await tickWorld(deps, id));
-    } catch (e) {
-      outcomes.push({ status: 'error' as const, worldId: id, error: e instanceof Error ? e.message : String(e) });
-    }
-  }
-  return outcomes;
-}
+/** The tick cadence (D39): a watched world steps every minute, an unwatched one every 5 minutes. */
+export const CADENCE = { watchedMs: 60_000, unwatchedMs: 5 * 60_000 } as const;
 
 async function loadState(tx: Tx, world: WorldRow, content: Content, now: string, tickSeq: number): Promise<WorldState> {
   const captainRows = await tx<CaptainRow[]>`
@@ -537,11 +541,15 @@ async function commitDiff(
   await commitBacking(tx, worldId, diff, tick.now);
 }
 
-/** Queued Intents, oldest first. SKIP LOCKED: an Intent still being written is left for the next tick. */
-async function loadIntents(tx: Tx, worldId: string): Promise<Intent[]> {
+/**
+ * Queued Intents, oldest first. SKIP LOCKED: an Intent still being written is left for the next tick.
+ * `upTo`, a backdated step's time: only Intents submitted at or before it (#54 item 2).
+ */
+async function loadIntents(tx: Tx, worldId: string, upTo: string | null): Promise<Intent[]> {
   const rows = await tx<{ id: string; player_id: string; created_at: string; payload: Record<string, unknown> }[]>`
     select id, player_id, to_json(created_at)#>>'{}' as created_at, payload
-    from intents where world_id = ${worldId} and status = 'queued'
+    from intents
+    where world_id = ${worldId} and status = 'queued' and (${upTo}::timestamptz is null or created_at <= ${upTo}::timestamptz)
     order by created_at, id
     for update skip locked`;
   return rows.map((r) => ({ ...r.payload, id: r.id, playerId: r.player_id, at: new Date(r.created_at).toISOString() }) as Intent);

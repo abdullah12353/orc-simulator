@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { content } from '@orc/content';
 import { drainJobs, insertFacts } from '@orc/server';
 import { BLAME, chain, type Cause, type Fact } from '@orc/sim';
-import { asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
+import { aiOverFetch, asUser, asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
 
 type World = Awaited<ReturnType<typeof freshWorld>>;
 
@@ -375,7 +375,7 @@ test('a Clash replay reads its stored dialogue and makes no provider call', asyn
 
   // Narration upgrades every Clash once.
   const provider = countingProvider();
-  const narration = { sql: db(), now: clock.now, fetch: provider.fetch, providers: { workersAi: { accountId: 'a', apiToken: 't' } } };
+  const narration = { sql: db(), now: clock.now, fetch: provider.fetch, providers: { workersAi: aiOverFetch(provider.fetch) } };
   await drainJobs(narration, { worldIds: [world.worldId] });
   const made = provider.calls();
   assert.equal(made, clashes.length);

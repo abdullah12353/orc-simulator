@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { BLAME, dayZero, type Fact } from '@orc/sim';
 import { content } from '@orc/content';
-import { b64url, drainPushes, fromB64url, handleTick, pushText, queuePushes, tickWorld, type VapidKeys } from '@orc/server';
+import { b64url, drainPushes, fromB64url, pushText, queuePushes, tickWorld, worldTick, type VapidKeys } from '@orc/server';
 import { asUser, asUserCommitted, db, fakeClock, freshWorld, insertStoryFacts, newUser, type StoryFact } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
@@ -419,18 +419,17 @@ test('a push left queued too long goes stale instead of arriving late', async ()
   assert.deepEqual((await jobsFor(w.playerId)).map((j) => [j.status, j.detail]), [['failed', 'stale']]);
 });
 
-test("the tick endpoint sends the stepped worlds' queued pushes after it answers", async () => {
+test("the world's tick sends the world's queued pushes after its step commits", async () => {
   const phone = await device();
   const { w } = await queuedDeath([phone]);
   const svc = pushService();
-  const background: Promise<unknown>[] = [];
   w.clock.advance(5);
-  const res = await handleTick(
-    new Request('http://x/tick', { method: 'POST', headers: { authorization: 'Bearer s' }, body: JSON.stringify({ worldId: w.worldId }) }),
-    { sql: db(), now: w.clock.now, secret: 's', pushes: { fetch: svc.fetch, vapid: await testVapid() }, waitUntil: (p) => background.push(p) },
+  const report = await worldTick(
+    { sql: db(), now: w.clock.now, pushes: { fetch: svc.fetch, vapid: await testVapid() } },
+    w.worldId,
+    { watched: false },
   );
-  assert.equal(res.status, 200);
-  await Promise.all(background);
+  assert.equal(report.catchUp.outcomes[0]!.status, 'stepped');
   assert.equal(svc.sent.filter((s) => s.url === phone.endpoint).length, 1);
 });
 

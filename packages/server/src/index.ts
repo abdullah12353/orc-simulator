@@ -1,6 +1,20 @@
 export { connect, type Sql, type Tx } from './db.ts';
 export { insertFacts, loadCauses } from './commit.ts';
-export { tickWorld, tickAllWorlds, CADENCE, type TickDeps, type TickOutcome, type CommitStep } from './tick.ts';
+export { tickWorld, CADENCE, type BackdatedStep, type TickDeps, type TickOutcome, type CommitStep } from './tick.ts';
+export {
+  catchUp,
+  worldTick,
+  openWorld,
+  assertPlayer,
+  OpenWorldError,
+  CATCH_UP,
+  WATCH,
+  nextMinuteTick,
+  type CatchUpReport,
+  type WorldTickDeps,
+  type WorldTickReport,
+} from './world.ts';
+export { jwtVerifier, bearerToken, JWKS_CACHE, type JwtVerifierOptions, type VerifyToken } from './auth.ts';
 export type { IsWatched, LiveHint } from './realtime.ts';
 export { createWorld, CreateWorldError, type CreateWorldDeps, type CreateWorldInput } from './create-world.ts';
 export {
@@ -23,14 +37,7 @@ export { b64url, encryptPayload, fromB64url, sendPush, vapidAuthorization, vapid
 export { registerNameRender, NameRenderError, type NameRenderInput } from './name-renders.ts';
 export { createClipping, ClippingError, type ClippingDeps, type ClippingInput } from './clippings.ts';
 export type { ClippingSnapshot } from '@orc/sim';
-export {
-  handleTick,
-  handleCreateWorld,
-  handleOpenEdition,
-  handleCreateClipping,
-  supabaseUserResolver,
-  type TickHandlerDeps,
-} from './http.ts';
+export { handleCreateWorld, handleOpenWorld, handleOpenEdition, handleCreateClipping, CORS, isUuid } from './http.ts';
 export {
   drainJobs,
   NARRATION,
@@ -43,4 +50,5 @@ export {
   type NarrationDeps,
   type NarrationFailure,
   type ProviderKeys,
+  type WorkersAi,
 } from './narration/index.ts';

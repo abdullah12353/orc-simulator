@@ -157,7 +157,7 @@ export async function openEdition(
     timer = setTimeout(() => resolve('waited'), deps.heraldWaitMs ?? HERALD.waitMs);
   });
   const status = await Promise.race([job, waited]);
-  clearTimeout(timer);
+  if (timer !== undefined) clearTimeout(timer);
   if (status === 'waited') {
     deps.waitUntil?.(job);
     return { ...result, generating: true };
