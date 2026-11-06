@@ -1,29 +1,10 @@
-// Live watching (#31). While the app is open and visible the Player marks itself seen about once a
-// minute, which makes the tick treat the world as watched (it steps every minute). After a watched tick
-// that made Facts, the tick broadcasts `{tick_seq}` on the private channel `world:<id>`; the broadcast
-// is only a nudge, and listeners refetch what they show.
+// Live watching (#31). After a watched tick that made Facts, the tick broadcasts `{tick_seq}` on the
+// private channel `world:<id>`; the broadcast is only a nudge, and listeners refetch what they show.
+// Being watched no longer comes from the app marking itself seen (`mark_seen` is gone, #53, #55): the
+// world's Durable Object will count its open live connections (#67, #68, #69).
 import { useEffect, useRef } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase.ts';
-
-/** How often an open, visible app marks its Player seen. Comfortably inside the tick's 5-minute window. */
-const SEEN_EVERY_MS = 60_000;
-
-/** Marks me seen in this world while the app is open and visible (on open, every minute, and on return). */
-export function useSeen(worldId: string): void {
-  useEffect(() => {
-    const mark = () => {
-      if (document.visibilityState === 'visible') void supabase.rpc('mark_seen', { world_id: worldId });
-    };
-    mark();
-    const timer = window.setInterval(mark, SEEN_EVERY_MS);
-    document.addEventListener('visibilitychange', mark);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', mark);
-    };
-  }, [worldId]);
-}
 
 /**
  * A live nudge: `tickSeq` is the tick that made new Facts, or null when the channel (re)connected and
