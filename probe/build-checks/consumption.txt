@@ -1,0 +1,12 @@
+GET /consumption_history/account?from=2026-11-01T00:00:00.000Z&to=2026-11-06T22:00:00.000Z&granularity=daily&org_id=<org> -> 404
+"this route does not exist"
+GET /consumption_history/projects?from=2026-11-01T00:00:00.000Z&to=2026-11-06T22:00:00.000Z&granularity=daily&org_id=<org>&project_ids=<project> -> 403
+{
+ "code": "",
+ "message": "This endpoint is not available. It is included with Scale plans and above."
+}
+GET /consumption_history/v2/projects?from=2026-11-01T00:00:00.000Z&to=2026-11-06T22:00:00.000Z&granularity=daily&org_id=<org>&project_ids=<project>&metrics=compute_unit_seconds -> 403
+{
+ "code": "",
+ "message": "This endpoint is not available. It is included with Launch plans and above."
+}

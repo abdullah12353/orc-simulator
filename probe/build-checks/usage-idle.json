@@ -1,0 +1,52 @@
+{
+ "at": "2026-11-06T21:36:17.815Z",
+ "endpoint_before": [
+  {
+   "id": "ep-tiny-glade-bap1aoxc",
+   "current_state": "idle",
+   "last_active": "2026-11-06T00:12:59Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  }
+ ],
+ "project_usage": {
+  "consumption_period_start": "2026-11-05T23:04:38Z",
+  "consumption_period_end": "2026-12-01T00:00:00Z",
+  "active_time_seconds": 3228,
+  "compute_time_seconds": 828,
+  "cpu_used_sec": 0,
+  "written_data_bytes": 0,
+  "data_transfer_bytes": 9334266,
+  "data_storage_bytes_hour": 0,
+  "synthetic_storage_size": 0,
+  "compute_last_active_at": "2026-11-06T00:12:59Z",
+  "plan": "free_v3",
+  "cu_hours_from_compute_time": 0.23
+ },
+ "branches": [
+  {
+   "id": "br-red-moon-bax2hhng",
+   "name": "main",
+   "compute_time_seconds": 828,
+   "active_time_seconds": 3228,
+   "cpu_used_sec": 0,
+   "written_data_bytes": 0,
+   "logical_size": 32948224
+  }
+ ],
+ "endpoint_after": [
+  {
+   "id": "ep-tiny-glade-bap1aoxc",
+   "current_state": "idle",
+   "last_active": "2026-11-06T00:12:59Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  }
+ ]
+}

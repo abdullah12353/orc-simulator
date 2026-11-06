@@ -1,0 +1,1 @@
+{"setupMs":863,"first":{"n":1,"toBeginMs":147,"txMs":66,"totalMs":213},"nowait":{"failed":true,"code":"55P03","message":"could not obtain lock on row in relation \"probe65_lock\"","ms":211},"server":{"pid":680,"version":"PostgreSQL 18.6 (ac70818) on aarch64-unknown-linux-gnu"},"aCommitted":true,"second":{"n":2,"toBeginMs":170,"txMs":71,"totalMs":241},"totalMs":1770}

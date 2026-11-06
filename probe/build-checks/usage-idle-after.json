@@ -1,0 +1,81 @@
+{
+ "at": "2026-11-06T22:44:26.650Z",
+ "endpoint_before": [
+  {
+   "id": "ep-tiny-glade-bap1aoxc",
+   "current_state": "idle",
+   "last_active": "2026-11-06T22:33:34Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  },
+  {
+   "id": "ep-proud-fire-basmd138",
+   "current_state": "active",
+   "last_active": "2026-11-06T22:43:31Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  }
+ ],
+ "project_usage": {
+  "consumption_period_start": "2026-11-05T23:04:38Z",
+  "consumption_period_end": "2026-12-01T00:00:00Z",
+  "active_time_seconds": 4580,
+  "compute_time_seconds": 1168,
+  "cpu_used_sec": 0,
+  "written_data_bytes": 0,
+  "data_transfer_bytes": 9533919,
+  "data_storage_bytes_hour": 0,
+  "synthetic_storage_size": 0,
+  "compute_last_active_at": "2026-11-06T22:44:15Z",
+  "plan": "free_v3",
+  "cu_hours_from_compute_time": 0.3244
+ },
+ "branches": [
+  {
+   "id": "br-red-moon-bax2hhng",
+   "name": "main",
+   "compute_time_seconds": 997,
+   "active_time_seconds": 3900,
+   "cpu_used_sec": 0,
+   "written_data_bytes": 0,
+   "logical_size": 32972800
+  },
+  {
+   "id": "br-rough-rice-bau0hszb",
+   "name": "ticket-66-build-check",
+   "compute_time_seconds": 171,
+   "active_time_seconds": 680,
+   "cpu_used_sec": 0,
+   "written_data_bytes": 0,
+   "logical_size": 33013760
+  }
+ ],
+ "endpoint_after": [
+  {
+   "id": "ep-tiny-glade-bap1aoxc",
+   "current_state": "idle",
+   "last_active": "2026-11-06T22:33:34Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  },
+  {
+   "id": "ep-proud-fire-basmd138",
+   "current_state": "active",
+   "last_active": "2026-11-06T22:43:31Z",
+   "suspend_timeout_seconds": 0,
+   "autoscaling": [
+    0.25,
+    0.25
+   ]
+  }
+ ]
+}

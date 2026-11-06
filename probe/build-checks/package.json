@@ -1,0 +1,12 @@
+{
+  "name": "orc-probe-do",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway probe for #65. Never merges.",
+  "dependencies": {
+    "postgres": "3.4.7"
+  },
+  "devDependencies": {
+    "wrangler": "4.158.0"
+  }
+}

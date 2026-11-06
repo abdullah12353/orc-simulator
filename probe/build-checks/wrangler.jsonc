@@ -1,0 +1,12 @@
+// Throwaway probe for #65. Never merges. Delete the Worker after (`wrangler delete`).
+// Secret: DB_URL = NEON_DB_URL (the -pooler URL of the throwaway `orc-probe` Neon project).
+{
+  "name": "orc-probe-do",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "durable_objects": { "bindings": [{ "name": "PROBE", "class_name": "Probe" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Probe"] }]
+}
