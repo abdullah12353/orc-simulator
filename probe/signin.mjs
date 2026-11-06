@@ -33,6 +33,7 @@ export async function signIn(email, callbackURL) {
   const verifyCookies = verify.headers.getSetCookie().map((c) => c.replace(/=[^;]*/, "=<v>"));
   keep(verify);
   const verifier = location ? new URL(location).searchParams.get("neon_auth_session_verifier") : null;
+  if (!verifier) return { asked, verifyStatus: verify.status, location, error: "no session verifier on the redirect" };
   // What @neon/auth's getSession does on the landing page: pass the verifier along.
   const gs = await fetch(`${AUTH}/get-session?neon_auth_session_verifier=${verifier}`, { headers: { cookie: cookieHeader(), origin: ORIGIN } });
   const sessionCookies = gs.headers.getSetCookie().map((c) => c.replace(/=[^;]*/, "=<v>"));

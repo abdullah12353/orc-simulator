@@ -1,4 +1,5 @@
 -- Is the first-request null specific to security definer? Same probe as whoami_full, but as invoker.
+-- First attempt; it failed: neondb_owner cannot grant usage on schema auth (owned by cloud_admin). Kept as a record.
 grant usage on schema auth to authenticated;
 create or replace function whoami_inv() returns jsonb language plpgsql volatile security invoker set search_path = public as $$
 begin return jsonb_build_object('uid', auth.uid(), 'role_setting', current_setting('role', true), 'claims', current_setting('request.jwt.claims', true),

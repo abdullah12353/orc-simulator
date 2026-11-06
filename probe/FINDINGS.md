@@ -80,6 +80,6 @@ Item 2 (iOS PWA) is HITL and still open.
 
 ## Left behind on `orc-probe`
 
-Probe tables and functions in `public` and `probe_hooks`. Magic link is on. Test users `delivered+a@resend.dev` and
+Probe tables and functions in `public`, including the `probe_hooks` table. Magic link is on. Test users `delivered+a@resend.dev` and
 `delivered+probe*@resend.dev`. The Cloudflare Workers `orc-probe-hook` and `orc-probe-hd`, the Hyperdrive config and the Neon
 Function `hook` are all deleted.
