@@ -33,6 +33,8 @@
     "tone-bible:sync": "node scripts/sync-tone-bible.mjs"
   },
   "devDependencies": {
+    "@neon/config": "^1.12.1",
+    "@neon/env": "^1.6.15",
     "@types/node": "^22.10.0",
     "supabase": "^2.122.0",
     "typescript": "~5.8.3"
