@@ -1,0 +1,10 @@
+// Throwaway probe for #58. Never merges. Delete the Worker after.
+{
+  "name": "orc-do-cpu-probe",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "observability": { "enabled": true },
+  "durable_objects": { "bindings": [{ "name": "BURNER", "class_name": "Burner" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Burner"] }]
+}

@@ -1,0 +1,93 @@
+08:28:01 stateless     ok             cpu      8 wall     10 /worker/burn?ms=10&name=http10
+08:28:01 stateless     ok             cpu     18 wall     18 /worker/burn?ms=30&name=http30
+08:28:01 stateless     ok             cpu     64 wall     65 /worker/burn?ms=100&name=http100
+08:28:02 stateless     ok             cpu    152 wall    154 /worker/burn?ms=300&name=http300
+08:28:02 stateless     ok             cpu    488 wall    490 /worker/burn?ms=1000&name=http1000
+08:28:03 stateless     ok             cpu   1448 wall   1489 /worker/burn?ms=3000&name=http3000
+08:28:05 stateless     exceededCpu    cpu   2020 wall   2104 /worker/burn?ms=10000&name=http10000
+08:28:07 durableObject ok             cpu      9 wall     39 /do/burn?ms=10&name=http10
+08:28:08 durableObject ok             cpu     16 wall     26 /do/burn?ms=30&name=http30
+08:28:08 durableObject ok             cpu     50 wall     68 /do/burn?ms=100&name=http100
+08:28:09 durableObject ok             cpu    147 wall    168 /do/burn?ms=300&name=http300
+08:28:09 durableObject ok             cpu    474 wall    490 /do/burn?ms=1000&name=http1000
+08:28:10 durableObject ok             cpu   1433 wall   1481 /do/burn?ms=3000&name=http3000
+08:28:12 durableObject ok             cpu   4817 wall   5033 /do/burn?ms=10000&name=http10000
+08:28:39 stateless     ok             cpu     37 wall     38 /worker/burn?ms=60
+08:28:39 stateless     ok             cpu     45 wall     45 /worker/burn?ms=60
+08:28:40 stateless     ok             cpu     29 wall     30 /worker/burn?ms=60
+08:28:40 stateless     ok             cpu     52 wall     53 /worker/burn?ms=60
+08:28:40 stateless     ok             cpu     30 wall     31 /worker/burn?ms=60
+08:28:41 stateless     ok             cpu     29 wall     30 /worker/burn?ms=60
+08:28:41 stateless     ok             cpu     45 wall     46 /worker/burn?ms=60
+08:28:41 stateless     ok             cpu     41 wall     41 /worker/burn?ms=60
+08:28:41 stateless     ok             cpu     29 wall     29 /worker/burn?ms=60
+08:28:42 stateless     ok             cpu     42 wall     45 /worker/burn?ms=60
+08:28:42 stateless     ok             cpu     36 wall     37 /worker/burn?ms=60
+08:28:42 stateless     exceededCpu    cpu     20 wall     22 /worker/burn?ms=60
+08:28:42 stateless     ok             cpu     39 wall     39 /worker/burn?ms=60
+08:28:43 stateless     ok             cpu     29 wall     29 /worker/burn?ms=60
+08:28:43 stateless     ok             cpu     30 wall     30 /worker/burn?ms=60
+08:28:43 stateless     ok             cpu     36 wall     36 /worker/burn?ms=60
+08:28:43 stateless     ok             cpu     38 wall     39 /worker/burn?ms=60
+08:28:44 stateless     ok             cpu     31 wall     32 /worker/burn?ms=60
+08:28:44 stateless     exceededCpu    cpu     20 wall     22 /worker/burn?ms=60
+08:28:44 stateless     ok             cpu     38 wall     39 /worker/burn?ms=60
+08:28:44 stateless     ok             cpu     29 wall     30 /worker/burn?ms=60
+08:28:44 stateless     exceededCpu    cpu     20 wall     22 /worker/burn?ms=60
+08:28:45 stateless     ok             cpu     31 wall     32 /worker/burn?ms=60
+08:28:45 stateless     ok             cpu     29 wall     30 /worker/burn?ms=60
+08:28:45 stateless     ok             cpu     39 wall     39 /worker/burn?ms=60
+08:28:45 stateless     ok             cpu    302 wall    302 /worker/burn?ms=600
+08:28:46 stateless     ok             cpu    366 wall    367 /worker/burn?ms=600
+08:28:46 stateless     ok             cpu    347 wall    350 /worker/burn?ms=600
+08:28:47 stateless     ok             cpu    300 wall    302 /worker/burn?ms=600
+08:28:48 stateless     ok             cpu    339 wall    341 /worker/burn?ms=600
+08:28:48 stateless     ok             cpu    377 wall    377 /worker/burn?ms=600
+08:28:49 stateless     ok             cpu    350 wall    352 /worker/burn?ms=600
+08:28:49 stateless     ok             cpu    283 wall    284 /worker/burn?ms=600
+08:28:50 stateless     ok             cpu    288 wall    288 /worker/burn?ms=600
+08:28:50 stateless     exceededCpu    cpu     20 wall     22 /worker/burn?ms=600
+08:28:50 stateless     ok             cpu    314 wall    315 /worker/burn?ms=600
+08:28:51 stateless     ok             cpu    450 wall    458 /worker/burn?ms=600
+08:28:52 stateless     ok             cpu    354 wall    354 /worker/burn?ms=600
+08:28:52 stateless     ok             cpu    282 wall    283 /worker/burn?ms=600
+08:28:53 stateless     ok             cpu    428 wall    429 /worker/burn?ms=600
+08:28:53 stateless     ok             cpu    424 wall    424 /worker/burn?ms=600
+08:28:54 stateless     ok             cpu    364 wall    367 /worker/burn?ms=600
+08:28:55 stateless     ok             cpu    387 wall    387 /worker/burn?ms=600
+08:28:55 stateless     ok             cpu    342 wall    342 /worker/burn?ms=600
+08:28:56 stateless     exceededCpu    cpu     20 wall     22 /worker/burn?ms=600
+08:28:56 stateless     ok             cpu    291 wall    292 /worker/burn?ms=600
+08:28:56 stateless     ok             cpu    364 wall    366 /worker/burn?ms=600
+08:28:57 stateless     ok             cpu    442 wall    448 /worker/burn?ms=600
+08:28:58 stateless     ok             cpu    287 wall    287 /worker/burn?ms=600
+08:28:58 stateless     ok             cpu    286 wall    287 /worker/burn?ms=600
+08:28:59 durableObject ok             cpu  21414 wall  22809 /do/burn?ms=40000&name=big40000
+08:29:22 stateless     exception      cpu      1 wall  35982 /do/burn?ms=70000&name=big70000
+08:29:22 durableObject exceededWallTime cpu  32000 wall  35749 /do/burn?ms=70000&name=big70000
+08:30:04 durableObject ok             cpu      1 wall     77 /do/alarm?ms=300&name=alarm300
+08:30:04 stateless     canceled       cpu      1 wall    250 /do/alarm?ms=300&name=alarm300
+08:30:05 durableObject ok             cpu      1 wall     34 /do/alarm?ms=3000&name=alarm3000
+08:30:05 stateless     ok             cpu      0 wall    242 /do/alarm?ms=3000&name=alarm3000
+08:30:05 durableObject ok             cpu    156 wall    172 ALARM {"scheduledTime":"2026-11-06T08:30:05.886Z"}
+08:30:05 stateless     ok             cpu      0 wall    457 /do/alarm?ms=40000&name=alarm40000
+08:30:05 durableObject ok             cpu      2 wall    218 /do/alarm?ms=40000&name=alarm40000
+08:30:06 durableObject ok             cpu      1 wall     30 /do/alarm?ms=70000&name=alarm70000
+08:30:06 stateless     canceled       cpu      1 wall    186 /do/alarm?ms=70000&name=alarm70000
+08:30:06 durableObject ok             cpu   1463 wall   1505 ALARM {"scheduledTime":"2026-11-06T08:30:06.348Z"}
+08:30:07 durableObject ok             cpu   8559 wall   8742 ALARM {"scheduledTime":"2026-11-06T08:30:07.011Z"}
+08:30:07 durableObject exceededCpu    cpu  32500 wall  34266 ALARM {"scheduledTime":"2026-11-06T08:30:07.447Z"}
+08:31:01 durableObject canceled       cpu      0 wall     20 ALARM {"scheduledTime":"2026-11-06T08:30:06.348Z"}
+08:30:43 durableObject exceededCpu    cpu  32000 wall  33699 ALARM {"scheduledTime":"2026-11-06T08:30:07.447Z"}
+08:31:46 stateless     canceled       cpu      0 wall     65 /do/runs?name=alarm300
+08:31:47 durableObject ok             cpu      0 wall      8 /do/runs?name=alarm300
+08:31:01 durableObject ok             cpu      1 wall      3 /do/runs?name=alarm3000
+08:31:47 stateless     canceled       cpu      0 wall     20 /do/runs?name=alarm3000
+08:31:47 durableObject ok             cpu      0 wall     44 /do/runs?name=alarm40000
+08:31:47 stateless     ok             cpu      1 wall     64 /do/runs?name=alarm40000
+08:31:22 durableObject exceededCpu    cpu  30000 wall  31557 ALARM {"scheduledTime":"2026-11-06T08:30:07.447Z"}
+08:31:48 stateless     exception      cpu      0 wall   5319 /do/runs?name=alarm70000
+08:32:02 durableObject exceededCpu    cpu  30000 wall  31626 ALARM {"scheduledTime":"2026-11-06T08:30:07.447Z"}
+08:32:12 stateless     exception      cpu      0 wall  21789 /do/runs?name=alarm70000
+08:32:50 durableObject ok             cpu      1 wall     15 /do/runs?name=alarm70000
+08:32:50 stateless     canceled       cpu      0 wall     33 /do/runs?name=alarm70000
