@@ -31,7 +31,7 @@ import {
 } from './commit.ts';
 import { commitBacking } from './backing.ts';
 import { isLockNotAvailable, jsonb, type Sql, type Tx } from './db.ts';
-import { broadcast } from './realtime.ts';
+import type { IsWatched, LiveHint } from './realtime.ts';
 import { queuePushes } from './pushes.ts';
 
 /** Points between commit statements where a test can inject a failure (or a pause). */
@@ -42,12 +42,22 @@ export interface TickDeps {
   /** Injected clock: the only source of "now" for the tick. */
   now: () => Date;
   content?: Content;
+  /** Whether the world is watched (D39): it then steps on every call. Absent: unwatched. */
+  watched?: IsWatched;
   /** Test hook, awaited after each commit step. Throwing aborts (and rolls back) the tick. */
   onCommitStep?: (step: CommitStep, info: { tickSeq: number; stateHash?: string }) => void | Promise<void>;
 }
 
 export type TickOutcome =
-  | { status: 'stepped'; worldId: string; tickSeq: number; factCount: number; stateHash: string }
+  | {
+      status: 'stepped';
+      worldId: string;
+      tickSeq: number;
+      factCount: number;
+      stateHash: string;
+      /** For a productive watched tick, the live hint to send. Returned after the commit (#55 item 2). */
+      hint: LiveHint | null;
+    }
   /** Unwatched and inside the 5-minute cadence: nothing happened, the call only counted as activity. */
   | { status: 'idle'; worldId: string }
   | { status: 'busy'; worldId: string }
@@ -147,7 +157,7 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       const now = deps.now().toISOString();
       // Cadence (D39): a watched world steps on every call (the clock calls once a minute); an
       // unwatched one only every 5 minutes. An idle call commits nothing.
-      const watched = await isWatched(tx, worldId, now);
+      const watched = deps.watched?.(worldId) ?? false;
       if (!watched && Date.parse(now) - Date.parse(world.last_tick_at) < CADENCE.unwatchedMs) {
         return { status: 'idle', worldId } as const;
       }
@@ -196,10 +206,10 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
       ]);
       await deps.onCommitStep?.('tick', info);
 
-      // Last, so it goes out only if everything above commits: one per productive watched tick.
-      if (watched && facts.length > 0) await broadcast(tx, worldId, { event: 'tick', payload: { tick_seq: tickSeq } });
-
-      return { status: 'stepped', worldId, tickSeq, factCount: facts.length, stateHash: hash } as const;
+      // One hint per productive watched tick. sql.begin resolves only after the commit, so the caller
+      // never sees a hint for a tick that rolled back.
+      const hint: LiveHint | null = watched && facts.length > 0 ? { event: 'tick', payload: { tick_seq: tickSeq } } : null;
+      return { status: 'stepped', worldId, tickSeq, factCount: facts.length, stateHash: hash, hint } as const;
     });
   } catch (e) {
     if (isLockNotAvailable(e)) return { status: 'busy', worldId };
@@ -207,24 +217,8 @@ export async function tickWorld(deps: TickDeps, worldId: string): Promise<TickOu
   }
 }
 
-/** The tick cadence (D39). A world is watched while any of its Players was seen in the last 5 minutes. */
-export const CADENCE = { watchedWindowMs: 5 * 60_000, unwatchedMs: 5 * 60_000 } as const;
-
-/**
- * Watched = some Player was seen in the 5 minutes up to the tick's `now` (data-model §3 step 2). A
- * sighting after `now` doesn't count: the tick's clock is the only clock, so injected clocks stay
- * deterministic (in production the two clocks agree, and the client marks itself seen every minute).
- */
-export async function isWatched(tx: Sql | Tx, worldId: string, now: string): Promise<boolean> {
-  const [row] = await tx<{ watched: boolean }[]>`
-    select exists (
-      select 1 from player_private pp join players p on p.id = pp.player_id
-      where p.world_id = ${worldId} and p.removed_at is null
-        and pp.last_seen_at > ${now}::timestamptz - make_interval(secs => ${CADENCE.watchedWindowMs / 1000})
-        and pp.last_seen_at <= ${now}::timestamptz
-    ) as watched`;
-  return row!.watched;
-}
+/** The tick cadence (D39): a watched world steps on every call, an unwatched one every 5 minutes. */
+export const CADENCE = { unwatchedMs: 5 * 60_000 } as const;
 
 /** Ticks every world, one transaction each. One world failing doesn't stop the others. */
 export async function tickAllWorlds(deps: TickDeps): Promise<(TickOutcome | { status: 'error'; worldId: string; error: string })[]> {

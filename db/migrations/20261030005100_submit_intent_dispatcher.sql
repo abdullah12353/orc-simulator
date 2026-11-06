@@ -12,7 +12,7 @@
 -- `first_meddle_done` at once, and the payload keeps `firstMeddle` only if this really is the Player's
 -- first Meddle (the tick un-marks that Player for the batch, so the sim gives it the 2–5 min Fuse).
 -- Returns the Meddles left. Not callable by clients. Fails with: no_meddles_left.
-create function submit_meddle_intent(me uuid, id uuid, world_id uuid, kind text, clean jsonb)
+create function submit_meddle_intent(me uuid, id uuid, world_id uuid, kind text, clean jsonb, _init uuid default auth.uid())
 returns int
 language plpgsql volatile security definer set search_path = public
 as $$
@@ -38,9 +38,9 @@ begin
   return left_;
 end;
 $$;
-revoke all on function submit_meddle_intent(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
+revoke all on function submit_meddle_intent(uuid, uuid, uuid, text, jsonb, uuid) from public, anonymous, authenticated;
 
-create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
+create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
 as $$

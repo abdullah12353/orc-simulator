@@ -16,7 +16,7 @@ create table clippings (
 );
 create index clippings_world_idx on clippings (world_id, created_at desc);
 
--- Frozen: nobody rewrites a card after the fact (not even the service role).
+-- Frozen: nobody rewrites a card after the fact (not even the server).
 create function clippings_frozen() returns trigger language plpgsql as $$
 begin
   raise exception 'clippings are frozen';
@@ -25,7 +25,7 @@ $$;
 create trigger clippings_no_update before update on clippings for each row execute function clippings_frozen();
 
 alter table clippings enable row level security;
-revoke all on clippings from anon, authenticated;
+revoke all on clippings from anonymous, authenticated;
 grant select on clippings to authenticated;
 create policy clippings_member_read on clippings for select to authenticated using (is_world_member(world_id));
 
@@ -55,5 +55,5 @@ create or replace view hall_timeline with (security_invoker = true) as
   ) t
   order by t.at desc, t.fact_no desc, t.shelf;
 
-revoke all on hall_clippings from anon, authenticated;
+revoke all on hall_clippings from anonymous, authenticated;
 grant select on hall_clippings to authenticated;

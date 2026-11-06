@@ -169,13 +169,14 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 ## 8. Minimal simulation architecture (locked; full detail in [data-model.md](./data-model.md))
 
 ```
-┌──────────── Cloudflare ────────────┐        ┌──────── Supabase (free) ────────┐
-│ Pages: React + TS PWA              │◄──RT──►│ Postgres (canonical state):      │
-│ Worker cron: tick → simulate()     │──SQL──►│  world, captains, grudges,       │
-│   → Facts → (featured) narrate     │        │  trophies, players, backings,    │
-│ Worker daily: build the Herald     │        │  intents, events (append-only)   │
-│ Static/R2: portraits, bark bank    │        │ Realtime feed · Auth (invite)    │
-└────────────────────────────────────┘        └──────────────────────────────────┘
+┌────────────── Cloudflare (free) ──────────────┐      ┌───────── Neon (free) ──────────┐
+│ Pages: React + TS PWA, portraits, bark bank   │─API─►│ Data API (reads, RPCs, RLS)    │
+│ Worker: verify JWT, route /worlds/:id/*       │      │ Postgres (canonical state):    │
+│   cron every 30 min → catch-up over KV list   │      │  world, captains, grudges,     │
+│ Durable Object per world:                     │─SQL─►│  trophies, players, backings,  │
+│   tick → simulate() → Facts → narrate (AI)    │      │  intents, facts (append-only)  │
+│   live sockets (hints), Herald, pushes        │      │ Auth: magic links (invite)     │
+└───────────────────────────────────────────────┘      └────────────────────────────────┘
 ```
 
 1. **World state changes only inside `simulate()`.** Players write *intents*, and the next tick consumes them. Player ledgers (gold, Meddle allowance) are debited when an intent is submitted, and refunded if the sim rejects it.
@@ -212,7 +213,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D3 | Death not permanent; humiliating Return | **Decided** | Brainstorm |
 | D4 | Minimal v1 | **Decided** | Brainstorm |
 | D5 | Original characters and mechanics; no Shadow of War / Tolkien / Brooks content | **Decided** | Brief |
-| D6 | Stack: React/TS PWA, Supabase free, Cloudflare, a free LLM (amended by D37), ElevenLabs | **Decided** | Brief, amended by ticket *Narration tiers* |
+| D6 | Stack: React/TS PWA, Supabase free, Cloudflare, a free LLM (amended by D37), ElevenLabs. **Amended by D67:** Neon free replaces Supabase | **Decided** | Brief, amended by ticket *Narration tiers* |
 | D7 | Rules-based sim owns canonical state; LLM only narrates Facts | **Decided** | Brief |
 | D8 | Destination: a locked MVP spec; building is a later effort | **Decided** | Grilling Q1 |
 | D9 | Async-first loop; live speed-up while someone's on | **Decided** | Grilling Q2 |
@@ -245,7 +246,7 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D36 | Payouts: ≈10% of Stake per win, ≈1% per Infamy point, rounded up; shown only privately, never in the Herald | **Decided** | Ticket *Backing economy* |
 | D37 | Narration runs at $0: Cloudflare Workers AI as primary, Groq gpt-oss-120b as fallback, templates as the last resort; the free quota is the cap; model chosen by bake-off (D65) | **Decided** | Ticket *Narration tiers* |
 | D38 | Tiers: every Clash gets generated dialogue; the Herald is generated on open; notable events are templated; minor changes are silent; no runtime TTS | **Decided** | Ticket *Narration tiers* |
-| D39 | Tick every 1 min when watched (Player seen within 5 min), every 5 min otherwise; Worker as clock, Edge Function runs the tick; narration never blocks it | **Decided** | Ticket *Narration tiers* |
+| D39 | Tick every 1 min when watched (Player seen within 5 min), every 5 min otherwise; Worker as clock, Edge Function runs the tick; narration never blocks it. **Amended by D67:** the world's Durable Object runs the tick and decides watched from its sockets (2-min window); unwatched worlds take 5-min steps in 30-min catch-up batches | **Decided** | Ticket *Narration tiers* |
 | D40 | Any disaster can kill (Clash, botched Dare, accident), about 1–3 deaths a day; every Captain Returns after 2–12 h with an Introduction and an hour's grace from dying | **Decided** | Ticket *Failing Upward* |
 | D41 | Every Return brings exactly one Humiliation that fits the death; five categories (bandages, lost bits, disguise, Epithet, new Fear) with their own lifetimes; none touch Power or the odds | **Decided** | Ticket *Failing Upward* |
 | D42 | Infamy comes only from stupidity (tiers 1–4 / 5–15 / 15–30; wins 0; the throne +20) and is lifetime; Power only drifts ±1 | **Decided** | Ticket *Failing Upward* |
@@ -273,3 +274,4 @@ These live as tickets on [issue #14](https://github.com/abdullah12353/orc-simula
 | D64 | Affinity is directed per ordered pair (amends D49); days roll at midnight Europe/London, LLM quotas on UTC; content ships as TS/JSON in the repo; narration runs after commit in the tick function | **Decided** | Ticket *Data model* |
 | D65 | Narration model: Gemma 4 26B on Workers AI (thinking off) as primary, Groq gpt-oss-120b as fallback; Llama 3.3 70B dropped | **Decided** | Ticket *Bake-off* |
 | D66 | A format failure from the primary retries once on the fallback; refusals and timeouts go straight to the template (amends ticket *Narration tiers*'s no-retries rule) | **Decided** | Ticket *Bake-off* |
+| D67 | Off Supabase onto Neon free (Postgres, Auth with magic links, Data API) and Cloudflare free (a Worker, a Durable Object per world, KV, cron, Workers AI); amends D6, D39 ([ADR 0001](../../docs/adr/0001-off-supabase-onto-neon-and-durable-objects.md)) | **Decided** | Map [#47](https://github.com/abdullah12353/orc-simulator/issues/47) |

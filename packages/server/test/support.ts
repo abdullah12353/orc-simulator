@@ -1,12 +1,14 @@
-// Seam B helpers: talk to the local Supabase Postgres directly, with an injected clock and a fresh
-// world per test. Run these suites only through `npm run test:db` (it holds the shared-DB lock).
+// Seam B helpers: talk to Postgres directly, with an injected clock and a fresh world per test. Run these
+// suites only through `npm run test:db`: it makes this worktree's own database and passes its URL.
 import { after } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { content, type Content } from '@orc/content';
 import { DAY_ZERO, dayZero, simulate, tickSeed } from '@orc/sim';
 import { connect, createWorld, type Sql } from '@orc/server';
 
-export const DB_URL = process.env.ORC_DB_URL ?? 'postgresql://postgres:postgres@127.0.0.1:55422/postgres';
+const url = process.env.ORC_DB_URL;
+if (!url) throw new Error('ORC_DB_URL is not set: run Seam B through `npm run test:db`');
+export const DB_URL: string = url;
 
 let shared: Sql | undefined;
 // Registered at import (file level), not inside a test, or it would close the pool after that test.
@@ -30,14 +32,12 @@ export function fakeClock(start = '2026-10-30T12:00:00.000Z') {
   };
 }
 
-/** Inserts a confirmed auth user, as if they had signed in by magic link. */
+/** Inserts a Neon Auth user with a verified email, as if they had signed in by magic link. */
 export async function newUser(sql: Sql = db()): Promise<string> {
   const id = randomUUID();
   await sql`
-    insert into auth.users (id, instance_id, aud, role, email, email_confirmed_at, raw_app_meta_data,
-                            raw_user_meta_data, created_at, updated_at)
-    values (${id}, '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated',
-            ${`${id}@test.local`}, now(), '{"provider":"email","providers":["email"]}', '{}', now(), now())`;
+    insert into neon_auth."user" (id, name, email, "emailVerified")
+    values (${id}, 'Test User', ${`${id}@test.local`}, true)`;
   return id;
 }
 

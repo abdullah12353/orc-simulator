@@ -37,7 +37,7 @@ create table clash_dialogue (
 alter table trophies enable row level security;
 alter table clash_dialogue enable row level security;
 
-revoke all on trophies, clash_dialogue from anon, authenticated;
+revoke all on trophies, clash_dialogue from anonymous, authenticated;
 grant select on trophies, clash_dialogue to authenticated;
 
 create policy trophies_member_read on trophies for select to authenticated using (is_world_member(world_id));

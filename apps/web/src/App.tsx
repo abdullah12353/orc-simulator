@@ -6,7 +6,7 @@ import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import type { IntroductionCardData } from './introduction-data.ts';
-import { useLive, useSeen } from './live.ts';
+import { useLive } from './live.ts';
 import { LiveStage } from './LiveStage.tsx';
 import { Meddle } from './Meddle.tsx';
 import { Stable } from './Stable.tsx';
@@ -137,7 +137,6 @@ function Worlds({ initial }: { initial?: string }) {
 function WorldTabs({ worldId }: { worldId: string }) {
   const [tab, setTab] = useState<'herald' | 'meddle' | 'stable' | 'captains' | 'hall' | 'facts'>('herald');
   const [story, setStory] = useState<number | null>(pushLink?.worldId === worldId ? pushLink.storyNo : null);
-  useSeen(worldId);
   // First open (#43, D58): Krúg's Introduction, then the edition, then the guided first Rumour. Never again,
   // but a first open cut short (the app closed) resumes where it stopped.
   const { step, finish } = useFirstOpen(worldId);

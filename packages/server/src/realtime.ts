@@ -1,25 +1,18 @@
-// Realtime broadcasts on a world's private channel `world:<id>` (data-model §3 step 7). Only world
-// members can subscribe (RLS on realtime.messages, migration 20261030003100). Clients treat a broadcast
-// as "refetch": it carries a pointer, never data.
-import { jsonb, type Sql, type Tx } from './db.ts';
-
-/** The private channel a world's live events go out on. */
-export const worldTopic = (worldId: string) => `world:${worldId}`;
+// Live hints (data-model §3 step 7, #55): a world's live connections are told when to refetch. A hint is a
+// pointer, never data. The tick and the narration drain RETURN their hints, and only once their
+// transaction has committed, so a hint never points at work that rolled back (#55 item 2). Sending them
+// is the world's Durable Object's job (#67, #68); nothing in the database carries them.
 
 /**
- * What goes out on `world:<id>`: `tick` after a productive watched tick, and `dialogue` when a Clash's
- * generated lines replace its fallback script (sent by drainJobs, only while the world is watched).
+ * `tick` after a productive watched tick, and `dialogue` when a Clash's generated lines replace its
+ * fallback script (only while the world is watched).
  */
-export type WorldBroadcast =
+export type LiveHint =
   | { event: 'tick'; payload: { tick_seq: number } }
   | { event: 'dialogue'; payload: { fact_no: number } };
 
 /**
- * Sends one broadcast through `realtime.send`, which writes it to realtime.messages for Realtime to
- * deliver. Called inside a transaction, it goes out only if that transaction commits, so a broadcast
- * never points at a tick that rolled back. `realtime.send` never throws (it logs a warning), so a
- * Realtime hiccup can't fail the tick.
+ * Whether a world is watched right now. The world's Durable Object knows, from its live connections
+ * (#55 item 5); without one, every world is unwatched.
  */
-export async function broadcast(sql: Sql | Tx, worldId: string, message: WorldBroadcast): Promise<void> {
-  await sql`select realtime.send(${jsonb(sql, message.payload)}, ${message.event}, ${worldTopic(worldId)}, true)`;
-}
+export type IsWatched = (worldId: string) => boolean;

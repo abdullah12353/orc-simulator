@@ -38,7 +38,7 @@ create index push_jobs_player_idx on push_jobs (player_id, created_at);
 
 alter table push_subscriptions enable row level security;
 alter table push_jobs enable row level security;
-revoke all on push_subscriptions, push_jobs from anon, authenticated;
+revoke all on push_subscriptions, push_jobs from anonymous, authenticated;
 grant select, delete on push_subscriptions to authenticated;
 grant select on push_jobs to authenticated;
 create policy push_subscriptions_owner_read on push_subscriptions for select to authenticated using (owns_player(player_id));
@@ -47,7 +47,8 @@ create policy push_jobs_owner_read on push_jobs for select to authenticated usin
 
 -- Opt in (or refresh the keys of) this device for the caller's Player in a world. Parameters are p_-prefixed
 -- because `endpoint`/`auth` would clash with the table's columns in ON CONFLICT.
-create function subscribe_push(p_world uuid, p_endpoint text, p_p256dh text, p_auth text) returns void
+create function subscribe_push(p_world uuid, p_endpoint text, p_p256dh text, p_auth text, _init uuid default auth.uid())
+returns void
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -66,14 +67,14 @@ begin
   on conflict (player_id, endpoint) do update set p256dh = excluded.p256dh, auth = excluded.auth;
 end;
 $$;
-revoke all on function subscribe_push(uuid, text, text, text) from public, anon;
-grant execute on function subscribe_push(uuid, text, text, text) to authenticated;
+revoke all on function subscribe_push(uuid, text, text, text, uuid) from public, anonymous;
+grant execute on function subscribe_push(uuid, text, text, text, uuid) to authenticated;
 
 -- Opt this device out for the caller's Player in a world.
-create function unsubscribe_push(p_world uuid, p_endpoint text) returns void
+create function unsubscribe_push(p_world uuid, p_endpoint text, _init uuid default auth.uid()) returns void
 language sql volatile security definer set search_path = public
 as $$
   delete from push_subscriptions where player_id = my_player(p_world) and endpoint = p_endpoint;
 $$;
-revoke all on function unsubscribe_push(uuid, text) from public, anon;
-grant execute on function unsubscribe_push(uuid, text) to authenticated;
+revoke all on function unsubscribe_push(uuid, text, uuid) from public, anonymous;
+grant execute on function unsubscribe_push(uuid, text, uuid) to authenticated;

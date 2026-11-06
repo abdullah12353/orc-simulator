@@ -65,7 +65,7 @@ alter table intents enable row level security;
 alter table meddles enable row level security;
 alter table fuses enable row level security;
 
-revoke all on intents, meddles, fuses from anon, authenticated;
+revoke all on intents, meddles, fuses from anonymous, authenticated;
 grant select on intents, meddles to authenticated;
 
 create policy intents_owner_read on intents for select to authenticated using (owns_player(player_id));
@@ -77,7 +77,7 @@ create policy meddles_owner_or_landed_read on meddles for select to authenticate
 -- left". Idempotent on the client-generated id: resubmitting returns the same result without a second
 -- debit. Only shape is checked here; the sim checks the Rumour against the world and refunds rejects.
 -- Fails with: not_a_player, intent_id_taken, unsupported_kind, bad_rumour, no_meddles_left.
-create function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
+create function submit_intent(id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
 as $$
@@ -143,5 +143,5 @@ begin
 end;
 $$;
 
-revoke all on function submit_intent(uuid, uuid, text, jsonb) from public, anon;
-grant execute on function submit_intent(uuid, uuid, text, jsonb) to authenticated;
+revoke all on function submit_intent(uuid, uuid, text, jsonb, uuid) from public, anonymous;
+grant execute on function submit_intent(uuid, uuid, text, jsonb, uuid) to authenticated;

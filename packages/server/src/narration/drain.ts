@@ -2,12 +2,11 @@
 // never blocks or fails a tick. Each queued Clash job gets ONE call on the first provider whose quota
 // can take it (Workers AI, then Groq short of the Herald reserve, else none). A format failure from Gemma
 // gets one more call, on Groq (D66); refusals, timeouts and quota keep the fallback script. On success
-// `clash_dialogue` is upgraded once and, when the world is watched, a `dialogue` broadcast goes out.
+// `clash_dialogue` is upgraded once and, when the world is watched, a `dialogue` hint is returned.
 import { content as shippedContent, type Content } from '@orc/content';
 import type { ClashFact, ClashLine, Fact } from '@orc/sim';
 import { jsonb, type Sql } from '../db.ts';
-import { broadcast } from '../realtime.ts';
-import { isWatched } from '../tick.ts';
+import type { IsWatched, LiveHint } from '../realtime.ts';
 import { clashMessages, type ClashStory } from './prompt.ts';
 import { callProvider, configured, MODELS, type ProviderId, type ProviderKeys } from './providers.ts';
 import { reserve, settle, usageDay, worstCase } from './quota.ts';
@@ -22,6 +21,8 @@ export interface NarrationDeps {
   content?: Content;
   /** Per call. */
   timeoutMs?: number;
+  /** Whether a world is watched: only then does an upgraded Clash return a `dialogue` hint. */
+  watched?: IsWatched;
 }
 
 export const NARRATION = {
@@ -50,11 +51,13 @@ interface Job {
 export interface DrainReport {
   done: number;
   fallback: number;
+  /** One `dialogue` hint per Clash upgraded in a watched world, each after its upgrade committed. */
+  hints: { worldId: string; hint: LiveHint }[];
 }
 
 /** Drains the queued Clash jobs of these worlds, one at a time, oldest first. Never throws for a job. */
 export async function drainJobs(deps: NarrationDeps, opts: { worldIds: string[] }): Promise<DrainReport> {
-  const report: DrainReport = { done: 0, fallback: 0 };
+  const report: DrainReport = { done: 0, fallback: 0, hints: [] };
   if (opts.worldIds.length === 0) return report;
   report.fallback += await expireStaleJobs(deps, opts.worldIds);
   for (let n = 0; n < NARRATION.maxJobsPerDrain; n++) {
@@ -62,7 +65,7 @@ export async function drainJobs(deps: NarrationDeps, opts: { worldIds: string[] 
     if (!job) break;
     let outcome: Outcome;
     try {
-      outcome = await runClashJob(deps, job);
+      outcome = await runClashJob(deps, job, report.hints);
     } catch (e) {
       outcome = { status: 'fallback', provider: null, failure: null, excerpt: `error: ${(e as Error)?.message ?? e}`, neurons: null, tokens: null };
     }
@@ -117,7 +120,7 @@ export interface Outcome {
   tokens: number | null;
 }
 
-async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
+async function runClashJob(deps: NarrationDeps, job: Job, hints: DrainReport['hints']): Promise<Outcome> {
   const content = deps.content ?? shippedContent;
   const story = await loadStory(deps.sql, job, content);
   const messages = clashMessages(content, story);
@@ -172,19 +175,17 @@ async function runClashJob(deps: NarrationDeps, job: Job): Promise<Outcome> {
   if (!last.ok) return { ...base, status: 'fallback', provider: last.provider, failure: last.failure };
   const won = last;
 
-  // Upgraded exactly once: only a fallback script is ever replaced. Broadcast in the same transaction, so
-  // a live card is only told about lines that committed.
-  await deps.sql.begin(async (tx) => {
-    const upgraded = await tx`
-      update clash_dialogue
-      set lines = ${jsonb(tx, won.lines)}, source = 'generated', provider = ${won.provider},
-          model = ${MODELS[won.provider]}, updated_at = ${deps.now().toISOString()}
-      where world_id = ${job.world_id} and fact_no = ${job.fact_no} and source = 'fallback'
-      returning 1`;
-    if (upgraded.length === 1 && (await isWatched(tx, job.world_id, deps.now().toISOString()))) {
-      await broadcast(tx, job.world_id, { event: 'dialogue', payload: { fact_no: job.fact_no } });
-    }
-  });
+  // Upgraded exactly once: only a fallback script is ever replaced. The hint is added after the update
+  // commits, so a live card is only told about lines that committed.
+  const upgraded = await deps.sql`
+    update clash_dialogue
+    set lines = ${jsonb(deps.sql, won.lines)}, source = 'generated', provider = ${won.provider},
+        model = ${MODELS[won.provider]}, updated_at = ${deps.now().toISOString()}
+    where world_id = ${job.world_id} and fact_no = ${job.fact_no} and source = 'fallback'
+    returning 1`;
+  if (upgraded.length === 1 && (deps.watched?.(job.world_id) ?? false)) {
+    hints.push({ worldId: job.world_id, hint: { event: 'dialogue', payload: { fact_no: job.fact_no } } });
+  }
   // A success after Gemma's format failure still logs that failure.
   const gemmaFailed = excerpts.length > 0;
   return { ...base, status: 'done', provider: won.provider, failure: gemmaFailed ? 'bad_output' : null };

@@ -166,7 +166,9 @@ test('a fast model response returns a generated edition, written by one call', a
 test('a response slower than the wait returns the templated edition, which later becomes generated', async () => {
   const day = '2031-03-02';
   const world = await worldOn(day);
-  const fake = fakeProviders({ delayMs: 300 });
+  // Long enough that the second open below lands while the job still runs, even over a network
+  // (on a Neon branch, 300 ms was gone before that open's queries were).
+  const fake = fakeProviders({ delayMs: 2_000 });
   const { deps, background } = heraldDeps(world.clock, fake.fetch, { heraldWaitMs: 30 });
 
   const out = await openEdition(deps, world);

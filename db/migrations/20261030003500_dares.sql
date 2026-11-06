@@ -56,12 +56,12 @@ begin
 end;
 $$;
 
-revoke all on function clean_rumour_payload(jsonb), clean_dare_payload(jsonb) from public, anon, authenticated;
+revoke all on function clean_rumour_payload(jsonb), clean_dare_payload(jsonb) from public, anonymous, authenticated;
 
 -- Queues a Meddle for the next tick and debits it at once, so the Player sees an honest "2 Meddles
 -- left". Idempotent on the client-generated id: resubmitting returns the same result without a second
 -- debit. Fails with: not_a_player, intent_id_taken, unsupported_kind, bad_rumour, bad_dare, no_meddles_left.
-create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
+create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
 as $$

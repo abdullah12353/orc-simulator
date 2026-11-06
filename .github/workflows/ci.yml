@@ -41,7 +41,7 @@ jobs:
         run: for f in supabase/functions/*/index.ts; do deno check --no-lock "$f"; done
 
   seam-b:
-    name: Seam B (backend on local Supabase)
+    name: Seam B (backend on Postgres 18.6)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -51,9 +51,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Start Supabase (the CLI comes from devDependencies)
-        run: npx supabase start
-      - name: Seam B suite (reset to this commit's migrations, then run)
+      # test:db starts db/compose.yaml's Postgres 18.6 container, applies db/local-shim.sql and this
+      # commit's migrations to a fresh database, then runs the suite. The end-to-end smoke test comes
+      # back with #71, against Neon's dev branch.
+      - name: Seam B suite
         run: npm run test:db
-      - name: Smoke test the served functions end to end
-        run: npm run smoke:local

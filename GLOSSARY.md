@@ -114,7 +114,7 @@ _Avoid_: Accent humour
 ## Consequences
 
 **Tick**:
-One step of the world clock: every 1 minute while watched and every 5 while not. Each tick consumes Intents and produces Facts.
+One step of the world clock: every 1 minute while watched; otherwise 5-minute steps, run in catch-up batches. Each tick consumes Intents and produces Facts.
 _Avoid_: Turn, round, frame
 
 **Intent**:

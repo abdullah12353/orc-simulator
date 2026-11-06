@@ -13,8 +13,7 @@ type World = Awaited<ReturnType<typeof freshWorld>>;
 async function tickUntil(world: World, clock: ReturnType<typeof fakeClock>, kind: string, max = 200) {
   for (let i = 0; i < max; i++) {
     clock.advance(1);
-    await db()`update player_private set last_seen_at = ${clock.iso()} where player_id = ${world.playerId}`;
-    const out = await tickWorld({ sql: db(), now: clock.now }, world.worldId);
+    const out = await tickWorld({ sql: db(), now: clock.now, watched: () => true }, world.worldId);
     assert.equal(out.status, 'stepped');
     if (out.status !== 'stepped') break;
     const facts = await db()<{ no: number; story_no: number; payload: Record<string, unknown> }[]>`

@@ -11,7 +11,8 @@ Design: [GLOSSARY.md](GLOSSARY.md), [.scratch/orc-nonsense/](.scratch/orc-nonsen
 | `packages/content` (`@orc/content`) | The typed content bundle, its validator, and `contentVersion` |
 | `packages/sim` (`@orc/sim`) | Pure deterministic sim: `simulate`, `applyDiff`, `castWorld`, `stateHash`, `tickSeed` |
 | `packages/server` (`@orc/server`) | Portable Edge Function core (tick, create-world) on postgres.js |
-| `supabase/` | `config.toml` (ports 55420–55429), migrations, thin Deno entrypoints in `functions/` |
+| `db/` | `migrations/` (applied by `scripts/migrate.mjs`), and Seam B's local Postgres: `compose.yaml`, `local-shim.sql` |
+| `supabase/` | `config.toml` (ports 55420–55429), thin Deno entrypoints in `functions/` |
 | `apps/web` (`@orc/web`) | React + TS PWA (Vite, Cloudflare Pages) |
 | `apps/clock` (`@orc/clock`) | Cloudflare cron Worker: POSTs the tick endpoint every minute, nothing else |
 
@@ -25,9 +26,9 @@ npm install
 npm run typecheck        # tsc for packages, web and clock
 npm run content:check    # CI content validation
 npm test                 # Seam A (sim + content), ORC_SEEDS=<n> for longer multi-seed runs
-npm run db:start         # start the local Supabase stack (under the shared DB lock)
-npm run test:db          # Seam B: lock, reset the DB to this checkout's migrations, run integration tests
-npm run smoke:local      # magic link → create-world → tick endpoint → Facts, through the served stack
+npm run test:db          # Seam B: Postgres 18.6 in Docker, this worktree's own database reset to its migrations
+ORC_DB_URL=<url> npm run db:migrate   # apply the migrations not yet applied to a database
+npm run smoke:local      # magic link → create-world → tick endpoint → Facts (Supabase only, until #71)
 npm run web:env && npm run dev:web   # PWA on http://127.0.0.1:5173 (magic-link mail: http://127.0.0.1:55424)
 npm run dev:clock -- 5   # tick the local stack every 5 s, like the clock Worker
 ```

@@ -289,7 +289,7 @@ test('dialogue is upgraded once: a second drain makes no call and never overwrit
   const again = fakeProviders({ workersAi: (input) => goodLines(input, 'second') });
   const report = await drainJobs(deps(clock, again.fetch), { worldIds: [worldId] });
 
-  assert.deepEqual(report, { done: 0, fallback: 0 });
+  assert.deepEqual(report, { done: 0, fallback: 0, hints: [] });
   assert.equal(again.calls.length, 0);
   assert.deepEqual(await dialogueRows(worldId), first);
   // Even a stray second job for the same Clash can't overwrite generated lines.
@@ -359,25 +359,20 @@ test('every Clash a tick makes gets one narration job, committed with it', async
   assert.deepEqual((await jobRows(worldId)).map((j) => j.fact_no), all);
 });
 
-/** The dialogue broadcasts sent on a world's channel. */
-const dialogueBroadcasts = async (worldId: string) =>
-  (await db()<{ payload: { fact_no: number } }[]>`
-    select payload from realtime.messages where topic = ${`world:${worldId}`} and event = 'dialogue' order by inserted_at`).map(
-    (m) => m.payload.fact_no,
-  );
-
-test('while the world is watched, each upgraded Clash sends a {dialogue: fact_no} broadcast; unwatched, none', async () => {
+test('while the world is watched, each upgraded Clash returns a {dialogue: fact_no} hint after it commits; unwatched, none', async () => {
   const day = '2031-01-16';
   const watched = await worldWithJobs(day);
   const unwatched = await worldWithJobs(day);
-  // Creators count as seen when they create; 5 minutes on, only a fresh sighting makes a world watched.
-  watched.clock.advance(5);
-  await db()`update player_private set last_seen_at = ${watched.clock.iso()} where player_id = ${watched.playerId}`;
 
-  await drainJobs(deps(watched.clock, fakeProviders({}).fetch), { worldIds: [watched.worldId, unwatched.worldId] });
+  const report = await drainJobs(deps(watched.clock, fakeProviders({}).fetch, { watched: (w) => w === watched.worldId }), {
+    worldIds: [watched.worldId, unwatched.worldId],
+  });
 
-  assert.deepEqual(await dialogueBroadcasts(watched.worldId), watched.jobs.map((j) => j.fact_no));
-  assert.deepEqual(await dialogueBroadcasts(unwatched.worldId), []);
+  const hinted = (worldId: string) =>
+    report.hints.filter((h) => h.worldId === worldId).map((h) => (h.hint.event === 'dialogue' ? h.hint.payload.fact_no : -1));
+  assert.deepEqual(hinted(watched.worldId), watched.jobs.map((j) => j.fact_no));
+  assert.deepEqual(hinted(unwatched.worldId), []);
+  assert.ok((await dialogueRows(watched.worldId)).every((d) => d.source === 'generated'), 'every hinted upgrade is committed');
 });
 
 test('a drain only takes the given worlds’ jobs', async () => {
@@ -407,7 +402,7 @@ test('a Clash job left claimed by a drain that died is logged as a fallback once
   const providers = fakeProviders({});
   const report = await drainJobs(deps(clock, providers.fetch), { worldIds: [worldId] });
   assert.equal(providers.calls.length, jobs.length - 2, 'no call for either claimed job');
-  assert.deepEqual(report, { done: jobs.length - 2, fallback: 1 });
+  assert.deepEqual(report, { done: jobs.length - 2, fallback: 1, hints: [] });
   const rows = new Map((await jobRows(worldId)).map((j) => [j.fact_no, j]));
   assert.deepEqual(
     { status: rows.get(dead!.fact_no)!.status, failure: rows.get(dead!.fact_no)!.failure },
@@ -421,7 +416,7 @@ test('a Clash job left claimed by a drain that died is logged as a fallback once
 
   clock.advance(claimMinutes);
   const later = fakeProviders({});
-  assert.deepEqual(await drainJobs(deps(clock, later.fetch), { worldIds: [worldId] }), { done: 0, fallback: 1 });
+  assert.deepEqual(await drainJobs(deps(clock, later.fetch), { worldIds: [worldId] }), { done: 0, fallback: 1, hints: [] });
   assert.equal(later.calls.length, 0);
   assert.equal((await jobRows(worldId)).find((j) => j.fact_no === dying!.fact_no)!.status, 'fallback');
   assert.ok((await jobRows(worldId)).every((j) => j.status !== 'queued'), 'nothing is stuck');

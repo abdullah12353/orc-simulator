@@ -20,9 +20,8 @@ create trigger infamy_gains_no_truncate before truncate on infamy_gains
   for each statement execute function facts_are_append_only();
 
 alter table infamy_gains enable row level security;
-revoke all on infamy_gains from anon, authenticated;
+revoke all on infamy_gains from anonymous, authenticated;
 grant select on infamy_gains to authenticated;
-revoke update, delete, truncate on infamy_gains from service_role;
 -- World-readable, like the Facts that carry the same numbers.
 create policy infamy_gains_members_read on infamy_gains for select to authenticated using (is_world_member(world_id));
 
@@ -32,7 +31,7 @@ create view infamy_7d with (security_invoker = true) as
   from infamy_gains g join facts f on f.world_id = g.world_id and f.no = g.fact_no
   where f.at > now() - interval '7 days'
   group by g.world_id, g.captain_id;
-revoke all on infamy_7d from anon, authenticated;
+revoke all on infamy_7d from anonymous, authenticated;
 grant select on infamy_7d to authenticated;
 
 -- The Herald and the Hall of Shame look up Legendary deeds by story (§4.1, §4.3).

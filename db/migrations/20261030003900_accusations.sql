@@ -15,7 +15,7 @@ create table name_renders (
 );
 
 alter table name_renders enable row level security;
-revoke all on name_renders from anon, authenticated;
+revoke all on name_renders from anonymous, authenticated;
 grant select on name_renders to authenticated;
 create policy name_renders_member_read on name_renders for select to authenticated
   using (exists (select 1 from players p where p.id = player_id and is_world_member(p.world_id)));

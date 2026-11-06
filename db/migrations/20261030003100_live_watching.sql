@@ -1,0 +1,5 @@
+-- #31 Live watching (data-model §3 steps 2 and 7, D39): nothing in the database any more. The world's
+-- Durable Object counts the world as watched while a live connection is open (#53, #55), and it sends
+-- the live hints itself after the tick commits. So `mark_seen`, `player_private.last_seen_at`, the
+-- broadcast channel's read policy and its membership helper are gone (#60 item 6). The file stays so
+-- the migration history keeps its numbering and its ticket (#60 item 1).

@@ -6,7 +6,7 @@
 -- True exactly once per Player: the call that stamps `first_open_at`. The PWA plays the first-open
 -- sequence (Krúg's Introduction, the edition, the guided Rumour) only when this returns true, so two
 -- tabs can't both play it and it never repeats. Fails with: not_a_player.
-create function begin_first_open(world_id uuid) returns boolean
+create function begin_first_open(world_id uuid, _init uuid default auth.uid()) returns boolean
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -22,14 +22,14 @@ begin
   return stamped;
 end;
 $$;
-revoke all on function begin_first_open(uuid) from public, anon;
-grant execute on function begin_first_open(uuid) to authenticated;
+revoke all on function begin_first_open(uuid, uuid) from public, anonymous;
+grant execute on function begin_first_open(uuid, uuid) to authenticated;
 
 -- ---------------------------------------------------------------- see_hint
 
 -- The caller met a hint (dare, backing, stable). True if this is the first time (show the one-liner),
 -- false ever after. Fails with: not_a_player, bad_hint.
-create function see_hint(world_id uuid, hint text) returns boolean
+create function see_hint(world_id uuid, hint text, _init uuid default auth.uid()) returns boolean
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -48,8 +48,8 @@ begin
   return fresh;
 end;
 $$;
-revoke all on function see_hint(uuid, text) from public, anon;
-grant execute on function see_hint(uuid, text) to authenticated;
+revoke all on function see_hint(uuid, text, uuid) from public, anonymous;
+grant execute on function see_hint(uuid, text, uuid) to authenticated;
 
 -- ---------------------------------------------------------------- submit_intent
 
@@ -58,7 +58,7 @@ grant execute on function see_hint(uuid, text) to authenticated;
 -- Player's first Meddle (the tick un-marks that Player for the batch, so the sim gives it the 2–5 min
 -- Fuse). Fails with: not_a_player, intent_id_taken, unsupported_kind, bad_rumour, bad_dare,
 -- no_meddles_left, bad_stake, not_enough_gold, no_stake.
-create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
+create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
 as $$

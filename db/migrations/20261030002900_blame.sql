@@ -41,9 +41,8 @@ create trigger fact_blame_no_truncate before truncate on fact_blame
 alter table fact_causes enable row level security;
 alter table fact_blame enable row level security;
 
-revoke all on fact_causes, fact_blame from anon, authenticated;
+revoke all on fact_causes, fact_blame from anonymous, authenticated;
 grant select on fact_causes, fact_blame to authenticated;
-revoke update, delete, truncate on fact_causes, fact_blame from service_role;
 
 -- World-readable, like Facts: Blame is announced (D18), and only landed Meddles ever appear here.
 create policy fact_causes_members_read on fact_causes for select to authenticated using (is_world_member(world_id));
