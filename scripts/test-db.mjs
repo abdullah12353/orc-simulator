@@ -75,7 +75,14 @@ async function ensureServer() {
   throw new Error('[test:db] local Postgres did not come up (is Docker running?)');
 }
 
-/** Drops and recreates this worktree's database, then applies the shim. Returns its URL. */
+/** A database on the local server. */
+function databaseUrl(name) {
+  const url = new URL(SERVER_URL);
+  url.pathname = `/${name}`;
+  return url.href;
+}
+
+/** Drops and recreates this worktree's database, then applies the shim. */
 async function resetLocal(name) {
   const admin = postgres(SERVER_URL, { max: 1, onnotice: () => {} });
   try {
@@ -84,15 +91,12 @@ async function resetLocal(name) {
   } finally {
     await admin.end({ timeout: 5 });
   }
-  const url = new URL(SERVER_URL);
-  url.pathname = `/${name}`;
-  const db = postgres(url.href, { max: 1, onnotice: () => {} });
+  const db = postgres(databaseUrl(name), { max: 1, onnotice: () => {} });
   try {
     await db.unsafe(readFileSync(SHIM, 'utf8'));
   } finally {
     await db.end({ timeout: 5 });
   }
-  return url.href;
 }
 
 async function main() {
@@ -103,9 +107,7 @@ async function main() {
   } else {
     await ensureServer();
     const name = worktreeDatabase();
-    const local = new URL(SERVER_URL);
-    local.pathname = `/${name}`;
-    url = local.href;
+    url = databaseUrl(name);
     if (process.env.ORC_SKIP_RESET) {
       console.error(`[test:db] ${name}: ORC_SKIP_RESET, using it as it is`);
     } else {
