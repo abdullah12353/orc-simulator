@@ -36,7 +36,7 @@ create index gold_ledger_player_idx on gold_ledger (player_id, at);
 
 alter table stakes enable row level security;
 alter table gold_ledger enable row level security;
-revoke all on stakes, gold_ledger from anon, authenticated;
+revoke all on stakes, gold_ledger from anonymous, authenticated;
 grant select on stakes, gold_ledger to authenticated;
 create policy stakes_owner_read on stakes for select to authenticated using (owns_player(player_id));
 create policy gold_ledger_owner_read on gold_ledger for select to authenticated using (owns_player(player_id));
@@ -47,14 +47,14 @@ create view backers with (security_invoker = false) as
   select s.world_id, s.player_id, s.captain_id
   from stakes s join players p on p.id = s.player_id and p.removed_at is null
   where is_world_member(s.world_id);
-revoke all on backers from anon, authenticated;
+revoke all on backers from anonymous, authenticated;
 grant select on backers to authenticated;
 
 -- The back / withdraw half of submit_intent: called by it with the caller's Player row already locked
 -- and the id already checked for a replay. A `back` (new Stake or top-up) debits the gold at once, with
 -- a ledger row; a `withdraw` debits nothing (the tick pays half back). Not callable by clients.
 -- Fails with: bad_stake, not_enough_gold, no_stake.
-create function submit_backing_intent(me uuid, id uuid, world_id uuid, kind text, payload jsonb)
+create function submit_backing_intent(me uuid, id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns void
 language plpgsql volatile security definer set search_path = public
 as $$
@@ -105,13 +105,13 @@ begin
   values (submit_backing_intent.world_id, me, -amount, 0, case when staked then 'top_up' else 'stake' end, captain, now());
 end;
 $$;
-revoke all on function submit_backing_intent(uuid, uuid, uuid, text, jsonb) from public, anon, authenticated;
+revoke all on function submit_backing_intent(uuid, uuid, uuid, text, jsonb, uuid) from public, anonymous, authenticated;
 
 -- submit_intent, as #35 left it (dispatching on kind with IF/ELSIF), plus one branch: `back` and
 -- `withdraw` go to submit_backing_intent and debit no Meddle (marked "#36" below). Fails with:
 -- not_a_player, intent_id_taken, unsupported_kind, bad_rumour, bad_dare, no_meddles_left, bad_stake,
 -- not_enough_gold, no_stake.
-create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb)
+create or replace function submit_intent(id uuid, world_id uuid, kind text, payload jsonb, _init uuid default auth.uid())
 returns table (intent_id uuid, meddles_left int)
 language plpgsql volatile security definer set search_path = public
 as $$

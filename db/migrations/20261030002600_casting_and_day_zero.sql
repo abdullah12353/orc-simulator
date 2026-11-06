@@ -45,7 +45,7 @@ alter table captain_fears enable row level security;
 alter table affinity enable row level security;
 alter table grudge_tags enable row level security;
 
-revoke all on captain_fears, affinity, grudge_tags from anon, authenticated;
+revoke all on captain_fears, affinity, grudge_tags from anonymous, authenticated;
 grant select on captain_fears, affinity, grudge_tags to authenticated;
 
 create policy captain_fears_members_read on captain_fears for select to authenticated using (is_world_member(world_id));

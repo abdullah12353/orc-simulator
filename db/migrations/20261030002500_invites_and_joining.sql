@@ -9,7 +9,6 @@ create table player_private (
   player_id uuid primary key references players (id),
   gold int not null check (gold between 0 and 30),
   meddles_available smallint not null check (meddles_available between 0 and 6),
-  last_seen_at timestamptz not null,
   first_open_at timestamptz,
   first_meddle_done boolean not null default false,
   hints_seen text[] not null default '{}',
@@ -20,12 +19,14 @@ create table player_private (
 
 -- Every Player gets a private row the moment they exist, with the same starting resources for the
 -- creator and for anyone who joins later: 30 gold and 3 Meddles (#20, from #7 and #8).
+-- The one definer function without `_init`: a trigger function takes no arguments, and this one never
+-- reads auth.uid().
 create function players_init_private() returns trigger
 language plpgsql security definer set search_path = public
 as $$
 begin
-  insert into player_private (player_id, gold, meddles_available, last_seen_at)
-  values (new.id, 30, 3, new.joined_at);
+  insert into player_private (player_id, gold, meddles_available)
+  values (new.id, 30, 3);
   return new;
 end;
 $$;
@@ -34,13 +35,13 @@ create trigger players_init_private after insert on players
 
 -- True if the signed-in user is this Player. For owner-only policies (player_private now; the
 -- ledger, Stakes, editions and pushes later). Security definer so it doesn't go through players' RLS.
-create function owns_player(p uuid) returns boolean
+create function owns_player(p uuid, _init uuid default auth.uid()) returns boolean
 language sql stable security definer set search_path = public
 as $$
   select exists (select 1 from players where id = p and user_id = auth.uid() and removed_at is null);
 $$;
-revoke all on function owns_player(uuid) from public, anon;
-grant execute on function owns_player(uuid) to authenticated, service_role;
+revoke all on function owns_player(uuid, uuid) from public, anonymous;
+grant execute on function owns_player(uuid, uuid) to authenticated;
 
 -- Blame lines name Players, so two live Players in one world can't share a display name.
 create unique index players_display_name_uq on players (world_id, lower(btrim(display_name)))
@@ -64,7 +65,7 @@ create index invites_world_idx on invites (world_id, created_at desc);
 alter table player_private enable row level security;
 alter table invites enable row level security;
 
-revoke all on player_private, invites from anon, authenticated;
+revoke all on player_private, invites from anonymous, authenticated;
 grant select on player_private, invites to authenticated;
 
 create policy player_private_owner_read on player_private for select to authenticated
@@ -75,16 +76,16 @@ create policy invites_members_read on invites for select to authenticated
 -- ---------------------------------------------------------------- RPCs
 
 -- The caller's live Player in a world, or null.
-create function my_player(w uuid) returns uuid
+create function my_player(w uuid, _init uuid default auth.uid()) returns uuid
 language sql stable security definer set search_path = public
 as $$
   select id from players where world_id = w and user_id = auth.uid() and removed_at is null;
 $$;
-revoke all on function my_player(uuid) from public, anon;
-grant execute on function my_player(uuid) to authenticated, service_role;
+revoke all on function my_player(uuid, uuid) from public, anonymous;
+grant execute on function my_player(uuid, uuid) to authenticated;
 
 -- A new invite link for a world the caller plays in, valid for 7 days and reusable until then.
-create function create_invite(world_id uuid) returns invites
+create function create_invite(world_id uuid, _init uuid default auth.uid()) returns invites
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -102,7 +103,7 @@ end;
 $$;
 
 -- Kills an invite for good. Any Player in its world may revoke it. Revoking twice is a no-op.
-create function revoke_invite(token text) returns void
+create function revoke_invite(token text, _init uuid default auth.uid()) returns void
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -118,7 +119,7 @@ $$;
 
 -- What an invite would do for the caller, without joining: for the accept screen.
 -- status: ok | not_found | revoked | expired | member | full
-create function invite_info(token text)
+create function invite_info(token text, _init uuid default auth.uid())
 returns table (status text, world_id uuid, world_name text, player_count int, expires_at timestamptz)
 language plpgsql stable security definer set search_path = public
 as $$
@@ -148,7 +149,7 @@ $$;
 -- Joins the caller to the invite's world as a new Player named `display_name` (shown in Blame lines).
 -- Fails with a clear reason: invite_not_found, invite_revoked, invite_expired, already_joined,
 -- world_full, bad_display_name or display_name_taken. At most 8 Players per world.
-create function join_world(token text, display_name text) returns uuid
+create function join_world(token text, display_name text, _init uuid default auth.uid()) returns uuid
 language plpgsql volatile security definer set search_path = public
 as $$
 declare
@@ -198,7 +199,7 @@ begin
 end;
 $$;
 
-revoke all on function create_invite(uuid), revoke_invite(text), invite_info(text), join_world(text, text)
-  from public, anon;
-grant execute on function create_invite(uuid), revoke_invite(text), invite_info(text), join_world(text, text)
+revoke all on function create_invite(uuid, uuid), revoke_invite(text, uuid), invite_info(text, uuid), join_world(text, text, uuid)
+  from public, anonymous;
+grant execute on function create_invite(uuid, uuid), revoke_invite(text, uuid), invite_info(text, uuid), join_world(text, text, uuid)
   to authenticated;

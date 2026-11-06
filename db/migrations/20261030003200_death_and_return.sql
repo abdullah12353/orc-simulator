@@ -24,6 +24,6 @@ create table humiliations (
 create index humiliations_current_idx on humiliations (world_id, captain_id) where ended_at is null;
 
 alter table humiliations enable row level security;
-revoke all on humiliations from anon, authenticated;
+revoke all on humiliations from anonymous, authenticated;
 grant select on humiliations to authenticated;
 create policy humiliations_member_read on humiliations for select to authenticated using (is_world_member(world_id));

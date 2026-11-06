@@ -35,7 +35,7 @@ create table edition_stories (
 alter table editions enable row level security;
 alter table edition_stories enable row level security;
 
-revoke all on editions, edition_stories from anon, authenticated;
+revoke all on editions, edition_stories from anonymous, authenticated;
 grant select on editions, edition_stories to authenticated;
 
 create policy editions_owner_read on editions for select to authenticated using (owns_player(player_id));

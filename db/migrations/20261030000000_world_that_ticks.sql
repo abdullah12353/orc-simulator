@@ -1,6 +1,18 @@
 -- #24 Tracer bullet: a world that ticks. Tables from data-model.md §1: worlds, players (minimal; #25 adds
 -- the rest of onboarding), captains, facts (append-only) and ticks.
 
+-- ---------------------------------------------------------------- on Neon (#60)
+
+-- These migrations assume what Neon provides (locally, db/local-shim.sql stands in): the auth schema
+-- with auth.uid(), neon_auth."user", and the roles `authenticated` (the Data API, signed in) and
+-- `anonymous` (granted nothing). The server connects as the tables' owner, so RLS doesn't apply to it;
+-- append-only is kept by triggers, not by roles.
+grant usage on schema public to authenticated;
+
+-- pgcrypto in its own schema, so `extensions.gen_random_bytes` reads the same on Neon and locally.
+create schema if not exists extensions;
+create extension if not exists pgcrypto schema extensions;
+
 create type roster as enum ('active', 'reserve', 'dead');
 create type tier as enum ('generated', 'templated', 'silent');
 
@@ -24,7 +36,7 @@ create table worlds (
 create table players (
   id uuid primary key default gen_random_uuid(),
   world_id uuid not null references worlds (id),
-  user_id uuid not null references auth.users (id),
+  user_id uuid not null references neon_auth."user" (id),
   display_name text not null check (length(btrim(display_name)) between 1 and 40),
   mangled_names text[] not null default '{}',
   joined_at timestamptz not null default now(),
@@ -39,7 +51,13 @@ alter table worlds
 
 -- Membership check used by every world-scoped RLS policy. Security definer so policies on
 -- `players` itself don't recurse.
-create function is_world_member(w uuid) returns boolean
+--
+-- `_init`, on every security definer function (#53, #57): an ignored parameter whose default,
+-- auth.uid(), is evaluated as the CALLER. On Neon, auth.uid() inside a definer function is null on a
+-- connection's first request until the caller has read the JWT; the default makes the caller read it
+-- first. The body still calls auth.uid() itself, so passing `_init` explicitly changes nothing.
+-- A DB test (definers.test.ts) fails if any definer function in public lacks it.
+create function is_world_member(w uuid, _init uuid default auth.uid()) returns boolean
 language sql stable security definer set search_path = public
 as $$
   select exists (
@@ -47,8 +65,8 @@ as $$
     where p.world_id = w and p.user_id = auth.uid() and p.removed_at is null
   );
 $$;
-revoke all on function is_world_member(uuid) from public, anon;
-grant execute on function is_world_member(uuid) to authenticated, service_role;
+revoke all on function is_world_member(uuid, uuid) from public, anonymous;
+grant execute on function is_world_member(uuid, uuid) to authenticated;
 
 -- ---------------------------------------------------------------- captains
 
@@ -130,9 +148,8 @@ alter table captains enable row level security;
 alter table facts enable row level security;
 alter table ticks enable row level security;
 
-revoke all on worlds, players, captains, facts, ticks from anon, authenticated;
+revoke all on worlds, players, captains, facts, ticks from anonymous, authenticated;
 grant select on worlds, players, captains, facts to authenticated;
-revoke update, delete, truncate on facts from service_role;
 
 create policy worlds_members_read on worlds for select to authenticated using (is_world_member(id));
 create policy players_members_read on players for select to authenticated using (is_world_member(world_id));

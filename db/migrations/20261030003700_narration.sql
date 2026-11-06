@@ -42,4 +42,4 @@ create table llm_usage (
 
 alter table narration_jobs enable row level security;
 alter table llm_usage enable row level security;
-revoke all on narration_jobs, llm_usage from anon, authenticated;
+revoke all on narration_jobs, llm_usage from anonymous, authenticated;

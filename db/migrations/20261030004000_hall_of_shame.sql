@@ -7,7 +7,7 @@
 -- The story's latest printed headline (a generated one where the Herald job wrote it), else null. Editions
 -- are owner-only, so this reads them as definer, for world members only. A gutter entry prints only the
 -- line, so a headline slot wins over a later gutter one.
-create function story_caption(w uuid, story bigint) returns text
+create function story_caption(w uuid, story bigint, _init uuid default auth.uid()) returns text
 language sql stable security definer set search_path = public
 as $$
   select es.headline
@@ -16,8 +16,8 @@ as $$
   order by es.slot = 'gutter', e.created_at desc, e.no desc
   limit 1;
 $$;
-revoke all on function story_caption(uuid, bigint) from public, anon;
-grant execute on function story_caption(uuid, bigint) to authenticated, service_role;
+revoke all on function story_caption(uuid, bigint, uuid) from public, anonymous;
+grant execute on function story_caption(uuid, bigint, uuid) to authenticated;
 create index edition_stories_story_idx on edition_stories (story_no);
 
 -- ---------------------------------------------------------------- rap sheets (§4.2)
@@ -42,8 +42,8 @@ as $$
   from heaviest h
   order by h.at desc, h.no desc;
 $$;
-revoke all on function rap_sheet(uuid) from public, anon;
-grant execute on function rap_sheet(uuid) to authenticated, service_role;
+revoke all on function rap_sheet(uuid) from public, anonymous;
+grant execute on function rap_sheet(uuid) to authenticated;
 
 -- ---------------------------------------------------------------- shelves (§4.3)
 
@@ -93,7 +93,7 @@ create view hall_timeline with (security_invoker = true) as
   ) t
   order by t.at desc, t.fact_no desc, t.shelf;
 
-revoke all on hall_legends, hall_moments, captain_story, hall_timeline from anon, authenticated;
+revoke all on hall_legends, hall_moments, captain_story, hall_timeline from anonymous, authenticated;
 grant select on hall_legends, hall_moments, captain_story, hall_timeline to authenticated;
 
 -- ---------------------------------------------------------------- trace it back (§4.5)
@@ -122,5 +122,5 @@ as $$
   join facts h on h.world_id = p_world and h.no = f.story_no
   order by f.at, f.no;
 $$;
-revoke all on function trace_back(uuid, bigint) from public, anon;
-grant execute on function trace_back(uuid, bigint) to authenticated, service_role;
+revoke all on function trace_back(uuid, bigint) from public, anonymous;
+grant execute on function trace_back(uuid, bigint) to authenticated;
