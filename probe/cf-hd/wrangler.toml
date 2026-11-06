@@ -1,0 +1,9 @@
+name = "orc-probe-hd"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[[hyperdrive]]
+binding = "HD"
+id = "b8735d90ab9849458d7ac13862dfbfa1"

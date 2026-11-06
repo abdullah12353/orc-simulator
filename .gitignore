@@ -13,3 +13,8 @@ supabase/functions/**/deno.lock
 .env.voices
 voices/takes/
 voices/designs/
+
+# Neon probe (#57)
+probe/node_modules/
+probe/**/.wrangler/
+probe/*.log

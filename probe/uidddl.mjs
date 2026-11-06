@@ -1,0 +1,21 @@
+// Do nulls in auth.uid() show up while DDL + a schema-cache refresh happen mid-traffic?
+import postgres from "postgres";
+import { readFileSync } from "node:fs";
+import { execSync } from "node:child_process";
+import { env } from "./env.mjs";
+import { signIn } from "./signin.mjs";
+const API = env.NEON_DATA_API_URL;
+const sql = postgres(env.NEON_DB_URL_DIRECT, { prepare: false, onnotice: () => {} });
+const a = await signIn("delivered+a@resend.dev", "https://orc-simulator.pages.dev/join/abc123");
+const call = async () => (await fetch(`${API}/rpc/whoami_full`, { method: "POST", headers: { Authorization: `Bearer ${a.token}`, "content-type": "application/json" }, body: "{}" })).json();
+const t = { ok: 0, nullUid: 0, err: {}, nullSamples: [] };
+let stop = false;
+const worker = async () => { while (!stop) { const r = await call();
+  if (r.code) t.err[r.code] = (t.err[r.code] ?? 0) + 1; else if (r.uid === a.claims.sub) t.ok++; else { t.nullUid++; t.nullSamples.length < 3 && t.nullSamples.push({ role: r.role_setting, claims: r.claims ? "set" : "empty" }); } } };
+const ws = Array.from({ length: 8 }, worker);
+await new Promise((r) => setTimeout(r, 3000));
+await sql.unsafe(readFileSync("diag.sql", "utf8").replace("create or replace function whoami_full", "drop function whoami_full(); create function whoami_full"));
+execSync("neon data-api refresh-schema --project-id gentle-unit-02894440 --branch main", { env: { ...process.env, MSYS_NO_PATHCONV: "1" }, stdio: "ignore" });
+await new Promise((r) => setTimeout(r, 8000));
+stop = true; await Promise.all(ws);
+console.log(JSON.stringify(t)); await sql.end(); process.exit(0);

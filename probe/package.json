@@ -1,0 +1,11 @@
+{
+  "name": "neon-probe",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway probe for #57. Never merges.",
+  "dependencies": {
+    "@neon/auth": "^0.8.2",
+    "@neon/postgrest-js": "^0.3.0",
+    "postgres": "^4.1.0"
+  }
+}
