@@ -26,7 +26,7 @@ const testArgs = [
   '--disable-warning=ExperimentalWarning',
   '--test',
   '--test-concurrency=1',
-  ...(extra.length > 0 ? extra : ['packages/server/test/**/*.test.ts']),
+  ...(extra.length > 0 ? extra : ['packages/server/test/**/*.test.ts', 'apps/worker/test/**/*.test.ts']),
 ];
 
 /** This worktree's database: the same name on every run from the same folder. */
