@@ -4,7 +4,7 @@
 import { fakeState, lastPair, type FakeSocket } from './workerd/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { nextMinuteTick, WATCH } from '@orc/server';
+import { GUTTER, nextMonthStart, nextMinuteTick, WATCH } from '@orc/server';
 import { AFTER_DAY_ZERO, asUserCommitted, db, DB_URL, fakeClock, freshWorld, newUser } from '../../../packages/server/test/support.ts';
 import { USER_HEADER } from '../src/env.ts';
 
@@ -13,9 +13,24 @@ const { World, GUTTER_CLOSED_CODE, NOT_A_PLAYER_CODE } = await import('../src/wo
 /** Nothing listens here: a job that asks Postgres anything fails. */
 const UNREACHABLE = 'postgresql://nobody:nothing@127.0.0.1:1/none';
 
+/** The WORLDS namespace, in memory: only the usage guard's reading (#70) is read from it here. */
+function fakeKV() {
+  const data = new Map<string, string>();
+  return {
+    data,
+    async get(key: string, type?: 'json') {
+      const v = data.get(key);
+      return v === undefined ? null : type === 'json' ? JSON.parse(v) : v;
+    },
+    async put(key: string, value: string) {
+      data.set(key, value);
+    },
+  };
+}
+
 function worldDO(dbUrl = DB_URL) {
   const state = fakeState();
-  const env = { NEON_DB_URL: dbUrl };
+  const env = { NEON_DB_URL: dbUrl, WORLDS: fakeKV() };
   const w = new World(state as never, env as never);
   return { w, state, env };
 }
@@ -63,8 +78,10 @@ test("a stranger's socket is refused with the not-a-player code before it's acce
 
 test('while the gutter is closed, a socket is refused with 4013 before Postgres is asked', async () => {
   const { worldId, userId } = await worldAgo(12);
-  const { w, state } = worldDO(UNREACHABLE);
-  (w as unknown as { gutter: () => Promise<string> }).gutter = async () => 'closed';
+  const { w, state, env } = worldDO(UNREACHABLE);
+  // The cron's last reading (#70): 96 CU-h this period.
+  const now = new Date();
+  env.WORLDS.data.set(GUTTER.kvKey, JSON.stringify({ cuHours: 96, periodEnd: nextMonthStart(now), readAt: now.toISOString() }));
 
   const server = await open(w, worldId, userId);
   assert.equal(GUTTER_CLOSED_CODE, 4013);
