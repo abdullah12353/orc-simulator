@@ -1,19 +1,28 @@
 // The world's Durable Object (data-model §3, #54): a thin shell over packages/server. It decides "watched"
 // from its own state (open sockets, the last request), owns the alarm, opens Postgres for one job at a
-// time and closes it after (so it can hibernate), and keeps the live hints its work returns.
+// time and closes it after (so it can hibernate), and sends the live hints its work returns to the
+// Players' hibernating sockets (#68).
 import { DurableObject } from 'cloudflare:workers';
 import {
+  assertPlayer,
+  catchUp,
   connect,
+  currentPlayers,
   handleCreateClipping,
   handleCreateWorld,
   handleOpenEdition,
   handleOpenWorld,
+  LIVE_PING,
+  liveMessage,
   nextMinuteTick,
+  OpenWorldError,
   providerKeysFromEnv,
+  removedSockets,
   vapidFromEnv,
   WATCH,
   worldTick,
   type LiveHint,
+  type LiveMessage,
   type Sql,
 } from '@orc/server';
 import { USER_HEADER, type Env } from './env.ts';
@@ -22,7 +31,7 @@ import { USER_HEADER, type Env } from './env.ts';
 interface Stored {
   /** This DO's world (DOs are named by world id, but don't know their name). */
   worldId: string;
-  /** Watched until then (ms): 2 min after the last request through the DO. */
+  /** Watched until then (ms): 2 min after the last request through the DO, or the last socket's close. */
   watchedUntil: number;
   /** The cron (or create-world) asked for a catch-up, which the next alarm runs. */
   pending: boolean;
@@ -33,14 +42,27 @@ interface Stored {
 /** Keep the last this many hints: enough for #68 to send, never a growing pile. */
 const KEPT_HINTS = 20;
 
+/** The close code a live socket is refused with while the usage guard has closed the gutter (#55 item 5, #70). */
+export const GUTTER_CLOSED_CODE = 4013;
+/** The close code for a live socket whose user isn't, or is no longer, one of the world's Players. */
+export const NOT_A_PLAYER_CODE = 4003;
+
+/** What each live socket carries through hibernation (`serializeAttachment`). */
+interface Attachment {
+  userId: string;
+}
+
 export class World extends DurableObject<Env> {
   /** One tick-ish job at a time (alarm, open, open-edition), so two never race for the world's row lock. */
   private chain: Promise<unknown> = Promise.resolve();
-  /**
-   * Live hints from committed work, oldest first. #68 sends them to `ctx.getWebSockets()`; until then
-   * they're only kept.
-   */
+  /** Live hints from committed work, oldest first. Each went to `ctx.getWebSockets()` as it came. */
   readonly hints: LiveHint[] = [];
+
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    // A client's pings are answered by the runtime, without waking the object (#55 item 1).
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair(LIVE_PING.request, LIVE_PING.response));
+  }
 
   // ---- the router's calls ----
 
@@ -78,6 +100,8 @@ export class World extends DurableObject<Env> {
         );
       case 'create-clipping':
         return this.withSql((sql) => handleCreateClipping(req, { ...this.deps(sql), getUserId, worldId }));
+      case 'live':
+        return this.live(req, worldId, await getUserId());
       default:
         return new Response('not found', { status: 404 });
     }
@@ -110,15 +134,115 @@ export class World extends DurableObject<Env> {
     const drain = stored.get('drain') === true;
     if (!watched && stored.get('pending') !== true) return;
 
-    const report = await this.serial(() => this.withSql((sql) => worldTick(this.deps(sql), worldId, { watched, drain })));
+    const report = await this.serial(() =>
+      this.withSql(async (sql) => {
+        await this.closeRemoved(sql, worldId);
+        // Each hint goes to the sockets as soon as its work has committed, not after the whole run.
+        return worldTick(this.deps(sql), worldId, { watched, drain, onHint: (hint) => this.keep([hint]) });
+      }),
+    );
     await this.ctx.storage.delete(['pending', 'drain']);
-    this.keep(report.hints);
     const steps = report.catchUp.outcomes.filter((o) => o.status === 'stepped').length;
     const tickSeq = report.live?.status === 'stepped' ? report.live.tickSeq : report.catchUp.tickSeq;
     console.log(
       `world ${worldId}: ${watched ? 'watched' : 'unwatched'}, catch-up ${report.catchUp.mode} (${steps} steps)` +
         `${report.live ? `, minute tick ${report.live.status}` : ''}, tick_seq ${tickSeq ?? '-'}, ${report.hints.length} hints`,
     );
+  }
+
+  // ---- live sockets (#68) ----
+
+  /**
+   * A Player opens the world's live socket (#55). It's refused with a close code while the gutter is
+   * closed (before Postgres is touched), or when the user isn't a Player (one query). Otherwise it's
+   * accepted as a hibernating socket that carries its user id, and the world catches up and sends
+   * `ready` with its tick_seq (#53 item 2).
+   */
+  private async live(req: Request, worldId: string, userId: string | null): Promise<Response> {
+    if (req.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return new Response('expected a websocket', { status: 426 });
+    const [client, server] = Object.values(new WebSocketPair()) as [WebSocket, WebSocket];
+    const refuse = (code: number, reason: string) => {
+      // Accepted only to carry the close code: not hibernatable, so it never counts as watching.
+      server.accept();
+      server.close(code, reason);
+      return new Response(null, { status: 101, webSocket: client });
+    };
+    if ((await this.gutter()) === 'closed') return refuse(GUTTER_CLOSED_CODE, 'gutter closed');
+    if (!userId || !(await this.isPlayer(worldId, userId))) return refuse(NOT_A_PLAYER_CODE, 'not a player');
+    this.ctx.acceptWebSocket(server);
+    server.serializeAttachment({ userId } satisfies Attachment);
+    await this.ctx.storage.put<string>('worldId', worldId);
+    // The open socket keeps the world watched (`watched()`); this arms the minute tick.
+    await this.watchedByRequest();
+    this.ctx.waitUntil(this.ready(server, worldId));
+    return new Response(null, { status: 101, webSocket: client });
+  }
+
+  /** Membership, in one query: a current (not removed) Player of the world. */
+  private isPlayer(worldId: string, userId: string): Promise<boolean> {
+    return this.withSql(async (sql) => {
+      try {
+        await assertPlayer({ sql }, { userId, worldId });
+        return true;
+      } catch (e) {
+        if (e instanceof OpenWorldError) return false;
+        throw e;
+      }
+    });
+  }
+
+  /** Catch up, then `ready`. If the catch-up fails, the socket closes and the client reconnects. */
+  private async ready(ws: WebSocket, worldId: string): Promise<void> {
+    try {
+      const { tickSeq } = await this.serial(() => this.withSql((sql) => catchUp(this.deps(sql), worldId)));
+      if (tickSeq === null) throw new Error('no such world');
+      ws.send(JSON.stringify({ type: 'ready', tick_seq: tickSeq } satisfies LiveMessage));
+    } catch (e) {
+      console.error(`world ${worldId}: a live socket's catch-up failed`, e);
+      try {
+        ws.close(1011, 'catch-up failed');
+      } catch {
+        // already closed
+      }
+    }
+  }
+
+  /** Clients only send pings, which the runtime answers. Anything else is ignored. */
+  override async webSocketMessage(): Promise<void> {}
+
+  /** The world stays watched for 2 min after the last socket closes (#55 item 5). */
+  override async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+    await this.watchedByRequest();
+    try {
+      // 1005 and 1006 can't be sent; anything else is echoed to finish the closing handshake.
+      ws.close(code === 1005 || code === 1006 ? 1000 : code, reason);
+    } catch {
+      // already closed
+    }
+  }
+
+  override async webSocketError(): Promise<void> {
+    await this.watchedByRequest();
+  }
+
+  /** Re-reads the member list (#55 item 3) and closes the sockets of Players removed since they opened. */
+  private async closeRemoved(sql: Sql, worldId: string): Promise<void> {
+    const sockets = this.ctx.getWebSockets();
+    if (sockets.length === 0) return;
+    const players = await currentPlayers({ sql }, worldId);
+    const userOf = (ws: WebSocket) => (ws.deserializeAttachment() as Attachment | null)?.userId ?? null;
+    for (const ws of removedSockets(sockets, userOf, players)) {
+      try {
+        ws.close(NOT_A_PLAYER_CODE, 'not a player');
+      } catch {
+        // already closed
+      }
+    }
+  }
+
+  /** The usage guard's verdict (#70 fills this in). `closed` refuses live sockets with GUTTER_CLOSED_CODE. */
+  private async gutter(): Promise<'normal' | 'slow' | 'closed'> {
+    return 'normal';
   }
 
   // ---- watching ----
@@ -137,10 +261,21 @@ export class World extends DurableObject<Env> {
     if (alarm === null || alarm > next) await this.ctx.storage.setAlarm(next);
   }
 
-  /** Where the live hints go once their work has committed. #68 sends them to the world's sockets. */
+  /** Where the live hints go once their work has committed: every open socket (#68), and the kept list. */
   private keep(hints: LiveHint[]): void {
     this.hints.push(...hints);
     this.hints.splice(0, Math.max(0, this.hints.length - KEPT_HINTS));
+    const sockets = this.ctx.getWebSockets();
+    for (const hint of hints) {
+      const message = JSON.stringify(liveMessage(hint));
+      for (const ws of sockets) {
+        try {
+          ws.send(message);
+        } catch {
+          // closing: its client refetches when it reconnects
+        }
+      }
+    }
   }
 
   // ---- plumbing ----
