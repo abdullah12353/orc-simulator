@@ -23,6 +23,8 @@ export interface NarrationDeps {
   timeoutMs?: number;
   /** Whether a world is watched: only then does an upgraded Clash return a `dialogue` hint. */
   watched?: IsWatched;
+  /** Called with each `dialogue` hint once its upgrade has committed, before the next job runs. */
+  onHint?: (hint: LiveHint) => void | Promise<void>;
 }
 
 export const NARRATION = {
@@ -184,7 +186,9 @@ async function runClashJob(deps: NarrationDeps, job: Job, hints: DrainReport['hi
     where world_id = ${job.world_id} and fact_no = ${job.fact_no} and source = 'fallback'
     returning 1`;
   if (upgraded.length === 1 && (deps.watched?.(job.world_id) ?? false)) {
-    hints.push({ worldId: job.world_id, hint: { event: 'dialogue', payload: { fact_no: job.fact_no } } });
+    const hint: LiveHint = { event: 'dialogue', payload: { fact_no: job.fact_no } };
+    hints.push({ worldId: job.world_id, hint });
+    await deps.onHint?.(hint);
   }
   // A success after Gemma's format failure still logs that failure.
   const gemmaFailed = excerpts.length > 0;

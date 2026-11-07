@@ -4,8 +4,8 @@
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CATCH_UP, catchUp, openWorld, OpenWorldError, tickWorld, worldTick, type Sql } from '@orc/server';
-import { AFTER_DAY_ZERO, db, fakeClock, freshWorld, newUser, rolledBack, seedWithFactsOnFirstTick, snapshot } from './support.ts';
+import { assertPlayer, CATCH_UP, catchUp, currentPlayers, openWorld, OpenWorldError, removedSockets, tickWorld, worldTick, type Sql } from '@orc/server';
+import { AFTER_DAY_ZERO, asUserCommitted, db, fakeClock, freshWorld, newUser, rolledBack, seedWithFactsOnFirstTick, snapshot } from './support.ts';
 
 const T0 = '2026-10-30T12:00:00.000Z';
 const at = (minutes: number) => new Date(Date.parse(T0) + minutes * 60_000);
@@ -214,4 +214,23 @@ test('opening a world catches it up for its Players only', async () => {
   assert.equal((await worldRow(worldId)).tickSeq, AFTER_DAY_ZERO, "a stranger's open doesn't wake the world");
 
   assert.deepEqual(await openWorld({ sql: db(), now: clock.now }, { userId, worldId }), { tickSeq: AFTER_DAY_ZERO + 6 });
+});
+
+test('the member list the DO re-reads each tick leaves out removed Players, and their sockets are the ones closed', async () => {
+  const clock = fakeClock(T0);
+  const { worldId, userId: creator } = await freshWorld({ clock });
+  const [invite] = await asUserCommitted(creator, (tx) => tx`select token from create_invite(${worldId})`);
+  const friend = await newUser();
+  await asUserCommitted(friend, (tx) => tx`select join_world(${invite!.token}, 'Dazza')`);
+  const stranger = await newUser();
+  const sockets = [{ user: creator }, { user: friend }, { user: stranger }, { user: null }];
+  const userOf = (s: { user: string | null }) => s.user;
+
+  assert.deepEqual(await currentPlayers({ sql: db() }, worldId), new Set([creator, friend]));
+  assert.deepEqual(removedSockets(sockets, userOf, await currentPlayers({ sql: db() }, worldId)), [sockets[2], sockets[3]]);
+
+  await db()`update players set removed_at = ${clock.iso()} where world_id = ${worldId} and user_id = ${friend}`;
+  assert.deepEqual(await currentPlayers({ sql: db() }, worldId), new Set([creator]));
+  assert.deepEqual(removedSockets(sockets, userOf, await currentPlayers({ sql: db() }, worldId)), sockets.slice(1));
+  await assert.rejects(assertPlayer({ sql: db() }, { userId: friend, worldId }), (e) => e instanceof OpenWorldError && e.message === 'not_a_player');
 });
