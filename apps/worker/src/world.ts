@@ -7,6 +7,7 @@ import {
   assertPlayer,
   catchUp,
   connect,
+  CORS,
   currentPlayers,
   handleCreateClipping,
   handleCreateWorld,
@@ -26,6 +27,10 @@ import {
   type Sql,
 } from '@orc/server';
 import { USER_HEADER, type Env } from './env.ts';
+import { storedGutter } from './gutter.ts';
+
+/** The calls that open Postgres: refused once the gutter is closed (#70). */
+const NEON_ACTIONS = new Set(['create', 'open', 'open-edition', 'create-clipping']);
 
 /** What the DO keeps in its own storage (none of it in Postgres). */
 interface Stored {
@@ -79,6 +84,10 @@ export class World extends DurableObject<Env> {
   }
 
   private async handle(action: string, req: Request, worldId: string, getUserId: () => Promise<string | null>): Promise<Response> {
+    // Closed (#70): nothing wakes Neon till the 1st, so it never suspends mid-tick.
+    if (NEON_ACTIONS.has(action) && (await this.gutter()) === 'closed') {
+      return Response.json({ error: 'gutter_closed' }, { status: 503, headers: CORS });
+    }
     switch (action) {
       case 'create': {
         const res = await this.withSql((sql) =>
@@ -129,7 +138,12 @@ export class World extends DurableObject<Env> {
     const stored = await this.ctx.storage.get<Stored[keyof Stored]>(['worldId', 'pending', 'drain']);
     const worldId = stored.get('worldId') as string | undefined;
     if (!worldId) return;
-    const watched = await this.watched();
+    // The usage guard (#70). Closed: the slots stop too. Slow: no minute ticks, and no next alarm, so a
+    // watched world only catches up on the slots like every other.
+    const gutter = await this.gutter();
+    if (gutter !== 'normal') console.log(`world ${worldId}: the gutter is ${gutter}, ${gutter === 'closed' ? 'no tick' : 'no minute tick'}`);
+    if (gutter === 'closed') return;
+    const watched = gutter === 'normal' && (await this.watched());
     if (watched) await this.ctx.storage.setAlarm(nextMinuteTick(Date.now()));
     const drain = stored.get('drain') === true;
     if (!watched && stored.get('pending') !== true) return;
@@ -240,9 +254,12 @@ export class World extends DurableObject<Env> {
     }
   }
 
-  /** The usage guard's verdict (#70 fills this in). `closed` refuses live sockets with GUTTER_CLOSED_CODE. */
+  /**
+   * The usage guard's state (#70), from the cron's last reading in KV: never Postgres. `closed` refuses
+   * live sockets with GUTTER_CLOSED_CODE.
+   */
   private async gutter(): Promise<'normal' | 'slow' | 'closed'> {
-    return 'normal';
+    return storedGutter(this.env);
   }
 
   // ---- watching ----

@@ -744,3 +744,13 @@ button.link {
   border: 1px solid #44403c;
   border-radius: 8px;
 }
+
+/* The usage guard (#70): the gutter's gone slow, or it's closed till the 1st */
+.gutter {
+  margin: 0.25rem 0;
+  padding: 0.5rem 0.75rem;
+  background: #292524;
+  border: 1px solid #d97706;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
