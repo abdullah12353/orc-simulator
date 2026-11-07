@@ -6,11 +6,9 @@ dist/
 .env
 .env.local
 .dev.vars
-supabase/.temp/
-supabase/.branches/
-supabase/functions/.env
-supabase/functions/**/deno.lock
-.env.deploy
+# .env.deploy and any copy of it (.env.deploy.probe for a throwaway stack)
+.env.deploy*
+apps/worker/wrangler.provision.json
 .env.voices
 voices/takes/
 voices/designs/

@@ -48,7 +48,7 @@ jobs:
           cache: npm
       - run: npm ci
       # test:db starts db/compose.yaml's Postgres 18.6 container, applies db/local-shim.sql and this
-      # commit's migrations to a fresh database, then runs the suite. The end-to-end smoke test comes
-      # back with #71, against Neon's dev branch.
+      # commit's migrations to a fresh database, then runs the suite. The end-to-end test (`npm run smoke`)
+      # runs locally against Neon's dev branch, which CI has no credentials for.
       - name: Seam B suite
         run: npm run test:db

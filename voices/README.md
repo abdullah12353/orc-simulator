@@ -36,7 +36,7 @@ npm run voices:pick krug-shout~2 # use an alternative name shout in the game
 - The masters land in `voices/takes/` (git-ignored). The main take of each line is trimmed, loudness-matched and put in the game, replacing its placeholder.
 - The lines are in [`test-cast.ts`](test-cast.ts). Edit any line, then re-render it by name.
 - Each Captain has three spellings of his name shout (`shout`, `shout~2`, `shout~3`), because how the model reads stretched letters is untested.
-- `npm run deploy:web` rebuilds the site and redeploys it to Cloudflare Pages with the new sounds.
+- `npm run provision` rebuilds the site and redeploys it to Cloudflare Pages with the new sounds (the rest is left as it is).
 - Muffled (mouth bandage) needs nothing: the game filters his own voice.
 
 ## 3. What to listen for

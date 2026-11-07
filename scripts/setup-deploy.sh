@@ -200,13 +200,13 @@ finish() {
 
 run_wizard() {
 
-TOTAL_STAGES=14
+TOTAL_STAGES=5
 
-# Run from the repo root; every value lands in .env.deploy (git-ignored, mode 600).
+# Run from the repo root; every value lands in .env.deploy (git-ignored, mode 600), which provision.mjs reads.
 cd "$(dirname "$0")/.."
 ENV_FILE=".env.deploy"
 
-# In PowerShell, plain `bash` is WSL's Linux, which can't use the Windows Node, npx or Docker CLI.
+# In PowerShell, plain `bash` is WSL's Linux, which can't use the Windows Node, npx or the Neon CLI.
 if grep -qi microsoft /proc/version 2>/dev/null; then
   warn "This is WSL's bash. Run the wizard with Git Bash instead, from PowerShell:"
   note "& \"C:\\Program Files\\Git\\bin\\bash.exe\" scripts/setup-deploy.sh"
@@ -216,20 +216,10 @@ fi
 if ! command -v node >/dev/null 2>&1 && [[ -x "/c/Program Files/nodejs/node.exe" ]]; then
   PATH="/c/Program Files/nodejs:$PATH"
 fi
-for tool in node npx; do
+for tool in node npm npx; do
   command -v "$tool" >/dev/null 2>&1 \
     || { warn "$tool isn't on PATH. Install Node 22+ (nodejs.org) or add its folder to PATH, then re-run."; exit 1; }
 done
-command -v docker >/dev/null 2>&1 \
-  || warn "docker isn't on PATH. Stage 9 bundles the Edge Functions with Docker, so start Docker Desktop before then."
-
-# keep_or KEY CMD...: reuse KEY from .env.deploy, else generate it with CMD and save it.
-keep_or() {
-  local key="$1" value; shift
-  value=$(_existing "$key" || true)
-  if [[ -n "$value" ]]; then printf -v "$key" '%s' "$value"; note "keeping the $key already in $ENV_FILE"
-  else write_env "$key" "$("$@")"; fi
-}
 
 # Resume: `--from N` starts at stage N, with the earlier stages' values read back from .env.deploy.
 FROM=1
@@ -246,109 +236,67 @@ fi
 # at N: true if stage N should run; lines the progress counter up with it.
 at() { (( $1 >= FROM )) || return 1; _STAGE_INDEX=$(( $1 - 1 )); }
 
-banner "ORC NONSENSE: first deploy (Supabase, Cloudflare, Groq, Resend)"
+banner "ORC NONSENSE: first deploy (Neon, Cloudflare, Gmail, Groq)"
 
 # ── 1 ─────────────────────────────────────────────────────────────────────
 if at 1; then
-stage "Supabase: create the project"
-say "The database, sign-in and the four Edge Functions live in one free Supabase project."
-open_url "https://supabase.com/dashboard/new"
-step "Sign in (GitHub is fine), then pick or create an organisation on the Free plan."
-step "Project name: orc-nonsense. Region: West EU (London), eu-west-2."
-step "Click 'Generate a password', copy it before you leave the page, then 'Create new project'."
-step "Wait a couple of minutes until the project shows as healthy."
-ask_secret SUPABASE_DB_PASSWORD "Paste the database password:"
-write_env SUPABASE_DB_PASSWORD "$SUPABASE_DB_PASSWORD"
-step "The project ref is the id in the dashboard address: supabase.com/dashboard/project/<ref>."
-ask SUPABASE_PROJECT_REF "Paste the project ref (about 20 lowercase letters):"
-write_env SUPABASE_PROJECT_REF "$SUPABASE_PROJECT_REF"
+stage "Neon: an account and the CLI"
+say "Neon holds the database, sign-in (Neon Auth) and the Data API, on the Free plan."
+say "provision.mjs drives it through the Neon CLI, so the CLI needs to be logged in as you."
+if ! command -v neon >/dev/null 2>&1; then
+  step "Installing the Neon CLI (npm install -g neon)."
+  npm install -g neon
+fi
+open_url "https://console.neon.tech/signup"
+step "Sign up or sign in (GitHub is fine). There's no project to make: provision.mjs makes orc-nonsense."
+pause "Press Enter to log the CLI in (a browser opens; approve it, then come back here)"
+neon login
+neon me
 pause
 
 fi
 
 # ── 2 ─────────────────────────────────────────────────────────────────────
 if at 2; then
-stage "Supabase: project URL and anon key"
-say "The PWA talks to Supabase with these two public values."
-open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/settings/api-keys"
-write_env SUPABASE_URL "https://$SUPABASE_PROJECT_REF.supabase.co"
-step "On API Keys, open the 'Legacy API keys' tab and copy the anon public key (a long eyJ... token)."
-note "If there's no legacy tab, copy the Publishable key (sb_publishable_...) instead; it works the same."
-ask SUPABASE_ANON_KEY "Paste the anon (or publishable) key:"
-write_env SUPABASE_ANON_KEY "$SUPABASE_ANON_KEY"
+stage "Cloudflare: an account and Wrangler"
+say "Cloudflare runs the PWA (Pages), the Worker with a Durable Object per world, KV and Workers AI,"
+say "all on the free plan. provision.mjs deploys them with Wrangler."
+open_url "https://dash.cloudflare.com/sign-up"
+step "Sign up or sign in. No domain is needed."
+pause "Press Enter to log Wrangler in (a browser opens; allow it, then come back here)"
+npx wrangler login
+npx wrangler whoami
+step "If that lists more than one account, copy the Account ID of the one to deploy to."
+ask CF_ACCOUNT_ID "Account ID (Enter to use the only one):" || CF_ACCOUNT_ID=""
+[[ -n "$CF_ACCOUNT_ID" ]] && write_env CF_ACCOUNT_ID "$CF_ACCOUNT_ID"
 pause
 
 fi
 
 # ── 3 ─────────────────────────────────────────────────────────────────────
 if at 3; then
-stage "Supabase: the pooler connection string"
-say "The Edge Functions connect through Supavisor in transaction mode (port 6543)."
-open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF?showConnect=true"
-step "Click 'Connect' at the top of the project page if the dialog didn't open."
-step "Under 'Transaction pooler', copy the URI. It looks like"
-note "postgresql://postgres.$SUPABASE_PROJECT_REF:[YOUR-PASSWORD]@aws-0-eu-west-2.pooler.supabase.com:6543/postgres"
-ask POOLER_URI "Paste it as shown (leave [YOUR-PASSWORD] in, I'll fill it):"
-# Percent-encode the password so symbols in it can't break the URL.
-encoded=$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$SUPABASE_DB_PASSWORD")
-ORC_DB_URL="${POOLER_URI//\[YOUR-PASSWORD\]/$encoded}"
-[[ "$ORC_DB_URL" == *":6543/"* ]] || warn "That URI isn't on port 6543. Check you copied the Transaction pooler one."
-write_env ORC_DB_URL "$ORC_DB_URL"
+stage "Gmail: the Herald's own account and an app password"
+say "Magic links go out through Gmail as \"The Gutter Herald\". A dedicated account keeps your own"
+say "inbox and password out of it."
+open_url "https://accounts.google.com/signup"
+step "Create a new Google account for the game, e.g. gutter.herald.<something>@gmail.com."
+open_url "https://myaccount.google.com/signinoptions/twosv"
+step "Signed in as that account, turn on 2-Step Verification. Gmail only gives app passwords with it on."
+open_url "https://myaccount.google.com/apppasswords"
+step "Create an app password named orc-nonsense. Google shows 16 letters once; copy them."
+ask GMAIL_USER "The Gmail address:"
+write_env GMAIL_USER "$GMAIL_USER"
+ask_secret GMAIL_APP_PASSWORD "Paste the app password:"
+write_env GMAIL_APP_PASSWORD "${GMAIL_APP_PASSWORD// /}"
+note "provision.mjs gives it to Neon Auth's SMTP settings once; it's kept in $ENV_FILE so re-runs work."
 pause
 
 fi
 
 # ── 4 ─────────────────────────────────────────────────────────────────────
 if at 4; then
-stage "Supabase CLI: link and push the migrations"
-say "This logs the CLI in, links this repo to the project and applies the 21 migrations."
-step "A browser opens for the CLI login; approve it, then come back here."
-pause "Press Enter to log in"
-npx supabase login
-npx supabase link --project-ref "$SUPABASE_PROJECT_REF" -p "$SUPABASE_DB_PASSWORD"
-npx supabase db push --linked --dry-run -p "$SUPABASE_DB_PASSWORD"
-if confirm "Apply these migrations to the live database?"; then
-  npx supabase db push --linked -p "$SUPABASE_DB_PASSWORD"
-else
-  SKIPPED+=("migrations: npx supabase db push --linked")
-  warn "skipped; nothing below works until the migrations are in"
-fi
-pause
-
-fi
-
-# ── 5 ─────────────────────────────────────────────────────────────────────
-if at 5; then
-stage "Cloudflare: account and Account ID"
-say "Cloudflare hosts the PWA (Pages), the clock (a cron Worker) and Gemma (Workers AI), all on the free plan."
-open_url "https://dash.cloudflare.com/sign-up"
-step "Sign up or sign in. No domain is needed."
-step "Open 'Workers & Pages' in the sidebar; the Account ID is on the right of the overview."
-note "It's also in the dashboard address: dash.cloudflare.com/<account id>/..."
-ask CF_ACCOUNT_ID "Paste the Account ID (32 hex characters):"
-write_env CF_ACCOUNT_ID "$CF_ACCOUNT_ID"
-pause
-
-fi
-
-# ── 6 ─────────────────────────────────────────────────────────────────────
-if at 6; then
-stage "Cloudflare: a Workers AI API token"
-say "The tick and the Herald call Gemma with this token."
-open_url "https://dash.cloudflare.com/profile/api-tokens"
-step "Click 'Create Token', then 'Use template' next to 'Workers AI'."
-step "Leave the permissions as they are, pick your account, then 'Continue to summary' -> 'Create Token'."
-step "Copy the token. Cloudflare shows it once."
-ask_secret CF_AI_TOKEN "Paste the Workers AI token:"
-write_env CF_AI_TOKEN "$CF_AI_TOKEN"
-pause
-
-fi
-
-# ── 7 ─────────────────────────────────────────────────────────────────────
-if at 7; then
 stage "Groq: API key and Zero Data Retention"
-say "Groq's free gpt-oss-120b is the fallback when Gemma is down or out of Neurons."
+say "Groq's free gpt-oss-120b is narration's fallback when Workers AI is down or out of Neurons."
 open_url "https://console.groq.com/keys"
 step "Sign in, click 'Create API Key', name it orc-nonsense, copy the key (gsk_...)."
 ask_secret GROQ_API_KEY "Paste the Groq key:"
@@ -360,147 +308,18 @@ pause "Press Enter once ZDR is on"
 
 fi
 
-# ── 8 ─────────────────────────────────────────────────────────────────────
-if at 8; then
-stage "Local secrets: TICK_SECRET and VAPID keys"
-say "No account needed. These are made on this machine and saved; re-runs keep them."
-keep_or TICK_SECRET node -e 'process.stdout.write(require("crypto").randomBytes(32).toString("base64url"))'
-if [[ -z "$(_existing VAPID_PUBLIC_KEY || true)" || -z "$(_existing VAPID_PRIVATE_KEY || true)" ]]; then
-  # A P-256 pair in the Web Push format: public = uncompressed point, private = d, both base64url.
-  read -r vapid_pub vapid_priv <<< "$(node -e '
-    const { generateKeyPairSync } = require("crypto");
-    const jwk = generateKeyPairSync("ec", { namedCurve: "prime256v1" }).privateKey.export({ format: "jwk" });
-    const pub = Buffer.concat([Buffer.from([4]), Buffer.from(jwk.x, "base64url"), Buffer.from(jwk.y, "base64url")]);
-    process.stdout.write(pub.toString("base64url") + " " + jwk.d);')"
-  write_env VAPID_PUBLIC_KEY "$vapid_pub"
-  write_env VAPID_PRIVATE_KEY "$vapid_priv"
+# ── 5 ─────────────────────────────────────────────────────────────────────
+if at 5; then
+stage "Provision everything else"
+say "The rest is a script, safe to re-run: the Neon project (AWS London) and its dev branch, Neon Auth,"
+say "the Data API, the migrations, the KV namespace, the Worker and its secrets, and the site."
+if confirm "Run node scripts/provision.mjs now?"; then
+  node scripts/provision.mjs
+  PAGES_URL=$(_existing PAGES_URL || true)
+  step "Open ${PAGES_URL:-the site} on your phone, sign in from a real magic-link email, and create the world."
+  note "Check the email came from \"The Gutter Herald\" and not the spam folder."
 else
-  VAPID_PUBLIC_KEY=$(_existing VAPID_PUBLIC_KEY); VAPID_PRIVATE_KEY=$(_existing VAPID_PRIVATE_KEY)
-  note "keeping the VAPID keys already in $ENV_FILE (changing them would break every device's opt-in)"
-fi
-say "Push services want a contact address for whoever runs the pushes."
-ask VAPID_CONTACT "Your contact email for push services:"
-write_env VAPID_SUBJECT "mailto:${VAPID_CONTACT#mailto:}"
-pause
-
-fi
-
-# ── 9 ─────────────────────────────────────────────────────────────────────
-if at 9; then
-stage "Supabase: function secrets and the four Edge Functions"
-say "This sets the server's secrets, then deploys tick, open-edition, create-world and create-clipping."
-fn_env=$(mktemp)
-(umask 077; {
-  printf 'ORC_DB_URL=%s\n' "$ORC_DB_URL"
-  printf 'TICK_SECRET=%s\n' "$TICK_SECRET"
-  printf 'CF_ACCOUNT_ID=%s\nCF_AI_TOKEN=%s\nGROQ_API_KEY=%s\n' "$CF_ACCOUNT_ID" "$CF_AI_TOKEN" "$GROQ_API_KEY"
-  printf 'VAPID_PUBLIC_KEY=%s\nVAPID_PRIVATE_KEY=%s\nVAPID_SUBJECT=%s\n' "$VAPID_PUBLIC_KEY" "$VAPID_PRIVATE_KEY" "$VAPID_SUBJECT"
-} > "$fn_env")
-npx supabase secrets set --project-ref "$SUPABASE_PROJECT_REF" --env-file "$fn_env"
-rm -f "$fn_env"
-note "verify_jwt per function comes from supabase/config.toml (tick: off, it checks TICK_SECRET). Bundling uses Docker, so keep Docker Desktop running."
-npx supabase functions deploy --project-ref "$SUPABASE_PROJECT_REF"
-write_env TICK_URL "https://$SUPABASE_PROJECT_REF.supabase.co/functions/v1/tick"
-pause
-
-fi
-
-# ── 10 ────────────────────────────────────────────────────────────────────
-if at 10; then
-stage "Cloudflare Pages: build and deploy the PWA"
-say "This logs Wrangler in, builds apps/web with the public values, and uploads it."
-step "A browser opens for the Wrangler login; allow it, then come back here."
-pause "Press Enter to log in"
-npx wrangler login
-ask PAGES_PROJECT "Pages project name (becomes <name>.pages.dev):"
-write_env PAGES_PROJECT "$PAGES_PROJECT"
-npx wrangler pages project create "$PAGES_PROJECT" --production-branch main \
-  || note "Couldn't create it. If it already exists that's fine; carrying on."
-VITE_SUPABASE_URL="$SUPABASE_URL" VITE_SUPABASE_ANON_KEY="$SUPABASE_ANON_KEY" \
-  VITE_VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" npm run build:web
-npx wrangler pages deploy apps/web/dist --project-name "$PAGES_PROJECT" --branch main
-step "Wrangler printed the site address. Use the production one (https://$PAGES_PROJECT.pages.dev,"
-step "or with a suffix if that name was taken), not the per-deploy hash address."
-ask PAGES_URL "Paste the site address:"
-write_env PAGES_URL "${PAGES_URL%/}"
-pause
-
-fi
-
-# ── 11 ────────────────────────────────────────────────────────────────────
-if at 11; then
-stage "Supabase Auth: where magic links land"
-say "Magic links and invite links (/join/...) must be allowed to come back to the site."
-open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/auth/url-configuration"
-step "Site URL: $PAGES_URL"
-step "Redirect URLs, add both:"
-note "$PAGES_URL/**"
-note "$PAGES_URL/join/*"
-step "Save."
-pause
-
-fi
-
-# ── 12 ────────────────────────────────────────────────────────────────────
-if at 12; then
-stage "Resend: email that reaches your friends"
-say "Supabase's built-in email only reaches your own team, a few an hour. Resend's free tier fixes that."
-open_url "https://resend.com/domains"
-step "Sign up, then 'Add Domain' with a domain you own (a subdomain like mail.yourdomain.com is fine)."
-step "Add the DNS records Resend shows at your domain's DNS host, then wait for 'Verified'."
-warn "With no verified domain, Resend only delivers to your own address."
-ask EMAIL_FROM "Sender address on that domain (e.g. herald@mail.yourdomain.com):"
-write_env EMAIL_FROM "$EMAIL_FROM"
-open_url "https://resend.com/api-keys"
-step "'Create API Key', permission 'Sending access', copy the key (re_...)."
-ask_secret RESEND_API_KEY "Paste the Resend key:"
-write_env RESEND_API_KEY "$RESEND_API_KEY"
-open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/auth/smtp"
-step "Turn on 'Enable custom SMTP' and fill in:"
-note "Sender email: $EMAIL_FROM    Sender name: The Herald"
-note "Host: smtp.resend.com    Port: 465    Username: resend"
-note "Password: your Resend key (it's in $ENV_FILE as RESEND_API_KEY)"
-step "Save."
-pause
-
-fi
-
-# ── 13 ────────────────────────────────────────────────────────────────────
-if at 13; then
-stage "Cloudflare: the clock Worker"
-say "Every minute, the Worker POSTs the tick. Once it's deployed, the worlds start living."
-if confirm "Deploy the clock now?"; then
-  (cd apps/clock && npx wrangler deploy --var "TICK_URL:$TICK_URL" \
-    && printf '%s' "$TICK_SECRET" | npx wrangler secret put TICK_SECRET)
-  note "The first minute or two may log a 401, until the secret is in place. That's harmless."
-else
-  SKIPPED+=("clock Worker: cd apps/clock && npx wrangler deploy --var TICK_URL:<TICK_URL>, then wrangler secret put TICK_SECRET")
-fi
-pause
-
-fi
-
-# ── 14 ────────────────────────────────────────────────────────────────────
-if at 14; then
-stage "First run, and the real Gemma Neuron rate"
-open_url "$PAGES_URL"
-step "Sign in with your email, create a world, and invite one friend."
-step "Wait for a Clash to be narrated (a few minutes after day zero), so Gemma has been called."
-open_url "https://dash.cloudflare.com/$CF_ACCOUNT_ID/ai/workers-ai"
-step "Read today's Neurons used for Gemma off the Workers AI usage panel (UTC day)."
-open_url "https://supabase.com/dashboard/project/$SUPABASE_PROJECT_REF/sql/new"
-step "Run: select neurons from llm_usage where provider = 'workers-ai' and day = current_date;"
-ask REAL_NEURONS "Neurons Cloudflare shows (Enter to skip until later):" || REAL_NEURONS=""
-if [[ -n "$REAL_NEURONS" ]]; then
-  ask EST_NEURONS "Neurons llm_usage estimated:"
-  node -e '
-    const [real, est] = process.argv.slice(1).map(Number);
-    const k = real / est;
-    console.log(`  Real / estimate = ${k.toFixed(3)}. New rates for packages/server/src/narration/quota.ts:`);
-    console.log(`  in: ${Math.round(8667 * k)}, out: ${Math.round(30000 * k)}  (tell Claude, or edit NEURON_RATES)`);' \
-    "$REAL_NEURONS" "$EST_NEURONS"
-else
-  SKIPPED+=("Gemma Neuron rate: compare the dashboard's Neurons with llm_usage, fix NEURON_RATES in quota.ts")
+  SKIPPED+=("provisioning: node scripts/provision.mjs (npm run provision)")
 fi
 pause
 
