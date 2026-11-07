@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { content } from '@orc/content';
 import { dayZero } from '@orc/sim';
 import { tickWorld, type CommitStep } from '@orc/server';
-import { AFTER_DAY_ZERO, asUserCommitted, db, fakeClock, freshWorld, seedWithFactsOnFirstTick } from './support.ts';
+import { AFTER_DAY_ZERO, asUserCommitted, db, fakeClock, freshWorld, seedWithFactsOnFirstTick, snapshot } from './support.ts';
 
 // A fresh world has already ticked through day zero, so its first live tick is AFTER_DAY_ZERO + 1.
 const FIRST = AFTER_DAY_ZERO + 1;
@@ -78,30 +78,8 @@ test('two concurrent tick calls on one world: the second exits without stepping'
   assert.equal(await count('ticks', worldId), FIRST);
 });
 
-/** Every table a tick writes, keyed to one world (player_private through its Player). */
-const TICK_TABLES = [
-  'worlds', 'facts', 'fact_causes', 'fact_blame', 'ticks', 'captains', 'affinity', 'grudge_tags', 'trophies',
-  'captain_fears', 'humiliations', 'infamy_gains', 'intents', 'meddles', 'fuses', 'stakes', 'gold_ledger',
-  'player_private', 'clash_dialogue', 'narration_jobs', 'push_jobs',
-] as const;
 /** The tables the fault test's tick is set up to write to (the criterion names them). */
 const MUST_WRITE = ['facts', 'fact_blame', 'ticks', 'clash_dialogue', 'narration_jobs', 'push_jobs', 'intents', 'player_private', 'stakes'] as const;
-
-/** Every row of every table the tick writes, for one world, as JSON (sorted, so two snapshots compare). */
-async function snapshot(worldId: string): Promise<Record<string, string[]>> {
-  const out: Record<string, string[]> = {};
-  for (const table of TICK_TABLES) {
-    const where =
-      table === 'worlds'
-        ? db()`id = ${worldId}`
-        : table === 'player_private'
-          ? db()`player_id in (select id from players where world_id = ${worldId})`
-          : db()`world_id = ${worldId}`;
-    const rows = await db()`select to_jsonb(t)::text as row from ${db()(table)} t where ${where}`;
-    out[table] = rows.map((r) => r.row as string).sort();
-  }
-  return out;
-}
 
 /** A world whose seed leaves a Captain dead after day zero, so a Return can be brought forward. */
 function seedWithADeadCaptain(createdAt: string): number {

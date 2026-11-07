@@ -1,0 +1,37 @@
+// The one Worker (#62 item 3): the thin router (`fetch`), the 30-min catch-up cron (`scheduled`), the
+// world Durable Object class and the KV world list. Locally: `npm run dev -w @orc/worker` (wrangler dev
+// --test-scheduled), with secrets and the dev values of the vars in apps/worker/.dev.vars (git-ignored;
+// see .dev.vars.example). Deploys are #71's provisioning script.
+{
+  "name": "orc-worker",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  // postgres.js's workerd build (over cloudflare:sockets) needs it (#65).
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": { "enabled": true },
+
+  // Every 30 minutes, :00 and :30 (#54 item 4): every world in the KV list catches up.
+  "triggers": { "crons": ["*/30 * * * *"] },
+
+  "durable_objects": { "bindings": [{ "name": "WORLD", "class_name": "World" }] },
+  // SQLite-backed: the only kind Workers Free has.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }],
+
+  // The world list the cron walks: one key per world, `world:<id>`. No id: wrangler dev keeps it locally,
+  // and #71's provisioning creates the namespace.
+  "kv_namespaces": [{ "binding": "WORLDS" }],
+
+  // Workers AI for narration (#62 item 3), instead of the REST API and CF_AI_TOKEN.
+  "ai": { "binding": "AI" },
+
+  // Secrets (`wrangler secret put`, or .dev.vars locally): NEON_DB_URL (the -pooler URL), GROQ_API_KEY,
+  // VAPID_PRIVATE_KEY, NEON_API_KEY (#70). The vars below are set per deploy by #71's provisioning.
+  "vars": {
+    "NEON_AUTH_JWKS_URL": "",
+    "NEON_AUTH_ISSUER": "",
+    "VAPID_PUBLIC_KEY": "",
+    "VAPID_SUBJECT": "",
+    "NEON_PROJECT_ID": ""
+  }
+}

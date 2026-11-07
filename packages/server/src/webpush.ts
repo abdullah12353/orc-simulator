@@ -93,12 +93,14 @@ export async function encryptPayload(
   } else {
     const pair = (await crypto.subtle.generateKey(ecdh, true, ['deriveBits'])) as KeyPair;
     asPrivate = pair.privateKey;
-    asPublic = new Uint8Array(await crypto.subtle.exportKey('raw', pair.publicKey));
+    asPublic = new Uint8Array((await crypto.subtle.exportKey('raw', pair.publicKey)) as ArrayBuffer);
   }
   const salt = fixed?.salt ?? crypto.getRandomValues(new Uint8Array(16));
   const uaPublic = fromB64url(sub.p256dh);
   const uaKey = await crypto.subtle.importKey('raw', uaPublic, ecdh, false, []);
-  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits({ name: 'ECDH', public: uaKey }, asPrivate, 256));
+  // Cast: Workers' types spell the ECDH parameter `$public`; the runtime, like every other, takes `public`.
+  const agreement = { name: 'ECDH', public: uaKey } as unknown as Parameters<typeof crypto.subtle.deriveBits>[0];
+  const ecdhSecret = new Uint8Array(await crypto.subtle.deriveBits(agreement, asPrivate, 256));
 
   const keyInfo = concat(utf8('WebPush: info\0'), uaPublic, asPublic);
   const ikm = await hkdf(fromB64url(sub.auth), ecdhSecret, keyInfo, 32);

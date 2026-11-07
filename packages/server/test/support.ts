@@ -4,7 +4,7 @@ import { after } from 'node:test';
 import { randomUUID } from 'node:crypto';
 import { content, type Content } from '@orc/content';
 import { DAY_ZERO, dayZero, simulate, tickSeed } from '@orc/sim';
-import { connect, createWorld, type Sql } from '@orc/server';
+import { connect, createWorld, type ProviderKeys, type Sql, type WorkersAi } from '@orc/server';
 
 const url = process.env.ORC_DB_URL;
 if (!url) throw new Error('ORC_DB_URL is not set: run Seam B through `npm run test:db`');
@@ -19,6 +19,24 @@ export function db(): Sql {
   shared ??= connect(DB_URL, { max: 5 });
   return shared;
 }
+
+/**
+ * A Workers AI binding over a fake `fetch`, so one fake can play both providers: `run` posts its inputs
+ * (with its abort signal) and answers what the REST API would have put under `result`.
+ */
+export function aiOverFetch(fetch: typeof globalThis.fetch): WorkersAi {
+  return {
+    async run(model, inputs, options) {
+      const res = await fetch(`https://workers-ai.test/run/${model}`, { method: 'POST', body: JSON.stringify(inputs), signal: options?.signal });
+      const data = (await res.json()) as { result?: unknown };
+      if (!res.ok) throw new Error(`${res.status}: ${JSON.stringify(data)}`);
+      return data.result;
+    },
+  };
+}
+
+/** Both providers, played by one fake `fetch`. */
+export const fakeKeys = (fetch: typeof globalThis.fetch): ProviderKeys => ({ workersAi: aiOverFetch(fetch), groq: { apiKey: 'test-groq-key' } });
 
 /** A controllable clock: starts at `start`, moves only when told to. */
 export function fakeClock(start = '2026-10-30T12:00:00.000Z') {
@@ -65,6 +83,48 @@ export async function asUserCommitted<T>(userId: string, fn: (tx: Sql) => Promis
     await tx`set local role authenticated`;
     return fn(tx as unknown as Sql);
   })) as T;
+}
+
+/**
+ * Runs `fn` inside one transaction that is then rolled back, handing it a pool whose `begin` makes a
+ * savepoint: code that opens its own transactions (the tick) runs unchanged, and leaves no trace. Lets a
+ * test run one world down two paths from the same start.
+ */
+export async function rolledBack(fn: (sql: Sql) => Promise<void>, sql: Sql = db()): Promise<void> {
+  try {
+    await sql.begin(async (tx) => {
+      const nested = new Proxy(tx, {
+        get: (target, key) => (key === 'begin' ? (cb: never) => target.savepoint(cb) : Reflect.get(target, key)),
+      }) as unknown as Sql;
+      await fn(nested);
+      throw new Rollback();
+    });
+  } catch (e) {
+    if (!(e instanceof Rollback)) throw e;
+  }
+}
+
+/** Every table a tick writes, keyed to one world (player_private through its Player). */
+export const TICK_TABLES = [
+  'worlds', 'facts', 'fact_causes', 'fact_blame', 'ticks', 'captains', 'affinity', 'grudge_tags', 'trophies',
+  'captain_fears', 'humiliations', 'infamy_gains', 'intents', 'meddles', 'fuses', 'stakes', 'gold_ledger',
+  'player_private', 'clash_dialogue', 'narration_jobs', 'push_jobs',
+] as const;
+
+/** Every row of every table the tick writes, for one world, as JSON (sorted, so two snapshots compare). */
+export async function snapshot(worldId: string): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  for (const table of TICK_TABLES) {
+    const where =
+      table === 'worlds'
+        ? db()`id = ${worldId}`
+        : table === 'player_private'
+          ? db()`player_id in (select id from players where world_id = ${worldId})`
+          : db()`world_id = ${worldId}`;
+    const rows = await db()`select to_jsonb(t)::text as row from ${db()(table)} t where ${where}`;
+    out[table] = rows.map((r) => r.row as string).sort();
+  }
+  return out;
 }
 
 /** The tick_seq a fresh world is at: day zero already ran this many ticks. */

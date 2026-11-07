@@ -9,6 +9,7 @@
   "dependencies": {
     "@orc/content": "*",
     "@orc/sim": "*",
+    "jose": "6.2.15",
     "postgres": "3.4.7"
   }
 }

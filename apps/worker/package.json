@@ -1,0 +1,17 @@
+{
+  "name": "@orc/worker",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "dev": "wrangler dev --test-scheduled"
+  },
+  "dependencies": {
+    "@orc/server": "*"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20260702.1",
+    "wrangler": "4.158.0"
+  }
+}

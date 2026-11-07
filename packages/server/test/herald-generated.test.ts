@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { drainJobs, openEdition, tickWorld, type OpenEditionDeps } from '@orc/server';
-import { asUserCommitted, db, fakeClock, freshWorld, newUser } from './support.ts';
+import { asUserCommitted, db, fakeClock, fakeKeys, freshWorld, newUser } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
 
@@ -73,7 +73,6 @@ function fakeProviders(opts: { workersAi?: Behaviour; groq?: Behaviour; delayMs?
   return { fetch, calls };
 }
 
-const KEYS = { workersAi: { accountId: 'test-account', apiToken: 'test-cf-token' }, groq: { apiKey: 'test-groq-key' } };
 
 /** open-edition's deps with narration wired, collecting whatever it leaves running in the background. */
 function heraldDeps(clock: Clock, fetch: typeof globalThis.fetch, extra: Partial<OpenEditionDeps> = {}) {
@@ -81,7 +80,7 @@ function heraldDeps(clock: Clock, fetch: typeof globalThis.fetch, extra: Partial
   const deps: OpenEditionDeps = {
     sql: db(),
     now: clock.now,
-    narration: { fetch, providers: KEYS },
+    narration: { fetch, providers: fakeKeys(fetch) },
     waitUntil: (work) => void background.push(work),
     ...extra,
   };
@@ -307,7 +306,7 @@ test("the Herald reserve on Groq is not consumed by Clash jobs, and the Herald c
   const fake = fakeProviders({});
 
   // Day zero left Clash jobs; draining them makes no call and spends nothing.
-  await drainJobs({ sql: db(), now: world.clock.now, fetch: fake.fetch, providers: KEYS }, { worldIds: [world.worldId] });
+  await drainJobs({ sql: db(), now: world.clock.now, fetch: fake.fetch, providers: fakeKeys(fake.fetch) }, { worldIds: [world.worldId] });
   assert.equal(fake.calls.length, 0, 'Clash jobs leave the reserve alone');
   assert.equal((await usage(day))['groq']!.requests, 900);
 
