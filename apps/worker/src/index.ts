@@ -3,6 +3,7 @@
 // so it stays far under the 20 ms of CPU a plain Worker gets. Everything else happens in the DO.
 import { bearerToken, CORS, isUuid, jwtVerifier, type VerifyToken } from '@orc/server';
 import { USER_HEADER, type Env } from './env.ts';
+import { gutterRoute, refreshGutter } from './gutter.ts';
 
 export { World } from './world.ts';
 
@@ -29,6 +30,8 @@ let verify: VerifyToken | undefined;
 
 export default {
   async fetch(req, env): Promise<Response> {
+    // The usage guard's state (#70): public and from KV, so it needs no JWT and never wakes Postgres.
+    if (new URL(req.url).pathname === '/gutter') return gutterRoute(req, env);
     const r = route(new URL(req.url).pathname);
     if (!r) return json({ error: 'not found' }, 404);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -60,9 +63,14 @@ export default {
 
   /**
    * Every 30 minutes: every world in the KV list catches up (its DO arms an alarm for now), which also
-   * restarts a world whose alarm died. The DOs do the work; this only fans out.
+   * restarts a world whose alarm died. The DOs do the work; this only fans out. First the usage guard
+   * reads Neon's compute (#70): once the gutter is closed, the slots stop.
    */
   async scheduled(_controller, env): Promise<void> {
+    if ((await refreshGutter(env)) === 'closed') {
+      console.log('cron: the gutter is closed, no catch-ups till the 1st');
+      return;
+    }
     const ids: string[] = [];
     let cursor: string | undefined;
     do {
