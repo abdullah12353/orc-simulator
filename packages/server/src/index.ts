@@ -54,3 +54,4 @@ export {
   type ProviderKeys,
   type WorkersAi,
 } from './narration/index.ts';
+export { GUTTER, gutterState, nextMonthStart, readNeonUsage, NEON_API, type GutterState, type UsageReading } from './gutter.ts';

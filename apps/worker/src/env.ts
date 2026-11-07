@@ -27,6 +27,11 @@ export interface Env {
   VAPID_SUBJECT?: string;
   /** For the usage guard (#70). */
   NEON_PROJECT_ID?: string;
+  /**
+   * Dev only, in `.dev.vars`: the usage guard's reading, in CU-h, instead of asking Neon (#70). Never a
+   * deploy's var or secret.
+   */
+  DEV_GUTTER_CU_HOURS?: string;
 }
 
 /** The header the router hands the verified user id to the world's DO in. Only the router can set it. */

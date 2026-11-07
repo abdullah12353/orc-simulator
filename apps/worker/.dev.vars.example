@@ -10,3 +10,9 @@ NEON_AUTH_ISSUER=https://ep-<endpoint>.neonauth.<region>.aws.neon.tech
 # VAPID_PUBLIC_KEY=
 # VAPID_PRIVATE_KEY=
 # VAPID_SUBJECT=mailto:you@example.com
+# Optional: the usage guard (#70) reads the project's compute from Neon's API at each cron slot. Unset, it
+# keeps the last state (normal before any reading).
+# NEON_API_KEY=
+# NEON_PROJECT_ID=
+# Dev only, never on a deploy: stub the guard's reading in CU-h (80 = slow, 95 = closed), instead of asking Neon.
+# DEV_GUTTER_CU_HOURS=85
