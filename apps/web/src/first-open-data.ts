@@ -10,7 +10,7 @@ import { introductionScript } from '@orc/sim';
 import { nextStep, progressAfter, resumeFirstOpen, type FirstOpenStep, type Hint } from './first-open.ts';
 import type { IntroductionCardData } from './introduction-data.ts';
 import { faceAt, loadFaces } from './portrait-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 const once = new Map<string, Promise<boolean>>();
 
@@ -62,8 +62,8 @@ export function useFirstOpen(worldId: string): FirstOpen {
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      askOnce(`open:${worldId}`, () => supabase.rpc('begin_first_open', { world_id: worldId })),
-      supabase.rpc('my_player', { w: worldId }),
+      askOnce(`open:${worldId}`, () => db.rpc('begin_first_open', { world_id: worldId })),
+      db.rpc('my_player', { w: worldId }),
     ]).then(([fresh, me]) => {
       if (cancelled) return;
       const key = typeof me.data === 'string' ? progressKey(worldId, me.data) : null;
@@ -90,7 +90,7 @@ export function useHint(worldId: string, hint: Hint): boolean {
   const [show, setShow] = useState(false);
   useEffect(() => {
     let cancelled = false;
-    void askOnce(`hint:${worldId}:${hint}`, () => supabase.rpc('see_hint', { world_id: worldId, hint })).then((s) => !cancelled && setShow(s));
+    void askOnce(`hint:${worldId}:${hint}`, () => db.rpc('see_hint', { world_id: worldId, hint })).then((s) => !cancelled && setShow(s));
     return () => {
       cancelled = true;
     };
@@ -100,7 +100,7 @@ export function useHint(worldId: string, hint: Hint): boolean {
 
 /** Krúg's Introduction, as he is now (alias, Epithet, Humiliations, Legendary), for the first open. */
 export async function loadKrugIntroduction(worldId: string): Promise<IntroductionCardData | null> {
-  const { data } = await supabase.from('captains').select('alias_idx, epithet, legendary_fact').eq('world_id', worldId).eq('id', KRUG).single();
+  const { data } = await db.from('captains').select('alias_idx, epithet, legendary_fact').eq('world_id', worldId).eq('id', KRUG).single();
   if (!data) return null;
   const row = data as { alias_idx: 0 | 1 | null; epithet: string | null; legendary_fact: number | null };
   const history = await loadFaces(worldId, [KRUG]);

@@ -6,7 +6,7 @@
 import { content } from '@orc/content';
 import { captainName } from './captain-names.ts';
 import { nextRange } from './paging.ts';
-import { supabase } from './supabase.ts';
+import { currentUserId, db } from './db.ts';
 
 /** One entry on a shelf, the timeline or a rap sheet: a story head, captioned. */
 export interface HallEntry {
@@ -69,7 +69,7 @@ async function rows(query: PromiseLike<{ data: unknown; error: { message: string
 const SHELF_COLUMNS = 'fact_no, at, kind, caption';
 
 export async function loadLegends(worldId: string): Promise<HallEntry[]> {
-  const q = supabase
+  const q = db
     .from('hall_legends')
     .select(`captain_id, ${SHELF_COLUMNS}`)
     .eq('world_id', worldId)
@@ -84,7 +84,7 @@ export const HALL_PAGE = 50;
 /** A page of the Infamous moments shelf, `shown` rows in. */
 export async function loadMoments(worldId: string, shown = 0, size = HALL_PAGE): Promise<HallEntry[]> {
   const { from, to } = nextRange(shown, size);
-  const q = supabase
+  const q = db
     .from('hall_moments')
     .select(SHELF_COLUMNS)
     .eq('world_id', worldId)
@@ -97,7 +97,7 @@ export async function loadMoments(worldId: string, shown = 0, size = HALL_PAGE):
 /** A page of the timeline, `shown` rows in. */
 export async function loadTimeline(worldId: string, shown = 0, size = HALL_PAGE): Promise<HallEntry[]> {
   const { from, to } = nextRange(shown, size);
-  const q = supabase
+  const q = db
     .from('hall_timeline')
     .select(`shelf, captain_id, clipping_id, ${SHELF_COLUMNS}`)
     .eq('world_id', worldId)
@@ -112,11 +112,11 @@ export async function loadTimeline(worldId: string, shown = 0, size = HALL_PAGE)
 
 /** One Player's rap sheet: their 10 heaviest Blame entries, newest first. Never more than one Player. */
 export async function loadRapSheet(playerId: string): Promise<HallEntry[]> {
-  return (await rows(supabase.rpc('rap_sheet', { p_player: playerId }))).map((r) => entry('rap', r));
+  return (await rows(db.rpc('rap_sheet', { p_player: playerId }))).map((r) => entry('rap', r));
 }
 
 export async function loadCaptainStory(worldId: string, captainId: string): Promise<StoryEntry[]> {
-  const q = supabase
+  const q = db
     .from('captain_story')
     .select('fact_no, story_no, at, kind, line, payload, story_line')
     .eq('world_id', worldId)
@@ -134,7 +134,7 @@ export async function loadCaptainStory(worldId: string, captainId: string): Prom
 }
 
 export async function traceBack(worldId: string, factNo: number): Promise<TraceStep[]> {
-  const steps = await rows(supabase.rpc('trace_back', { p_world: worldId, p_fact: factNo }));
+  const steps = await rows(db.rpc('trace_back', { p_world: worldId, p_fact: factNo }));
   return steps.map((r) => ({
     factNo: num(r.fact_no),
     hops: num(r.hops),
@@ -189,13 +189,13 @@ export function stepText(kind: string, line: string, storyLine: string, p: Row):
 
 /** The world's Players, for the rap sheet picker, and which one is me (the Clash card highlights me). */
 export async function loadPlayers(worldId: string): Promise<{ players: { id: string; name: string }[]; me: string | null }> {
-  const [{ data: players }, { data: auth }] = await Promise.all([
-    supabase.from('players').select('id, display_name, user_id').eq('world_id', worldId).is('removed_at', null).order('joined_at'),
-    supabase.auth.getUser(),
+  const [{ data: players }, userId] = await Promise.all([
+    db.from('players').select('id, display_name, user_id').eq('world_id', worldId).is('removed_at', null).order('joined_at'),
+    currentUserId(),
   ]);
   const list = (players ?? []) as { id: string; display_name: string; user_id: string }[];
   return {
     players: list.map((p) => ({ id: p.id, name: p.display_name })),
-    me: list.find((p) => p.user_id === auth.user?.id)?.id ?? null,
+    me: list.find((p) => p.user_id === userId)?.id ?? null,
   };
 }

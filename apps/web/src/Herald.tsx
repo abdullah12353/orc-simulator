@@ -13,7 +13,8 @@ import { HintLine } from './HintLine.tsx';
 import { OnStage } from './OnStage.tsx';
 import { YourStableSection } from './Stable.tsx';
 import type { YourStable } from './stable-lines.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
+import { worldJob } from './worker.ts';
 
 // The Gutter Herald (#27): opening it calls open-edition, which returns my new "Since You Left" edition
 // or, if none is due, my last one plus a Stop press. Older editions (the last 7) are read directly
@@ -115,7 +116,7 @@ const announcedKey = (editionId: string) => `orc:fanfare:${editionId}`;
 async function loadAccusations(worldId: string, rows: EditionRow[]): Promise<Map<number, Accusation>> {
   const nos = [...new Set(rows.flatMap((r) => (r.accusation_fact === null ? [] : [Number(r.accusation_fact)])))];
   if (nos.length === 0) return new Map();
-  const { data: facts } = await supabase
+  const { data: facts } = await db
     .from('facts')
     .select('no, story_no, line, payload')
     .eq('world_id', worldId)
@@ -125,8 +126,8 @@ async function loadAccusations(worldId: string, rows: EditionRow[]): Promise<Map
   const accused = [...new Set(found.flatMap((f) => (f.payload.accused ? [f.payload.accused] : [])))];
   if (accused.length === 0) return new Map();
   const [renders, players] = await Promise.all([
-    supabase.from('name_renders').select('player_id, accuser_id, clip_key').in('player_id', accused),
-    supabase.from('players').select('id, removed_at').eq('world_id', worldId).in('id', accused),
+    db.from('name_renders').select('player_id, accuser_id, clip_key').in('player_id', accused),
+    db.from('players').select('id, removed_at').eq('world_id', worldId).in('id', accused),
   ]);
   return accusationsFrom(found, (renders.data ?? []) as NameRenderRow[], (players.data ?? []) as { id: string; removed_at: string | null }[]);
 }
@@ -169,13 +170,13 @@ export function Herald({ worldId }: { worldId: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data, error } = await supabase.functions.invoke<Opened>('open-edition', { body: { worldId } });
+      const { data, error } = await worldJob<Opened>(`/worlds/${worldId}/open-edition`, {}, 'The Herald did not arrive.');
       if (cancelled) return;
-      if (error || !data) return setOpened({ error: error?.message ?? 'The Herald did not arrive.' });
+      if (error !== undefined) return setOpened({ error });
       setOpened(data);
       setShowing(data.edition.id);
       void autoPlayLead(data.edition);
-      const past = await supabase
+      const past = await db
         .from('editions')
         .select(EDITION_COLUMNS)
         .eq('world_id', worldId)
@@ -245,7 +246,7 @@ export function Herald({ worldId }: { worldId: string }) {
       if (busy) return;
       busy = true;
       tries += 1;
-      const { data } = await supabase.from('editions').select(EDITION_COLUMNS).eq('id', writing).maybeSingle();
+      const { data } = await db.from('editions').select(EDITION_COLUMNS).eq('id', writing).maybeSingle();
       busy = false;
       const row = data as EditionRow | null;
       if (row?.status === 'generated') stop(fromRow(row));

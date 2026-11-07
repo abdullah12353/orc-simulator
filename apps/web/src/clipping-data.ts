@@ -2,7 +2,8 @@
 // server-side), and read the world's Clippings shelf (`hall_clippings`, newest first, members only).
 import type { ClippingSnapshot } from '@orc/sim';
 import { nextRange } from './paging.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
+import { worldJob } from './worker.ts';
 
 export type { ClippingSnapshot };
 
@@ -18,10 +19,12 @@ export interface Clipping {
 
 /** Clips a story printed in one of my editions. Throws with the server's reason on refusal. */
 export async function clipStory(worldId: string, editionId: string, storyNo: number): Promise<Clipping> {
-  const { data, error } = await supabase.functions.invoke<{ id: string; snapshot: ClippingSnapshot }>('create-clipping', {
-    body: { worldId, editionId, storyNo },
-  });
-  if (error || !data) throw new Error(error?.message ?? 'The scissors slipped.');
+  const { data, error } = await worldJob<{ id: string; snapshot: ClippingSnapshot }>(
+    `/worlds/${worldId}/create-clipping`,
+    { editionId, storyNo },
+    'The scissors slipped.',
+  );
+  if (error !== undefined) throw new Error(error);
   return { id: data.id, factNo: storyNo, at: new Date().toISOString(), caption: data.snapshot.headline, clippedBy: '', snapshot: data.snapshot };
 }
 
@@ -39,7 +42,7 @@ const COLUMNS = 'clipping_id, fact_no, at, caption, clipped_by, snapshot';
 /** A page of the Clippings shelf, newest first, `shown` rows in. */
 export async function loadClippings(worldId: string, shown = 0, size = 50): Promise<Clipping[]> {
   const { from, to } = nextRange(shown, size);
-  const { data, error } = await supabase
+  const { data, error } = await db
     .from('hall_clippings')
     .select(COLUMNS)
     .eq('world_id', worldId)
@@ -51,7 +54,7 @@ export async function loadClippings(worldId: string, shown = 0, size = 50): Prom
 }
 
 export async function loadClipping(id: string): Promise<Clipping | null> {
-  const { data, error } = await supabase.from('hall_clippings').select(COLUMNS).eq('clipping_id', id).maybeSingle();
+  const { data, error } = await db.from('hall_clippings').select(COLUMNS).eq('clipping_id', id).maybeSingle();
   if (error) throw new Error(error.message);
   return data ? fromRow(data as Row) : null;
 }

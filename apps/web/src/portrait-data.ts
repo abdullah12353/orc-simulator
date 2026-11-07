@@ -4,7 +4,7 @@
 // Humiliation is on.
 import { composePortrait, content, marksAsOf, type ComposedPortrait, type HumiliationRow } from '@orc/content';
 import { aliasAsOf, captainName, goesBy } from './captain-names.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 export interface FaceHistory {
   /** Oldest first (by row number). */
@@ -23,8 +23,8 @@ export async function loadFaces(worldId: string, captainIds: string[]): Promise<
   const faces = new Map<string, FaceHistory>(ids.map((id) => [id, { rows: [], legendaryFact: null, aliasIdx: null }]));
   if (ids.length === 0) return faces;
   const [humiliations, captains] = await Promise.all([
-    supabase.from('humiliations').select('captain_id, kind, no, gained_fact, ended_fact').eq('world_id', worldId).in('captain_id', ids).order('no'),
-    supabase.from('captains').select('id, legendary_fact, alias_idx').eq('world_id', worldId).in('id', ids),
+    db.from('humiliations').select('captain_id, kind, no, gained_fact, ended_fact').eq('world_id', worldId).in('captain_id', ids).order('no'),
+    db.from('captains').select('id, legendary_fact, alias_idx').eq('world_id', worldId).in('id', ids),
   ]);
   for (const c of (captains.data ?? []) as { id: string; legendary_fact: number | null; alias_idx: 0 | 1 | null }[]) {
     const face = faces.get(c.id)!;

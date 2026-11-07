@@ -4,7 +4,7 @@ import { DarePicker } from './DarePicker.tsx';
 import { loadMeddle, meddleLabel, type MeddleData, type Subject } from './meddle-data.ts';
 import { suggestRumour } from './first-open.ts';
 import { reasonText } from './invite-link.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 import { isLoaded, useWorldLoad } from './world-load.ts';
 
 // The Rumour composer (#28): pick who supposedly said it, who it's about, one of the 5 Claims and a
@@ -118,7 +118,7 @@ function RumourComposer({
     if (!ready || !subject) return;
     setState('sending');
     const text = freeText.trim();
-    const { data: rows, error } = await supabase.rpc('submit_intent', {
+    const { data: rows, error } = await db.rpc('submit_intent', {
       id: draftId,
       world_id: worldId,
       kind: 'rumour',

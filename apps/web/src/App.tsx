@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
 import { loadKrugIntroduction, useFirstOpen } from './first-open-data.ts';
 import { GutterNotice } from './GutterNotice.tsx';
@@ -7,20 +6,23 @@ import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import type { IntroductionCardData } from './introduction-data.ts';
-import { useLive } from './live.ts';
+import { useLive, useWorldOpen } from './live.ts';
 import { LiveStage } from './LiveStage.tsx';
 import { Meddle } from './Meddle.tsx';
 import { Stable } from './Stable.tsx';
-import { supabase } from './supabase.ts';
+import { auth, currentSession, db } from './db.ts';
 import { clearPendingInvite, pendingInvite } from './invite-link.ts';
 import { InvitePanel, JoinWorld } from './Invites.tsx';
 import { storyLink, withoutStoryLink } from './push-link.ts';
 import { InstallPrompt, PushOptIn } from './PushOptIn.tsx';
 import { StoryView } from './StoryView.tsx';
+import { worldJob } from './worker.ts';
 
-// Tracer-bullet screens (#24): magic-link sign-in, create a world, and a bare list of the world's
-// Fact lines, newest first. While a world is open its Player is marked seen, and live nudges over
-// Realtime (#31) refetch the lines and play new Clashes and notable events on the live stage.
+// Tracer-bullet screens (#24): magic-link sign-in (Neon Auth, #69), create a world, and a bare list of the
+// world's Fact lines, newest first. Opening a world connects its live socket first and waits for `ready`
+// (#53); live nudges (#31, #68) refetch the lines and play new Clashes and notable events on the live stage.
+
+type Session = NonNullable<Awaited<ReturnType<typeof currentSession>>>;
 
 export function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -28,9 +30,8 @@ export function App() {
   const [joined, setJoined] = useState<string | undefined>(undefined);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
-    const { data } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
-    return () => data.subscription.unsubscribe();
+    // Back from a magic link, the URL carries a session verifier that this first read exchanges.
+    void currentSession().then(setSession);
   }, []);
 
   if (session === undefined) return <main className="page">…</main>;
@@ -47,23 +48,24 @@ export function App() {
       />
     );
   }
-  return <Worlds key={joined} initial={joined} />;
+  return <Worlds key={joined} initial={joined} onSignedOut={() => setSession(null)} />;
 }
 
 function SignIn({ invite }: { invite: string | null }) {
   const [email, setEmail] = useState('');
-  const [state, setState] = useState<'idle' | 'sending' | 'sent' | { error: string }>('idle');
+  // A magic link that failed (expired, or used already) comes back with `?error=`.
+  const [state, setState] = useState<'idle' | 'sending' | 'sent' | { error: string }>(() =>
+    new URLSearchParams(window.location.search).has('error') ? { error: 'That magic link has expired or was used already. Send yourself a new one.' } : 'idle',
+  );
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setState('sending');
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      // Back to the invite after sign-in. If Auth doesn't allow that URL it falls back to the site
-      // URL, and the remembered invite (localStorage) still opens the accept screen.
-      options: { emailRedirectTo: invite ? `${window.location.origin}/join/${invite}` : window.location.origin },
-    });
-    setState(error ? { error: error.message } : 'sent');
+    // Back to the invite after sign-in. The invite is remembered (localStorage) too, so landing anywhere
+    // else on this site still opens the accept screen.
+    const back = invite ? `${window.location.origin}/join/${invite}` : `${window.location.origin}/`;
+    const { error } = await auth.signIn.magicLink({ email, callbackURL: back, newUserCallbackURL: back, errorCallbackURL: `${window.location.origin}/` });
+    setState(error ? { error: error.message ?? 'The magic link did not send. Try again.' } : 'sent');
   }
 
   return (
@@ -94,12 +96,12 @@ interface WorldRow {
 // A tapped push opens `/?world=<id>&story=<no>` (#42): that world, on that story.
 const pushLink = typeof location === 'undefined' ? null : storyLink(location.search);
 
-function Worlds({ initial }: { initial?: string }) {
+function Worlds({ initial, onSignedOut }: { initial?: string; onSignedOut: () => void }) {
   const [worlds, setWorlds] = useState<WorldRow[] | null>(null);
   const [selected, setSelected] = useState<string | null>(initial ?? pushLink?.worldId ?? null);
 
   async function load() {
-    const { data } = await supabase.from('worlds').select('id, name').order('created_at');
+    const { data } = await db.from('worlds').select('id, name').order('created_at');
     setWorlds(data ?? []);
     // A world we can't see (a stale push link, say) falls back to the first one.
     if (data && data.length > 0) setSelected((s) => (s && data.some((w) => w.id === s) ? s : data[0]!.id));
@@ -113,7 +115,7 @@ function Worlds({ initial }: { initial?: string }) {
     <main className="page">
       <header className="bar">
         <h1>ORC NONSENSE</h1>
-        <button className="link" onClick={() => void supabase.auth.signOut()}>
+        <button className="link" onClick={() => void auth.signOut().then(onSignedOut)}>
           Sign out
         </button>
       </header>
@@ -126,13 +128,41 @@ function Worlds({ initial }: { initial?: string }) {
           ))}
         </select>
       )}
-      {selected && <GutterNotice key={`gutter-${selected}`} />}
-      <InstallPrompt />
-      {selected && <PushOptIn key={`push-${selected}`} worldId={selected} />}
-      {selected && <InvitePanel key={selected} worldId={selected} />}
       {/* Keyed by world: nothing of one world's state (first open, Herald, Hall picks) leaks into the next. */}
-      {selected ? <WorldTabs key={selected} worldId={selected} /> : <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />}
+      {selected ? (
+        <OpenWorld key={selected} worldId={selected} />
+      ) : (
+        <>
+          <InstallPrompt />
+          <CreateWorld onCreated={(id) => void load().then(() => setSelected(id))} />
+        </>
+      )}
     </main>
+  );
+}
+
+/** A world's screens, once its live socket says `ready` (or after 4 s, marked possibly stale: #53). */
+function OpenWorld({ worldId }: { worldId: string }) {
+  const { view, gutterClosed } = useWorldOpen(worldId);
+  return (
+    <>
+      <GutterNotice closed={gutterClosed} />
+      <InstallPrompt />
+      {view === 'waiting' ? (
+        <p className="quiet">Reaching the fortress…</p>
+      ) : (
+        <>
+          {view === 'stale' && (
+            <p className="stale" role="status">
+              This may be out of date. <span className="quiet">The fortress isn't answering yet; still trying.</span>
+            </p>
+          )}
+          <PushOptIn worldId={worldId} />
+          <InvitePanel worldId={worldId} />
+          <WorldTabs worldId={worldId} />
+        </>
+      )}
+    </>
   );
 }
 
@@ -229,11 +259,9 @@ function CreateWorld({ onCreated }: { onCreated: (worldId: string) => void }) {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const { data, error } = await supabase.functions.invoke<{ worldId: string }>('create-world', {
-      body: { name, displayName },
-    });
+    const { data, error } = await worldJob<{ worldId: string }>('/worlds', { name, displayName }, 'Could not create the world.');
     setBusy(false);
-    if (error || !data) return setError(error?.message ?? 'Could not create the world.');
+    if (error !== undefined) return setError(error);
     onCreated(data.worldId);
   }
 
@@ -269,7 +297,7 @@ function FactLines({ worldId }: { worldId: string }) {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
+      const { data } = await db
         .from('facts')
         .select('no, at, line')
         .eq('world_id', worldId)

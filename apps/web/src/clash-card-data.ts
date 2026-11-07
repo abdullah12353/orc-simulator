@@ -4,7 +4,7 @@
 import { blameLine, content, type ComposedPortrait } from '@orc/content';
 import type { ClashFact, ClashLine, Fact } from '@orc/sim';
 import { faceAt, loadFaces, nameAt } from './portrait-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 export interface ClashCardData {
   clash: ClashFact;
@@ -24,7 +24,7 @@ export interface ClashCardData {
 /** Which of these story heads are Clashes. */
 export async function clashHeads(worldId: string, storyNos: number[]): Promise<Set<number>> {
   if (storyNos.length === 0) return new Set();
-  const { data } = await supabase.from('facts').select('no').eq('world_id', worldId).eq('kind', 'clash').in('no', storyNos);
+  const { data } = await db.from('facts').select('no').eq('world_id', worldId).eq('kind', 'clash').in('no', storyNos);
   return new Set((data ?? []).map((r: { no: number }) => Number(r.no)));
 }
 
@@ -34,8 +34,8 @@ export async function clashHeads(worldId: string, storyNos: number[]): Promise<S
  */
 export async function loadClashCard(worldId: string, factNo: number, knownBlameLine?: string | null): Promise<ClashCardData | null> {
   const [story, dialogue] = await Promise.all([
-    supabase.from('facts').select('no, payload').eq('world_id', worldId).eq('story_no', factNo),
-    supabase.from('clash_dialogue').select('lines, source').eq('world_id', worldId).eq('fact_no', factNo).maybeSingle(),
+    db.from('facts').select('no, payload').eq('world_id', worldId).eq('story_no', factNo),
+    db.from('clash_dialogue').select('lines, source').eq('world_id', worldId).eq('fact_no', factNo).maybeSingle(),
   ]);
   const facts = ((story.data ?? []) as { payload: Fact }[]).map((r) => r.payload);
   const clash = facts.find((f): f is ClashFact => f.kind === 'clash' && f.no === factNo);
@@ -45,7 +45,7 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
   const fell = facts.find((f) => f.kind === 'warlord_fell');
   const [history, world] = await Promise.all([
     loadFaces(worldId, ids),
-    fell ? null : supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
+    fell ? null : db.from('worlds').select('warlord_id').eq('id', worldId).single(),
   ]);
 
   return {
@@ -62,13 +62,13 @@ export async function loadClashCard(worldId: string, factNo: number, knownBlameL
 
 /** A Clash's stored dialogue alone: what a live card refetches when its generated lines land (#37). */
 export async function loadClashDialogue(worldId: string, factNo: number): Promise<Pick<ClashCardData, 'lines' | 'source'> | null> {
-  const { data } = await supabase.from('clash_dialogue').select('lines, source').eq('world_id', worldId).eq('fact_no', factNo).maybeSingle();
+  const { data } = await db.from('clash_dialogue').select('lines, source').eq('world_id', worldId).eq('fact_no', factNo).maybeSingle();
   if (!data) return null;
   return { lines: data.lines as ClashLine[], source: data.source as ClashCardData['source'] };
 }
 
 async function loadBlameLine(worldId: string, factNo: number): Promise<string | null> {
-  const { data } = await supabase
+  const { data } = await db
     .from('fact_blame')
     .select('player_id, verb, landed_at, landed_fact, meddle_id')
     .eq('world_id', worldId)
@@ -78,7 +78,7 @@ async function loadBlameLine(worldId: string, factNo: number): Promise<string | 
     .order('meddle_id');
   const rows = (data ?? []) as { player_id: string; verb: 'rumour' | 'dare' }[];
   if (rows.length === 0) return null;
-  const { data: players } = await supabase.from('players').select('id, display_name').eq('world_id', worldId);
+  const { data: players } = await db.from('players').select('id, display_name').eq('world_id', worldId);
   const names = new Map(((players ?? []) as { id: string; display_name: string }[]).map((p) => [p.id, p.display_name]));
   return blameLine(
     content,

@@ -10,9 +10,9 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@neon/neon-js": "^0.10.2",
     "@orc/content": "*",
     "@orc/sim": "*",
-    "@supabase/supabase-js": "^2.76.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },

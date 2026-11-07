@@ -754,3 +754,12 @@ button.link {
   border-radius: 6px;
   font-size: 0.9rem;
 }
+
+/* Opening a world (#53): no `ready` from the fortress within 4 s, so the screens may be behind */
+.stale {
+  margin: 0.25rem 0;
+  padding: 0.5rem 0.75rem;
+  border: 1px dashed #78716c;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
