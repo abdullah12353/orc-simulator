@@ -5,7 +5,7 @@ import { content, type ComposedPortrait } from '@orc/content';
 import { introductionScript, type Fact, type IntroductionScript } from '@orc/sim';
 import { INTRODUCTION_KINDS } from './live-queue.ts';
 import { faceAt, loadFaces } from './portrait-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 export interface IntroductionCardData {
   no: number;
@@ -20,7 +20,7 @@ type IntroFact = Extract<Fact, { intro: unknown }>;
 /** Which of these story heads play an Introduction. */
 export async function introductionHeads(worldId: string, storyNos: number[]): Promise<Set<number>> {
   if (storyNos.length === 0) return new Set();
-  const { data } = await supabase
+  const { data } = await db
     .from('facts')
     .select('no')
     .eq('world_id', worldId)
@@ -30,7 +30,7 @@ export async function introductionHeads(worldId: string, storyNos: number[]): Pr
 }
 
 export async function loadIntroduction(worldId: string, headNo: number): Promise<IntroductionCardData | null> {
-  const { data } = await supabase.from('facts').select('no, payload').eq('world_id', worldId).eq('story_no', headNo);
+  const { data } = await db.from('facts').select('no, payload').eq('world_id', worldId).eq('story_no', headNo);
   const story = (data ?? []) as { no: number; payload: Fact }[];
   const head = story.map((r) => r.payload).find((f): f is IntroFact => f.no === headNo && 'intro' in f);
   if (!head) return null;

@@ -5,7 +5,7 @@ import { loadPlayers } from './hall-data.ts';
 import { IntroductionCard } from './IntroductionCard.tsx';
 import { OnStage } from './OnStage.tsx';
 import { introductionHeads, loadIntroduction, type IntroductionCardData } from './introduction-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 // The story a push opened (#42): `/?world=<id>&story=<head no>`. Its lines in order (the head, then what
 // followed in the same story), plus its Clash or Introduction card when it has one, which plays at once:
@@ -20,7 +20,7 @@ interface Loaded {
 
 async function loadStory(worldId: string, storyNo: number): Promise<Loaded> {
   const [{ data, error }, { players, me }, clashes, intros] = await Promise.all([
-    supabase.from('facts').select('no, at, line').eq('world_id', worldId).eq('story_no', storyNo).neq('line', '').order('no'),
+    db.from('facts').select('no, at, line').eq('world_id', worldId).eq('story_no', storyNo).neq('line', '').order('no'),
     loadPlayers(worldId),
     clashHeads(worldId, [storyNo]),
     introductionHeads(worldId, [storyNo]),

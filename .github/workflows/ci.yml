@@ -32,8 +32,9 @@ jobs:
           ORC_SEEDS: 500
       - run: npm run build:web
         env:
-          VITE_SUPABASE_URL: http://127.0.0.1:55421
-          VITE_SUPABASE_ANON_KEY: ci-build-only
+          VITE_NEON_AUTH_URL: https://ci.neonauth.example.invalid/neondb/auth
+          VITE_DATA_API_URL: https://ci.apirest.example.invalid/neondb/rest/v1
+          VITE_WORKER_URL: https://ci-worker.example.invalid
 
   seam-b:
     name: Seam B (backend on Postgres 18.6)

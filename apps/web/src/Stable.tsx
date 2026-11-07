@@ -4,7 +4,7 @@ import { captainName as nameOf, goesBy } from './captain-names.ts';
 import { HintLine } from './HintLine.tsx';
 import { reasonText } from './invite-link.ts';
 import { goldLine, type GoldChange, type YourStable } from './stable-lines.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 import { useWorldLoad } from './world-load.ts';
 
 // The Stable (#36): my Stakes (held while the Captain is dead), my gold and my ledger, all owner-only,
@@ -35,20 +35,20 @@ interface Loaded {
 }
 
 async function loadStable(worldId: string): Promise<Loaded> {
-  const { data: me } = await supabase.rpc('my_player', { w: worldId });
+  const { data: me } = await db.rpc('my_player', { w: worldId });
   const [priv, captains, stakes, queued, ledger, backers, players] = await Promise.all([
-    supabase.from('player_private').select('gold').eq('player_id', me).single(),
-    supabase.from('captains').select('id, roster, epithet, alias_idx').eq('world_id', worldId),
-    supabase.from('stakes').select('captain_id, amount').eq('player_id', me),
-    supabase.from('intents').select('kind, payload').eq('player_id', me).eq('status', 'queued').in('kind', ['back', 'withdraw']),
-    supabase
+    db.from('player_private').select('gold').eq('player_id', me).single(),
+    db.from('captains').select('id, roster, epithet, alias_idx').eq('world_id', worldId),
+    db.from('stakes').select('captain_id, amount').eq('player_id', me),
+    db.from('intents').select('kind, payload').eq('player_id', me).eq('status', 'queued').in('kind', ['back', 'withdraw']),
+    db
       .from('gold_ledger')
       .select('id, at, delta, lost, reason, captain_id, fact_no')
       .eq('player_id', me)
       .order('id', { ascending: false })
       .limit(LEDGER_LINES),
-    supabase.from('backers').select('player_id, captain_id').eq('world_id', worldId),
-    supabase.from('players').select('id, display_name').eq('world_id', worldId),
+    db.from('backers').select('player_id, captain_id').eq('world_id', worldId),
+    db.from('players').select('id, display_name').eq('world_id', worldId),
   ]);
   const error = priv.error ?? captains.error ?? stakes.error ?? queued.error ?? ledger.error ?? backers.error ?? players.error;
   if (error) throw new Error(error.message);
@@ -56,7 +56,7 @@ async function loadStable(worldId: string): Promise<Loaded> {
   const factNos = [...new Set((ledger.data ?? []).flatMap((l) => (l.fact_no === null ? [] : [l.fact_no])))];
   const lines = new Map<number, string>();
   if (factNos.length > 0) {
-    const { data: facts } = await supabase.from('facts').select('no, line').eq('world_id', worldId).in('no', factNos);
+    const { data: facts } = await db.from('facts').select('no, line').eq('world_id', worldId).in('no', factNos);
     for (const f of facts ?? []) lines.set(f.no, f.line);
   }
   const playerName = new Map((players.data ?? []).map((p) => [p.id, p.display_name as string]));
@@ -175,7 +175,7 @@ function BackForm({ worldId, data, label, onDone }: { worldId: string; data: Loa
     e.preventDefault();
     if (!ready) return;
     setState('sending');
-    const { error } = await supabase.rpc('submit_intent', { id: draftId, world_id: worldId, kind: 'back', payload: { captainId, amount } });
+    const { error } = await db.rpc('submit_intent', { id: draftId, world_id: worldId, kind: 'back', payload: { captainId, amount } });
     if (error) return setState({ error: reasonText(error) });
     setState({ sent: `${amount} gold on ${label(captainId)}. Everyone will know you back him; nobody will know how much.` });
     setDraftId(crypto.randomUUID());
@@ -222,7 +222,7 @@ function StakeRow(props: {
   const [error, setError] = useState<string | null>(null);
   async function withdraw() {
     if (!window.confirm(`Pull your ${props.amount} gold off ${props.label}? You get half back (${Math.floor(props.amount / 2)}).`)) return;
-    const { error } = await supabase.rpc('submit_intent', {
+    const { error } = await db.rpc('submit_intent', {
       id: crypto.randomUUID(),
       world_id: props.worldId,
       kind: 'withdraw',

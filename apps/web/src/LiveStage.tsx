@@ -10,7 +10,7 @@ import { loadIntroduction, type IntroductionCardData } from './introduction-data
 import { useDialogue, useLive } from './live.ts';
 import { enqueue, liveItems, type LiveFact, type LiveItem } from './live-queue.ts';
 import { OnStage } from './OnStage.tsx';
-import { supabase } from './supabase.ts';
+import { currentUserId, db } from './db.ts';
 
 /** How long a notice holds: long enough to read, never so long it drags. */
 const noticeMs = (line: string) => Math.max(4000, Math.min(8000, 2000 + 45 * line.length));
@@ -29,14 +29,14 @@ export function LiveStage({ worldId }: { worldId: string }) {
     setQueue([]);
     chain.current = (async () => {
       // Start from now: what happened before we opened is the Herald's job, not the live stage's.
-      const { data } = await supabase.from('worlds').select('tick_seq').eq('id', worldId).maybeSingle();
+      const { data } = await db.from('worlds').select('tick_seq').eq('id', worldId).maybeSingle();
       if (!cancelled && data) cursor.current = Number(data.tick_seq);
-      const { data: auth } = await supabase.auth.getUser();
-      const { data: me } = await supabase
+      const userId = await currentUserId();
+      const { data: me } = await db
         .from('players')
         .select('display_name')
         .eq('world_id', worldId)
-        .eq('user_id', auth.user?.id ?? '')
+        .eq('user_id', userId ?? '')
         .maybeSingle();
       if (!cancelled && me) setReader(me.display_name as string);
     })();
@@ -49,7 +49,7 @@ export function LiveStage({ worldId }: { worldId: string }) {
     chain.current = chain.current.then(async () => {
       const from = cursor.current;
       if (from === null || (tickSeq !== null && tickSeq <= from)) return;
-      const { data } = await supabase
+      const { data } = await db
         .from('facts')
         .select('no, story_no, tick_seq, kind, tier, line')
         .eq('world_id', worldId)

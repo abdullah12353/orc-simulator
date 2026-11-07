@@ -4,7 +4,7 @@ import { goesBy } from './captain-names.ts';
 import { HintLine } from './HintLine.tsx';
 import { reasonText } from './invite-link.ts';
 import { meddleLabel, type MeddleData } from './meddle-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 // The Dare picker (#35): pick a Captain, then one of 3 Dares offered for him (a Stunt and a Prank among
 // them) or "surprise". A Prank also names its victim. "Show me others" offers the next 3. A Dare that plays
@@ -55,7 +55,7 @@ export function DarePicker({ worldId, data, onSubmitted }: { worldId: string; da
     e.preventDefault();
     if (!ready) return;
     setState('sending');
-    const { data: rows, error } = await supabase.rpc('submit_intent', {
+    const { data: rows, error } = await db.rpc('submit_intent', {
       id: draftId,
       world_id: worldId,
       kind: 'dare',

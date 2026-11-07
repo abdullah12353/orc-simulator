@@ -3,7 +3,7 @@ import { ACCENT_LABELS, content } from '@orc/content';
 import { aliasOf, captainName, castCard, displayName } from './captain-names.ts';
 import { Portrait } from './Portrait.tsx';
 import { faceAt, loadFaces, type FaceHistory } from './portrait-data.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 import { useWorldLoad } from './world-load.ts';
 
 // The Captain card screen (#26): every active Captain with portrait, name and Epithet, Traits, Fears,
@@ -51,16 +51,16 @@ function statusText(c: CaptainRow): string {
 
 async function loadCaptains(worldId: string): Promise<Loaded> {
   const [captains, fears, world, trophies, week] = await Promise.all([
-    supabase.from('captains').select('id, roster, power, infamy, traits, epithet, alias_idx, returns_at, legendary_fact').eq('world_id', worldId),
-    supabase.from('captain_fears').select('captain_id, fear, since').eq('world_id', worldId).order('since'),
-    supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
-    supabase
+    db.from('captains').select('id, roster, power, infamy, traits, epithet, alias_idx, returns_at, legendary_fact').eq('world_id', worldId),
+    db.from('captain_fears').select('captain_id, fear, since').eq('world_id', worldId).order('since'),
+    db.from('worlds').select('warlord_id').eq('id', worldId).single(),
+    db
       .from('trophies')
       .select('kind, holder_id')
       .eq('world_id', worldId)
       .order('acquired_at', { ascending: false })
       .order('no', { ascending: false }),
-    supabase.from('infamy_7d').select('captain_id, infamy').eq('world_id', worldId),
+    db.from('infamy_7d').select('captain_id, infamy').eq('world_id', worldId),
   ]);
   const error = captains.error ?? fears.error ?? world.error ?? trophies.error ?? week.error;
   if (error) throw new Error(error.message);

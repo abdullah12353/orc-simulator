@@ -4,7 +4,7 @@
 // Not checked by hand on a phone.
 import { useEffect, useState } from 'react';
 import { installHint, pushSupport, type DeviceInfo, type PushSupport } from './push-link.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 const VAPID_KEY = ((import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined) ?? '').trim();
 
@@ -47,9 +47,9 @@ export async function isSubscribed(worldId: string): Promise<boolean> {
   if (pushSupport(deviceInfo()) !== 'available') return false;
   const sub = await (await registration()).pushManager.getSubscription();
   if (!sub) return false;
-  const { data } = await supabase.rpc('my_player', { w: worldId });
+  const { data } = await db.rpc('my_player', { w: worldId });
   if (!data) return false;
-  const { data: rows } = await supabase.from('push_subscriptions').select('id').eq('player_id', data as string).eq('endpoint', sub.endpoint);
+  const { data: rows } = await db.from('push_subscriptions').select('id').eq('player_id', data as string).eq('endpoint', sub.endpoint);
   return (rows ?? []).length > 0;
 }
 
@@ -61,7 +61,7 @@ export async function enablePushes(worldId: string): Promise<void> {
     (await reg.pushManager.getSubscription()) ??
     (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(VAPID_KEY) }));
   const json = sub.toJSON() as { endpoint?: string; keys?: { p256dh?: string; auth?: string } };
-  const { error } = await supabase.rpc('subscribe_push', {
+  const { error } = await db.rpc('subscribe_push', {
     p_world: worldId,
     p_endpoint: json.endpoint ?? sub.endpoint,
     p_p256dh: json.keys?.p256dh ?? '',
@@ -74,7 +74,7 @@ export async function enablePushes(worldId: string): Promise<void> {
 export async function disablePushes(worldId: string): Promise<void> {
   const sub = await (await registration()).pushManager.getSubscription();
   if (!sub) return;
-  const { error } = await supabase.rpc('unsubscribe_push', { p_world: worldId, p_endpoint: sub.endpoint });
+  const { error } = await db.rpc('unsubscribe_push', { p_world: worldId, p_endpoint: sub.endpoint });
   if (error) throw new Error(error.message);
 }
 

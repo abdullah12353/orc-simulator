@@ -56,6 +56,8 @@ export interface LiveHandlers {
   tick: (tickSeq: number) => void;
   /** A Clash's generated dialogue committed. */
   dialogue: (factNo: number) => void;
+  /** The DO closed the socket for good: `code` is gutter closed (4013) or not a Player (4003). */
+  stopped?: (code: number) => void;
 }
 
 /**
@@ -164,6 +166,7 @@ export function liveConnection(worldId: string, env: LiveEnv, handlers: LiveHand
       if (ev.code === LIVE.gutterClosedCode || ev.code === LIVE.notAPlayerCode) {
         state = 'stopped';
         stoppedBy = ev.code;
+        handlers.stopped?.(ev.code);
         return;
       }
       scheduleRetry();

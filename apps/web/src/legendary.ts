@@ -1,11 +1,11 @@
 // Legendary deeds (#34, D45, D52): the story heads that took a Captain over 150 lifetime Infamy. Each has
 // a `legendary` consequence in its story, so they are found by story number, read under RLS.
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 /** Which of these story heads are Legendary deeds. */
 export async function legendaryDeeds(worldId: string, storyNos: number[]): Promise<Set<number>> {
   if (storyNos.length === 0) return new Set();
-  const { data } = await supabase
+  const { data } = await db
     .from('facts')
     .select('story_no')
     .eq('world_id', worldId)

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 import { inviteLink, MAX_PLAYERS, reasonText, statusText, type InviteStatus } from './invite-link.ts';
 
 interface InviteInfo {
@@ -17,7 +17,7 @@ export function JoinWorld({ token, onDone }: { token: string; onDone: (worldId: 
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    void supabase.rpc('invite_info', { token }).then(({ data, error }) => {
+    void db.rpc('invite_info', { token }).then(({ data, error }) => {
       const row = (data as InviteInfo[] | null)?.[0];
       setInfo(error || !row ? { error: reasonText(error) } : row);
     });
@@ -28,7 +28,7 @@ export function JoinWorld({ token, onDone }: { token: string; onDone: (worldId: 
     if (!info || 'error' in info) return;
     setBusy(true);
     setError(null);
-    const { error } = await supabase.rpc('join_world', { token, display_name: displayName });
+    const { error } = await db.rpc('join_world', { token, display_name: displayName });
     setBusy(false);
     if (!error || error.message === 'already_joined') return onDone(info.world_id);
     setError(reasonText(error));
@@ -94,14 +94,14 @@ export function InvitePanel({ worldId }: { worldId: string }) {
 
   async function load() {
     const [inv, pl] = await Promise.all([
-      supabase
+      db
         .from('invites')
         .select('token, expires_at')
         .eq('world_id', worldId)
         .is('revoked_at', null)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false }),
-      supabase.from('players').select('display_name').eq('world_id', worldId).is('removed_at', null).order('joined_at'),
+      db.from('players').select('display_name').eq('world_id', worldId).is('removed_at', null).order('joined_at'),
     ]);
     setInvites(inv.data ?? []);
     setPlayers((pl.data ?? []).map((p) => p.display_name as string));
@@ -112,7 +112,7 @@ export function InvitePanel({ worldId }: { worldId: string }) {
 
   async function create() {
     setError(null);
-    const { error } = await supabase.rpc('create_invite', { world_id: worldId });
+    const { error } = await db.rpc('create_invite', { world_id: worldId });
     if (error) return setError(reasonText(error));
     await load();
   }
@@ -120,7 +120,7 @@ export function InvitePanel({ worldId }: { worldId: string }) {
   async function revoke(token: string) {
     if (!window.confirm('Revoke this link? Anyone holding it can no longer join.')) return;
     setError(null);
-    const { error } = await supabase.rpc('revoke_invite', { token });
+    const { error } = await db.rpc('revoke_invite', { token });
     if (error) return setError(reasonText(error));
     await load();
   }

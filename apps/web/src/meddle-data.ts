@@ -1,7 +1,7 @@
 // The Meddle tab's data (#28, #35), shared by the Rumour composer and the Dare picker: my Meddles, every
 // Captain with what the pickers need (Traits, Fears, Trophies, Epithet, disguise), and the Warlord.
 import { captainName, pickerLabel } from './captain-names.ts';
-import { supabase } from './supabase.ts';
+import { db } from './db.ts';
 
 export interface MeddleCaptain {
   id: string;
@@ -37,20 +37,20 @@ const group = (rows: { id: string; value: string }[]) => {
 };
 
 export async function loadMeddle(worldId: string): Promise<MeddleData> {
-  const { data: me } = await supabase.rpc('my_player', { w: worldId });
+  const { data: me } = await db.rpc('my_player', { w: worldId });
   const [priv, captains, fears, trophies, meddles, queued, world] = await Promise.all([
-    supabase.from('player_private').select('meddles_available, first_meddle_done').eq('player_id', me).single(),
-    supabase.from('captains').select('id, roster, traits, epithet, alias_idx').eq('world_id', worldId),
-    supabase.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
-    supabase
+    db.from('player_private').select('meddles_available, first_meddle_done').eq('player_id', me).single(),
+    db.from('captains').select('id, roster, traits, epithet, alias_idx').eq('world_id', worldId),
+    db.from('captain_fears').select('captain_id, fear').eq('world_id', worldId).order('since'),
+    db
       .from('trophies')
       .select('kind, holder_id')
       .eq('world_id', worldId)
       .order('acquired_at', { ascending: false })
       .order('no', { ascending: false }),
-    supabase.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
-    supabase.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued').in('kind', ['rumour', 'dare']),
-    supabase.from('worlds').select('warlord_id').eq('id', worldId).single(),
+    db.from('meddles').select('id', { count: 'exact', head: true }).eq('player_id', me).neq('status', 'landed'),
+    db.from('intents').select('id', { count: 'exact', head: true }).eq('player_id', me).eq('status', 'queued').in('kind', ['rumour', 'dare']),
+    db.from('worlds').select('warlord_id').eq('id', worldId).single(),
   ]);
   const error = priv.error ?? captains.error ?? fears.error ?? trophies.error ?? meddles.error ?? queued.error;
   if (error) throw new Error(error.message);

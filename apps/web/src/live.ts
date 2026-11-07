@@ -3,8 +3,9 @@
 // after a Clash's generated lines land it sends `dialogue`, and listeners refetch what they show. Every
 // (re)open ends in `ready`, once the world has caught up, and that refetches everything. While it's open
 // the world is watched, so it's open only while the app is visible (live-socket.ts).
-import { useEffect, useRef } from 'react';
-import { liveConnection, type LiveConnection, type LiveEnv, type SocketLike } from './live-socket.ts';
+import { useEffect, useRef, useState } from 'react';
+import { LIVE, liveConnection, type LiveConnection, type LiveEnv, type SocketLike } from './live-socket.ts';
+import { worldGate, type GateView } from './world-gate.ts';
 import { WORKER_URL, workerToken } from './worker.ts';
 
 /**
@@ -16,10 +17,16 @@ export type LiveListener = (tickSeq: number | null) => void;
 /** A Clash's generated dialogue landed (#37): `factNo` is the Clash. Refetch its `clash_dialogue`. */
 export type DialogueListener = (factNo: number) => void;
 
+/** A `ready` came, or the DO closed the socket for good (`stopped` is its close code). */
+type StatusListener = (event: { ready: true } | { stopped: number }) => void;
+
 interface Feed {
   connection: LiveConnection;
   listeners: Set<LiveListener>;
   dialogue: Set<DialogueListener>;
+  status: Set<StatusListener>;
+  /** A `ready` has come on this world's socket since it was first opened. */
+  everReady: boolean;
 }
 const feeds = new Map<string, Feed>();
 
@@ -58,9 +65,15 @@ function feedFor(worldId: string): Feed {
   if (!feed) {
     const listeners = new Set<LiveListener>();
     const dialogue = new Set<DialogueListener>();
+    const status = new Set<StatusListener>();
     const connection = liveConnection(worldId, browser, {
       ready: () => {
+        if (feed) feed.everReady = true;
+        for (const s of status) s({ ready: true });
         for (const l of listeners) l(null);
+      },
+      stopped: (code) => {
+        for (const s of status) s({ stopped: code });
       },
       tick: (tickSeq) => {
         for (const l of listeners) l(tickSeq);
@@ -69,7 +82,7 @@ function feedFor(worldId: string): Feed {
         for (const l of dialogue) l(factNo);
       },
     });
-    feed = { connection, listeners, dialogue };
+    feed = { connection, listeners, dialogue, status, everReady: false };
     feeds.set(worldId, feed);
   }
   return feed;
@@ -83,7 +96,7 @@ const LINGER_MS = 5_000;
 
 /** Closes the world's socket once nobody has listened to it for a moment. */
 function release(worldId: string, feed: Feed): void {
-  const unused = () => feed.listeners.size === 0 && feed.dialogue.size === 0 && feeds.get(worldId) === feed;
+  const unused = () => feed.listeners.size === 0 && feed.dialogue.size === 0 && feed.status.size === 0 && feeds.get(worldId) === feed;
   if (!unused()) return;
   window.setTimeout(() => {
     if (!unused()) return;
@@ -124,4 +137,51 @@ export function useLive(worldId: string, onNudge: LiveListener): void {
   const latest = useRef(onNudge);
   latest.current = onNudge;
   useEffect(() => listenLive(worldId, (seq) => latest.current(seq)), [worldId]);
+}
+
+export interface WorldOpen {
+  /** `waiting` until the socket's `ready` or 4 s, then `ready`, or `stale` (shown, possibly out of date). */
+  view: GateView;
+  /** The DO refused the socket because the usage guard has closed the gutter (4013). */
+  gutterClosed: boolean;
+}
+
+/** What the world's shared socket has seen so far, for a screen opening now. */
+function seen(worldId: string): { ready: boolean; stoppedBy: number | null } {
+  const feed = feeds.get(worldId);
+  return { ready: feed?.everReady ?? false, stoppedBy: feed?.connection.stoppedBy() ?? null };
+}
+
+/**
+ * Opening a world (#53 item 2): connect to its DO first, and hold the screens until `ready`, so what they
+ * read is caught up. After 4 s they show anyway, marked possibly stale. A refused socket doesn't wait.
+ */
+export function useWorldOpen(worldId: string): WorldOpen {
+  const initial = (): WorldOpen => {
+    const s = seen(worldId);
+    return { view: s.ready ? 'ready' : s.stoppedBy !== null ? 'stale' : 'waiting', gutterClosed: s.stoppedBy === LIVE.gutterClosedCode };
+  };
+  const [open, setOpen] = useState<WorldOpen>(initial);
+  useEffect(() => {
+    const feed = feedFor(worldId);
+    const s = seen(worldId);
+    const gate = worldGate(
+      { setTimeout: (fn, ms) => window.setTimeout(fn, ms), clearTimeout: (h) => window.clearTimeout(h as number) },
+      (view) => setOpen((o) => ({ ...o, view })),
+      { ready: s.ready, stopped: s.stoppedBy !== null },
+    );
+    setOpen({ view: gate.view(), gutterClosed: s.stoppedBy === LIVE.gutterClosedCode });
+    const onStatus: StatusListener = (event) => {
+      setOpen((o) => ({ ...o, gutterClosed: 'stopped' in event && event.stopped === LIVE.gutterClosedCode }));
+      if ('ready' in event) gate.ready();
+      else gate.stopped();
+    };
+    feed.status.add(onStatus);
+    return () => {
+      gate.dispose();
+      feed.status.delete(onStatus);
+      release(worldId, feed);
+    };
+  }, [worldId]);
+  return open;
 }

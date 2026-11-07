@@ -16,16 +16,18 @@ const saved = Object.fromEntries(
     .filter(Boolean)
     .map(([, k, v]) => [k, v.startsWith("'") && v.endsWith("'") ? v.slice(1, -1).replaceAll("'\\''", "'") : v]),
 );
-for (const k of ['SUPABASE_URL', 'SUPABASE_ANON_KEY', 'VAPID_PUBLIC_KEY', 'PAGES_PROJECT']) {
+// The PWA's build-time values (#69). WORKER_URL is the deployed Worker's origin (#71 provisions it).
+for (const k of ['NEON_AUTH_URL', 'NEON_DATA_API_URL', 'WORKER_URL', 'VAPID_PUBLIC_KEY', 'PAGES_PROJECT']) {
   if (!saved[k]) {
-    console.error(`✗ .env.deploy has no ${k}. Run the deploy wizard's stage 10 first.`);
+    console.error(`✗ .env.deploy has no ${k}.`);
     process.exit(1);
   }
 }
 const env = {
   ...process.env,
-  VITE_SUPABASE_URL: saved.SUPABASE_URL,
-  VITE_SUPABASE_ANON_KEY: saved.SUPABASE_ANON_KEY,
+  VITE_NEON_AUTH_URL: saved.NEON_AUTH_URL,
+  VITE_DATA_API_URL: saved.NEON_DATA_API_URL,
+  VITE_WORKER_URL: saved.WORKER_URL,
   VITE_VAPID_PUBLIC_KEY: saved.VAPID_PUBLIC_KEY,
 };
 execSync('npm run build:web', { stdio: 'inherit', env });
