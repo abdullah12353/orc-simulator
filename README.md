@@ -3,7 +3,7 @@
 # orc-simulator (ORC NONSENSE)
 
 Design: [GLOSSARY.md](GLOSSARY.md), [.scratch/orc-nonsense/](.scratch/orc-nonsense/) (gdd, data-model, tone bible), and
-[ADR 0001](docs/adr/0001-off-supabase-onto-neon-and-durable-objects.md) for why the stack is what it is.
+[ADR 0001](docs/adr/) for why the stack is what it is.
 
 ## Stack
 
@@ -99,7 +99,7 @@ there and changes only what differs, so a second run in a row prints "no changes
 - The PWA built with production's values and deployed to Pages, only when the build changed.
 
 It writes what it learns back to `.env.deploy` (the `NEON_*` values, `WORKER_URL`, `PAGES_URL`, the VAPID keys
-it makes on the first run), and drops any old Supabase, Resend and clock values. To redeploy after new audio or
+it makes on the first run), and names any value nothing reads any more (the old stack's), so you can delete it. To redeploy after new audio or
 art, or after a migration, run `npm run provision` again.
 
 `node scripts/provision.mjs --env <file>` provisions from another env file. With its own names

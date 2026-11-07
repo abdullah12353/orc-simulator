@@ -194,17 +194,19 @@ const [submitted] = await data('/rpc/submit_intent', { method: 'POST', token: cr
 const [again] = await data('/rpc/submit_intent', { method: 'POST', token: creator.token, body: rumour });
 if (submitted.meddles_left !== 2 || again.meddles_left !== 2) throw new Error(`submit_intent: ${JSON.stringify([submitted, again])}`);
 step('planted a Rumour (2 Meddles left; the resend spent nothing)');
-for (const m of messages) m.used = true;
-let landed = null;
-for (let ticks = 0; ticks < 3 && !landed; ticks++) {
-  const tick = await nextMessage('tick', 100_000);
+// The socket only hears about ticks that made Facts, so this watches the Meddle itself.
+const [{ tick_seq: plantedAt }] = await data(`/worlds?id=eq.${worldId}&select=tick_seq`, { token: creator.token });
+let landedAt = null;
+for (const deadline = Date.now() + 180_000; Date.now() < deadline && landedAt === null; ) {
+  await wait(5000);
+  if (socket.readyState !== WebSocket.OPEN) throw new Error('the live socket closed while waiting for the tick');
   const [mine] = await data(`/meddles?id=eq.${intentId}&select=status`, { token: creator.token });
-  if (mine?.status === 'pending') landed = tick;
+  if (mine?.status === 'pending') [{ tick_seq: landedAt }] = await data(`/worlds?id=eq.${worldId}&select=tick_seq`, { token: creator.token });
 }
-if (!landed) throw new Error('the Rumour never became a pending Meddle');
+if (landedAt === null) throw new Error('the Rumour never became a pending Meddle (3 min, the world watched)');
 const theirs = await data(`/meddles?id=eq.${intentId}&select=status`, { token: friend.token });
 if (theirs.length !== 0) throw new Error('the friend can see a pending Meddle');
-step(`the tick to tick_seq ${landed.tick_seq} landed the Rumour as a pending Meddle, secret from the friend`);
+step(`the tick from tick_seq ${plantedAt} to ${landedAt} landed the Rumour as a pending Meddle, secret from the friend`);
 
 clearInterval(ping);
 socket.close(1000, 'smoke done');

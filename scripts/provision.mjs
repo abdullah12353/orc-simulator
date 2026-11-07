@@ -42,10 +42,15 @@ const DB = 'neondb';
 const SENDER_NAME = 'The Gutter Herald';
 const MAGIC_LINK_MINUTES = 60;
 const GMAIL_SMTP = { host: 'smtp.gmail.com', port: 465 };
-/** What `.env.deploy` drops (#62 item 4): the Supabase, Resend, REST-AI and clock values. */
-const LEGACY = /^(SUPABASE_.*|RESEND_API_KEY|EMAIL_FROM|CF_AI_TOKEN|TICK_.*|ORC_DB_URL)$/;
 /** What this script writes about the Neon project, dropped when they belong to another project. */
 const NEON_KEYS = ['NEON_PROJECT_ID', 'NEON_DB_URL', 'NEON_DB_URL_DIRECT', 'NEON_AUTH_URL', 'NEON_AUTH_JWKS_URL', 'NEON_DATA_API_URL', 'NEON_GUARD_API_KEY'];
+/** Every value `.env.deploy` holds now: the wizard's, the names, and what this script writes. */
+const KNOWN = new Set([
+  ...['CF_ACCOUNT_ID', 'GMAIL_USER', 'GMAIL_APP_PASSWORD', 'GROQ_API_KEY', 'VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'],
+  ...['NEON_PROJECT_NAME', 'NEON_REGION', 'NEON_ORG_ID', 'WORKER_NAME', 'KV_NAMESPACE', 'PAGES_PROJECT'],
+  ...NEON_KEYS,
+  ...['WORKER_URL', 'PAGES_URL'],
+]);
 
 // ---- arguments ----
 
@@ -240,9 +245,10 @@ console.log(`  Neon ${names.neonProject} (${names.region}) · Worker ${names.wor
 
 section('Env file');
 {
-  const legacy = Object.keys(cur).filter((k) => LEGACY.test(k));
-  if (legacy.length) save(Object.fromEntries(legacy.map((k) => [k, null])));
-  else same('no Supabase, Resend or clock values left');
+  // The old stack's values (#62 item 4) aren't read any more. They're named, not deleted: the file is yours.
+  const unused = Object.keys(cur).filter((k) => !KNOWN.has(k));
+  if (unused.length) warn(`${envName} has values nothing reads any more, safe to delete: ${unused.join(', ')}`);
+  else same(`every value in ${envName} is in use`);
 
   // The Web Push pair: made once and kept (a new pair would break every device's opt-in).
   if (!cur.VAPID_PUBLIC_KEY || !cur.VAPID_PRIVATE_KEY) {
@@ -467,9 +473,11 @@ save({
     }
   }
   if (!key) {
-    const made = json(run('neon', ['api-keys', 'create', '--name', `${names.worker}-usage-guard`, '--project-id', pid, '-o', 'json']).stdout);
+    // Key names are unique per account, and a key can't be read back, so each new one gets the date.
+    const keyName = `${names.worker}-usage-guard-${new Date().toISOString().replace(/\D/g, '').slice(0, 14)}`;
+    const made = json(run('neon', ['api-keys', 'create', '--name', keyName, '--project-id', pid, '-o', 'json']).stdout);
     if (!made.key) throw new Error(`neon api-keys create gave no key: ${Object.keys(made).join(', ')}`);
-    did(`project-scoped API key ${names.worker}-usage-guard`);
+    did(`project-scoped API key ${keyName}`);
     updateEnv(ENV_FILE, { NEON_GUARD_API_KEY: made.key });
     cur.NEON_GUARD_API_KEY = made.key;
   }
