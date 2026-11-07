@@ -156,7 +156,10 @@ function api(method, path, options) {
 }
 
 let cfEnv = process.env;
-const wrangler = (args, options = {}) => run(process.execPath, [WRANGLER, ...args], { env: cfEnv, ...options });
+// From the repo root by default, never the temp dir: Wrangler takes the nearest package.json's folder as
+// the project and writes `.wrangler/tmp` there. Above the temp dir that can be the home folder, and a
+// `~/.wrangler` makes Wrangler look for its login there instead, logging it out mid-run.
+const wrangler = (args, options = {}) => run(process.execPath, [WRANGLER, ...args], { cwd: ROOT, env: cfEnv, ...options });
 
 // ---- small helpers ----
 
@@ -166,14 +169,14 @@ const sha256 = (...parts) => {
   return h.digest('hex');
 };
 
-/** One hash over every file under `dir`: paths and contents. */
-function hashDir(dir) {
+/** One hash over the files under `dir` (paths and contents) that `skip` doesn't leave out. */
+function hashDir(dir, skip = () => false) {
   const h = createHash('sha256');
   const walk = (d) => {
     for (const name of readdirSync(d).sort()) {
       const p = join(d, name);
       if (statSync(p).isDirectory()) walk(p);
-      else h.update(relative(dir, p).replaceAll('\\', '/')).update('\0').update(readFileSync(p)).update('\0');
+      else if (!skip(name)) h.update(relative(dir, p).replaceAll('\\', '/')).update('\0').update(readFileSync(p)).update('\0');
     }
   };
   walk(dir);
@@ -512,7 +515,9 @@ writeFileSync(CONFIG, `${JSON.stringify(config, null, 2)}\n`);
 const bundle = join(TMP, 'worker-bundle');
 wrangler(['deploy', '--config', CONFIG, '--dry-run', '--outdir', bundle], { cwd: WORKER_DIR, timeout: 300_000 });
 // The tag names what's deployed: the bundle, the config (vars, bindings) and the secrets, hashed together.
-const tag = `p${sha256(hashDir(bundle), JSON.stringify(config), JSON.stringify(secrets)).slice(0, 20)}`;
+// Not the dry run's README (a timestamp) or source map (its sourceRoot is the temp dir); maps aren't uploaded.
+const workerBuild = hashDir(bundle, (name) => name === 'README.md' || name.endsWith('.map'));
+const tag = `p${sha256(workerBuild, JSON.stringify(config), JSON.stringify(secrets)).slice(0, 20)}`;
 
 function deployedTag() {
   const status = wrangler(['deployments', 'status', '--name', names.worker, '--json'], { check: false });
