@@ -1,13 +1,14 @@
-// Live watching (#31). After a watched tick that made Facts, the tick broadcasts `{tick_seq}` on the
-// private channel `world:<id>`; the broadcast is only a nudge, and listeners refetch what they show.
-// Being watched no longer comes from the app marking itself seen (`mark_seen` is gone, #53, #55): the
-// world's Durable Object will count its open live connections (#67, #68, #69).
+// Live watching (#31, #55, #68): one WebSocket per world to its Durable Object, shared by every listener in
+// the app. The socket is a nudge, never data: after a watched tick that made Facts the DO sends `tick`,
+// after a Clash's generated lines land it sends `dialogue`, and listeners refetch what they show. Every
+// (re)open ends in `ready`, once the world has caught up, and that refetches everything. While it's open
+// the world is watched, so it's open only while the app is visible (live-socket.ts).
 import { useEffect, useRef } from 'react';
-import type { RealtimeChannel } from '@supabase/supabase-js';
-import { supabase } from './supabase.ts';
+import { liveConnection, type LiveConnection, type LiveEnv, type SocketLike } from './live-socket.ts';
+import { WORKER_URL, workerToken } from './worker.ts';
 
 /**
- * A live nudge: `tickSeq` is the tick that made new Facts, or null when the channel (re)connected and
+ * A live nudge: `tickSeq` is the tick that made new Facts, or null when the socket (re)opened and
  * anything may have been missed. Either way, refetch.
  */
 export type LiveListener = (tickSeq: number | null) => void;
@@ -16,47 +17,82 @@ export type LiveListener = (tickSeq: number | null) => void;
 export type DialogueListener = (factNo: number) => void;
 
 interface Feed {
-  channel: RealtimeChannel;
+  connection: LiveConnection;
   listeners: Set<LiveListener>;
   dialogue: Set<DialogueListener>;
 }
 const feeds = new Map<string, Feed>();
 
-/** The world's one shared channel, opened on first use. */
+const browser: LiveEnv = {
+  workerUrl: WORKER_URL,
+  token: workerToken,
+  openSocket: (url) => {
+    const ws = new WebSocket(url);
+    const socket: SocketLike = {
+      onopen: null,
+      onmessage: null,
+      onclose: null,
+      send: (data) => ws.send(data),
+      close: (code, reason) => ws.close(code, reason),
+    };
+    ws.onopen = () => socket.onopen?.();
+    ws.onmessage = (ev) => socket.onmessage?.(ev);
+    ws.onclose = (ev) => socket.onclose?.(ev);
+    return socket;
+  },
+  visible: () => document.visibilityState === 'visible',
+  onVisibilityChange: (callback) => {
+    document.addEventListener('visibilitychange', callback);
+    return () => document.removeEventListener('visibilitychange', callback);
+  },
+  setTimeout: (fn, ms) => window.setTimeout(fn, ms),
+  clearTimeout: (handle) => window.clearTimeout(handle as number),
+  setInterval: (fn, ms) => window.setInterval(fn, ms),
+  clearInterval: (handle) => window.clearInterval(handle as number),
+  now: () => Date.now(),
+};
+
+/** The world's one shared socket, opened on first use. */
 function feedFor(worldId: string): Feed {
   let feed = feeds.get(worldId);
   if (!feed) {
     const listeners = new Set<LiveListener>();
     const dialogue = new Set<DialogueListener>();
-    const channel = supabase.channel(`world:${worldId}`, { config: { private: true } });
-    channel.on('broadcast', { event: 'tick' }, (message) => {
-      const tickSeq = Number((message.payload as { tick_seq?: unknown }).tick_seq);
-      if (Number.isFinite(tickSeq)) for (const l of listeners) l(tickSeq);
+    const connection = liveConnection(worldId, browser, {
+      ready: () => {
+        for (const l of listeners) l(null);
+      },
+      tick: (tickSeq) => {
+        for (const l of listeners) l(tickSeq);
+      },
+      dialogue: (factNo) => {
+        for (const l of dialogue) l(factNo);
+      },
     });
-    channel.on('broadcast', { event: 'dialogue' }, (message) => {
-      const factNo = Number((message.payload as { fact_no?: unknown }).fact_no);
-      if (Number.isFinite(factNo)) for (const l of dialogue) l(factNo);
-    });
-    void supabase.realtime.setAuth().then(() =>
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') for (const l of listeners) l(null);
-      }),
-    );
-    feed = { channel, listeners, dialogue };
+    feed = { connection, listeners, dialogue };
     feeds.set(worldId, feed);
   }
   return feed;
 }
 
-/** Closes the world's channel once nobody listens to it. */
+/**
+ * A socket nobody listens to stays this long, so a tab switch (one screen's listener goes, the next
+ * one's comes) doesn't close and reopen it: every open costs a request and wakes Postgres.
+ */
+const LINGER_MS = 5_000;
+
+/** Closes the world's socket once nobody has listened to it for a moment. */
 function release(worldId: string, feed: Feed): void {
-  if (feed.listeners.size === 0 && feed.dialogue.size === 0 && feeds.get(worldId) === feed) {
+  const unused = () => feed.listeners.size === 0 && feed.dialogue.size === 0 && feeds.get(worldId) === feed;
+  if (!unused()) return;
+  window.setTimeout(() => {
+    if (!unused()) return;
     feeds.delete(worldId);
-    void supabase.removeChannel(feed.channel);
-  }
+    feed.connection.close();
+  }, LINGER_MS);
 }
 
-/** Listens to a world's channel. One channel per world, shared by every listener in the app. */
+/** Listens to a world's live socket. One socket per world, shared by every listener in the app. */
 export function listenLive(worldId: string, listener: LiveListener): () => void {
   const feed = feedFor(worldId);
   feed.listeners.add(listener);
@@ -66,7 +102,7 @@ export function listenLive(worldId: string, listener: LiveListener): () => void 
   };
 }
 
-/** Listens for generated Clash dialogue landing in this world (on the same shared channel). */
+/** Listens for generated Clash dialogue landing in this world (on the same shared socket). */
 export function listenDialogue(worldId: string, listener: DialogueListener): () => void {
   const feed = feedFor(worldId);
   feed.dialogue.add(listener);
