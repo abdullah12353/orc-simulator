@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { Captains } from './Captains.tsx';
 import { loadKrugIntroduction, useFirstOpen } from './first-open-data.ts';
+import { GutterNotice } from './GutterNotice.tsx';
 import { Hall } from './Hall.tsx';
 import { Herald } from './Herald.tsx';
 import { IntroductionCard } from './IntroductionCard.tsx';
@@ -125,6 +126,7 @@ function Worlds({ initial }: { initial?: string }) {
           ))}
         </select>
       )}
+      {selected && <GutterNotice key={`gutter-${selected}`} />}
       <InstallPrompt />
       {selected && <PushOptIn key={`push-${selected}`} worldId={selected} />}
       {selected && <InvitePanel key={selected} worldId={selected} />}
