@@ -6,16 +6,18 @@ export {
   worldTick,
   openWorld,
   assertPlayer,
+  currentPlayers,
   OpenWorldError,
   CATCH_UP,
   WATCH,
   nextMinuteTick,
   type CatchUpReport,
+  type OnHint,
   type WorldTickDeps,
   type WorldTickReport,
 } from './world.ts';
 export { jwtVerifier, bearerToken, JWKS_CACHE, type JwtVerifierOptions, type VerifyToken } from './auth.ts';
-export type { IsWatched, LiveHint } from './realtime.ts';
+export { liveMessage, removedSockets, LIVE_PING, type IsWatched, type LiveHint, type LiveMessage } from './realtime.ts';
 export { createWorld, CreateWorldError, type CreateWorldDeps, type CreateWorldInput } from './create-world.ts';
 export {
   openEdition,

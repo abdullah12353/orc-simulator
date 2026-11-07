@@ -85,6 +85,12 @@ export interface WorldTickReport {
 }
 
 /**
+ * Called with each hint as soon as its work has committed, so the minute tick's hint goes out before
+ * the narration drain, not after it (#55 item 2). Awaited: the run waits for it before going on.
+ */
+export type OnHint = (hint: LiveHint) => void | Promise<void>;
+
+/**
  * One run of the world's clock (the DO's alarm, data-model §3 steps 1–7): catch up the missed unwatched
  * steps, then, if the world is watched, the minute step at the top of the current minute (so a retried
  * alarm in the same minute finds it done). After the commits it sends the world's queued pushes and
@@ -94,13 +100,15 @@ export interface WorldTickReport {
 export async function worldTick(
   deps: WorldTickDeps,
   worldId: string,
-  opts: { watched: boolean; drain?: boolean },
+  opts: { watched: boolean; drain?: boolean; onHint?: OnHint },
 ): Promise<WorldTickReport> {
   const caughtUp = await catchUp(deps, worldId);
   let live: TickOutcome | null = null;
   if (opts.watched && caughtUp.mode !== 'not_found') {
     const minute = Math.floor(deps.now().getTime() / CADENCE.watchedMs) * CADENCE.watchedMs;
     live = await tickWorld({ ...deps, now: () => new Date(minute), watched: () => true }, worldId);
+    // tickWorld resolves after sql.begin has: the tick this points at is committed.
+    if (live.status === 'stepped' && live.hint) await opts.onHint?.(live.hint);
   }
   const outcomes = live ? [...caughtUp.outcomes, live] : caughtUp.outcomes;
   const hints = outcomes.flatMap((o) => (o.status === 'stepped' && o.hint ? [o.hint] : []));
@@ -113,7 +121,7 @@ export async function worldTick(
     }
     if (deps.narration) {
       const report = await drainJobs(
-        { ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content, watched: () => opts.watched },
+        { ...deps.narration, sql: deps.sql, now: deps.now, content: deps.content, watched: () => opts.watched, onHint: opts.onHint },
         { worldIds: [worldId] },
       ).catch((e: unknown) => {
         console.error('drainJobs failed', e);
@@ -144,4 +152,14 @@ export async function assertPlayer(deps: Pick<TickDeps, 'sql'>, input: { userId:
   const [player] = await deps.sql`
     select 1 from players where world_id = ${input.worldId} and user_id = ${input.userId} and removed_at is null`;
   if (!player) throw new OpenWorldError('not_a_player');
+}
+
+/**
+ * The world's current Players' user ids, in one query: the DO re-reads it on every tick and closes the
+ * sockets of Players who were removed (#55 item 3).
+ */
+export async function currentPlayers(deps: Pick<TickDeps, 'sql'>, worldId: string): Promise<Set<string>> {
+  const rows = await deps.sql<{ user_id: string }[]>`
+    select user_id from players where world_id = ${worldId} and removed_at is null`;
+  return new Set(rows.map((r) => r.user_id));
 }

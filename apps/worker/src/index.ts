@@ -6,8 +6,12 @@ import { USER_HEADER, type Env } from './env.ts';
 
 export { World } from './world.ts';
 
-/** What a world's DO answers under `/worlds/:id/…`. Creating a world is `POST /worlds`. */
-const WORLD_ACTIONS = new Set(['open', 'open-edition', 'create-clipping']);
+/**
+ * What a world's DO answers under `/worlds/:id/…`. Creating a world is `POST /worlds`. `live` is the
+ * Player's WebSocket (#68): a GET upgrade with the JWT in `?token=` (#52), since browsers can't set
+ * headers on a socket.
+ */
+const WORLD_ACTIONS = new Set(['open', 'open-edition', 'create-clipping', 'live']);
 
 type Route = { worldId: string | null; action: string };
 
@@ -29,14 +33,17 @@ let verify: VerifyToken | undefined;
 
 export default {
   async fetch(req, env): Promise<Response> {
-    const r = route(new URL(req.url).pathname);
+    const url = new URL(req.url);
+    const r = route(url.pathname);
     if (!r) return json({ error: 'not found' }, 404);
     if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
-    if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
+    const live = r.action === 'live';
+    if (req.method !== (live ? 'GET' : 'POST')) return json({ error: 'method not allowed' }, 405);
+    if (live && req.headers.get('Upgrade')?.toLowerCase() !== 'websocket') return json({ error: 'expected a websocket' }, 426);
 
     if (!env.NEON_AUTH_JWKS_URL || !env.NEON_AUTH_ISSUER) return json({ error: 'auth is not configured' }, 503);
     verify ??= jwtVerifier({ jwksUrl: env.NEON_AUTH_JWKS_URL, issuer: env.NEON_AUTH_ISSUER });
-    const token = bearerToken(req);
+    const token = live ? url.searchParams.get('token') : bearerToken(req);
     let userId: string | null = null;
     try {
       userId = token ? await verify(token) : null;
@@ -51,6 +58,8 @@ export default {
     const stub = env.WORLD.get(env.WORLD.idFromName(worldId));
     const headers = new Headers({ 'content-type': 'application/json', [USER_HEADER]: userId });
     try {
+      // The DO answers a socket with a 101; the token stays here, out of the DO's URL.
+      if (live) return await stub.fetch(`https://world/${worldId}/live`, { headers: { Upgrade: 'websocket', [USER_HEADER]: userId } });
       return await stub.fetch(`https://world/${worldId}/${r.action}`, { method: 'POST', headers, body: await req.text() });
     } catch (e) {
       console.error(`world ${worldId} ${r.action} failed`, e);

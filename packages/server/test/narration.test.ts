@@ -4,7 +4,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { content } from '@orc/content';
-import { drainJobs, NARRATION, openEdition, tickWorld, worldTick, type NarrationDeps } from '@orc/server';
+import { dayZero, simulate, tickSeed } from '@orc/sim';
+import { drainJobs, NARRATION, openEdition, tickWorld, worldTick, type LiveHint, type NarrationDeps } from '@orc/server';
 import { AFTER_DAY_ZERO, db, fakeClock, fakeKeys, freshWorld } from './support.ts';
 
 type Clock = ReturnType<typeof fakeClock>;
@@ -471,4 +472,63 @@ test("a speaker's voice card carries his Epithet as of the Clash, from his Epith
   assert.ok(call, 'the Clash was narrated');
   const voice = (call.input as unknown as { captains: Card[] }).captains.find((c) => c.id === winner)!;
   assert.equal(voice.epithet, content.banks.epithets[def.epithet!]!.text);
+});
+
+// ---- live hints (#68) ----
+
+/** A seed whose first watched tick, a minute after day zero, makes Facts (so it has a `tick` hint). */
+function seedForProductiveWatchedTick(createdAt: string): number {
+  for (let seed = 1; seed < 1000; seed++) {
+    const { state } = dayZero(content, seed, createdAt, '');
+    const tickSeq = state.world.tickSeq + 1;
+    const now = new Date(Date.parse(createdAt) + 60_000).toISOString();
+    const out = simulate({ ...state, world: { ...state.world, tickSeq, now, watched: true } }, [], tickSeed(seed, tickSeq));
+    if (out.facts.length > 0) return seed;
+  }
+  throw new Error('no seed found');
+}
+
+test("worldTick hands each hint to onHint once its work has committed: the tick's before the drain, each dialogue before the next call", async () => {
+  const day = '2031-01-20';
+  const clock = fakeClock(`${day}T12:00:00.000Z`);
+  await db()`delete from llm_usage where day = ${day}`;
+  const { worldId } = await freshWorld({ clock, seed: seedForProductiveWatchedTick(clock.iso()) });
+  assert.ok((await jobRows(worldId)).length >= 2, 'day zero left Clash jobs to drain');
+
+  const timeline: string[] = [];
+  const inner = fakeProviders({});
+  const recording = (async (url: string | URL, init?: RequestInit) => {
+    timeline.push('call');
+    return inner.fetch(url, init);
+  }) as typeof globalThis.fetch;
+  // onHint is awaited. Had a hint been handed over inside its transaction, these reads (on another of
+  // the pool's connections) would not see its work yet.
+  const seen: LiveHint[] = [];
+  const onHint = async (hint: LiveHint) => {
+    seen.push(hint);
+    if (hint.event === 'tick') {
+      const [w] = await db()`select tick_seq::int from worlds where id = ${worldId}`;
+      assert.equal(w!.tick_seq, hint.payload.tick_seq, 'the tick a hint points at has committed');
+      timeline.push('tick');
+    } else {
+      const [d] = await db()`select source from clash_dialogue where world_id = ${worldId} and fact_no = ${hint.payload.fact_no}`;
+      assert.equal(d!.source, 'generated', 'the dialogue a hint points at has committed');
+      timeline.push('dialogue');
+    }
+  };
+
+  clock.advance(1);
+  const report = await worldTick(
+    { sql: db(), now: clock.now, narration: { fetch: recording, providers: fakeKeys(recording) } },
+    worldId,
+    { watched: true, onHint },
+  );
+
+  assert.equal(report.live?.status, 'stepped');
+  assert.deepEqual(seen, report.hints, 'onHint got every hint the run returns, in order');
+  assert.equal(timeline[0], 'tick', "the tick's hint went out before narration's first model call");
+  const rest = timeline.slice(1);
+  assert.ok(rest.length >= 4);
+  // Every upgrade's hint went out as it committed, before the next job's call: not batched at the end.
+  assert.deepEqual(rest, rest.map((_, i) => (i % 2 === 0 ? 'call' : 'dialogue')));
 });
