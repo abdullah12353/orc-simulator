@@ -106,6 +106,7 @@ function recorder() {
       ready: (n: number) => void events.push(`ready ${n}`),
       tick: (n: number) => void events.push(`tick ${n}`),
       dialogue: (n: number) => void events.push(`dialogue ${n}`),
+      stopped: (code: number) => void events.push(`stopped ${code}`),
     },
   };
 }
@@ -193,11 +194,13 @@ test('it never opens while the app starts hidden', async () => {
 test('the gutter-closed code (4013) stops the retrying; so does not-a-Player (4003)', async () => {
   for (const code of [LIVE.gutterClosedCode, LIVE.notAPlayerCode]) {
     const b = fakeBrowser();
-    const c = liveConnection('w-1', b.env, recorder().handlers);
+    const r = recorder();
+    const c = liveConnection('w-1', b.env, r.handlers);
     await b.flush();
     b.last().drops(code, 'gutter closed');
     assert.equal(c.state(), 'stopped');
     assert.equal(c.stoppedBy(), code);
+    assert.deepEqual(r.events, [`stopped ${code}`], 'the screens hear it at once (#69: no 4 s wait, the gutter line)');
     await b.advance(60 * 60_000);
     assert.equal(b.sockets.length, 1, 'no retry');
 
