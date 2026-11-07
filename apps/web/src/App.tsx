@@ -152,7 +152,8 @@ function OpenWorld({ worldId }: { worldId: string }) {
         <p className="quiet">Reaching the fortress…</p>
       ) : (
         <>
-          {view === 'stale' && (
+          {/* Under a closed gutter the banner already says nothing moves. */}
+          {view === 'stale' && !gutterClosed && (
             <p className="stale" role="status">
               This may be out of date. <span className="quiet">The fortress isn't answering yet; still trying.</span>
             </p>
