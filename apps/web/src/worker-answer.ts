@@ -2,7 +2,7 @@
 // the fetch is worker.ts's. The Worker answers `{ error: "<reason>" }` on a refusal, and while the usage
 // guard has closed the gutter (#70) every world job gets `503 {"error":"gutter_closed"}`.
 import { gutterNotice } from './gutter.ts';
-import { reasonText } from './invite-link.ts';
+import { reasonText } from './reasons.ts';
 
 export type WorkerAnswer<T> = { data: T; error?: undefined } | { data?: undefined; error: string };
 
