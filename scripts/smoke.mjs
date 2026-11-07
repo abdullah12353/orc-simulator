@@ -123,6 +123,7 @@ const messages = [];
 let onMessage = () => {};
 const socket = new WebSocket(`${WORKER.replace(/^http/, 'ws')}/worlds/${worldId}/live?token=${encodeURIComponent(creator.token)}`);
 socket.addEventListener('message', (e) => {
+  if (e.data === 'pong') return; // the runtime's answer to our keep-alive ping
   const m = JSON.parse(String(e.data));
   messages.push(m);
   onMessage(m);
