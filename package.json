@@ -23,12 +23,12 @@
     "voices:pick": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/render-voices.ts --pick",
     "content:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/check-content.ts",
     "names:register": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/register-name.ts",
-    "smoke:local": "node scripts/smoke-local.mjs",
+    "smoke": "node scripts/smoke.mjs",
     "web:env": "node scripts/web-env.mjs",
     "dev:web": "npm run dev -w @orc/web",
     "dev:worker": "npm run dev -w @orc/worker",
     "build:web": "npm run build -w @orc/web",
-    "deploy:web": "node scripts/deploy-web.mjs",
+    "provision": "node scripts/provision.mjs",
     "tone-bible:sync": "node scripts/sync-tone-bible.mjs"
   },
   "devDependencies": {
@@ -36,7 +36,6 @@
     "@neon/env": "^1.6.15",
     "@types/node": "^22.10.0",
     "postgres": "3.4.7",
-    "supabase": "^2.122.0",
     "typescript": "~5.8.3"
   }
 }

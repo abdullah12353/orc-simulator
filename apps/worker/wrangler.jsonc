@@ -1,7 +1,7 @@
 // The one Worker (#62 item 3): the thin router (`fetch`), the 30-min catch-up cron (`scheduled`), the
 // world Durable Object class and the KV world list. Locally: `npm run dev -w @orc/worker` (wrangler dev
 // --test-scheduled), with secrets and the dev values of the vars in apps/worker/.dev.vars (git-ignored;
-// see .dev.vars.example). Deploys are #71's provisioning script.
+// see .dev.vars.example). Deploys are scripts/provision.mjs (#71).
 {
   "name": "orc-worker",
   "main": "src/index.ts",
@@ -19,14 +19,14 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["World"] }],
 
   // The world list the cron walks: one key per world, `world:<id>`. No id: wrangler dev keeps it locally,
-  // and #71's provisioning creates the namespace.
+  // and scripts/provision.mjs creates the namespace and fills it in.
   "kv_namespaces": [{ "binding": "WORLDS" }],
 
   // Workers AI for narration (#62 item 3), instead of the REST API and CF_AI_TOKEN.
   "ai": { "binding": "AI" },
 
   // Secrets (`wrangler secret put`, or .dev.vars locally): NEON_DB_URL (the -pooler URL), GROQ_API_KEY,
-  // VAPID_PRIVATE_KEY, NEON_API_KEY (#70). The vars below are set per deploy by #71's provisioning.
+  // VAPID_PRIVATE_KEY, NEON_API_KEY (#70). The vars below are set per deploy by scripts/provision.mjs.
   "vars": {
     "NEON_AUTH_JWKS_URL": "",
     "NEON_AUTH_ISSUER": "",
